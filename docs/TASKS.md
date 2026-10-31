@@ -8,19 +8,20 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 사용자가 직접 리뷰·이해할 범위는 **`impl.ts`와 테스트 구조 두 가지**로 한정한다. 나머지는 AI가 만들고 G1이 검토한다.
 
 ### 1. 저장소와 첫 배포 (빈 페이지)
-- [ ] 저장소 public 확인 (무료 계정의 private 저장소는 Pages 불가)
-- [ ] 루트 `package.json` (npm workspaces: `site`), lockfile, Node 버전 고정(`.nvmrc` + `engines`), `.gitignore`
-- [ ] Astro + MDX + React 초기화 (`site/`), `site`·`base: "/slam_guide/"` 설정
-- [ ] GitHub Actions: build → Pages 배포. `permissions: pages: write, id-token: write`. 저장소 설정에서 Pages 소스를 "GitHub Actions"로
-- [ ] 빈 페이지가 `https://yunmin1130.github.io/slam_guide/`에 뜨는지 확인
+- [x] 저장소 public 확인 (무료 계정의 private 저장소는 Pages 불가)
+- [x] 루트 `package.json` (npm workspaces: `site`), lockfile, Node 버전 고정(`.nvmrc` + `engines`), `.gitignore`
+- [x] Astro + MDX + React 초기화 (`site/`), `site`·`base: "/slam_guide/"` 설정
+- [x] GitHub Actions workflow 작성 (`.github/workflows/deploy.yml`, `permissions: pages: write, id-token: write`)
+- [ ] **사용자**: 저장소 Settings → Pages → Source를 "GitHub Actions"로
+- [ ] main에 머지·push 후 빈 페이지가 `https://yunmin1130.github.io/slam_guide/`에 뜨는지 확인
 
 ### 2. core와 테스트
-- [ ] `core/{mine,reference,tests}` 구조, 루트 `tsconfig.json`(`@core/*`, `@core/prev/*` paths) + Vite `resolve.alias` + `server.fs.allow`
-- [ ] 루트 `vitest.config.ts`: `ref`·`mine` 두 project, `IMPL` env 주입
-- [ ] `skew` 1세트: mine TODO 스텁 + reference + 테스트(제목 규칙 준수). `dot`·`cross`는 mine에서 reference re-export
-- [ ] `test:ref`, `test:mine`(JSON → `site/src/data/test-results.json`) 스크립트, `--passWithNoTests`
-- [ ] placeholder `site/src/data/test-results.json` (`{}`) 커밋
-- [ ] CI에 테스트 단계 추가: `test:ref`(통과 조건) → mine 구문 검사 → `test:mine || true` → build → deploy (ARCHITECTURE §6)
+- [x] `core/{mine,reference,tests}` 구조, 루트 `tsconfig.json`(`@core/*`, `@core/prev/*` paths) + Vite `resolve.alias` + `server.fs.allow`
+- [x] 루트 `vitest.config.ts`: `ref`·`mine` 두 project, `IMPL` env 주입
+- [x] `skew` 1세트: mine TODO 스텁 + reference + 테스트(제목 규칙 준수). `dot`·`cross`는 mine에서 reference re-export
+- [x] `test:ref`, `test:mine`(JSON → `site/src/data/test-results.json`) 스크립트, `--passWithNoTests`
+- [x] 결과 JSON은 gitignore, `impl.ts`가 `import.meta.glob`으로 없으면 빈 값 처리 (placeholder 커밋 대신)
+- [x] CI 테스트 단계: `test:ref`(통과 조건) → `scripts/check-mine-syntax.mjs` → `test:mine || true` → build → deploy
 
 ### 3. 사이트 기본
 - [ ] remark-math + rehype-katex (빌드 타임 수식)

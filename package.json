@@ -1,0 +1,28 @@
+{
+  "name": "slam-guide",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "site"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "astro dev --root site",
+    "build": "astro build --root site",
+    "preview": "astro preview --root site",
+    "test:ref": "vitest run --project ref --passWithNoTests",
+    "test:mine": "vitest run --project mine --passWithNoTests --reporter=json --outputFile=site/src/data/test-results.json",
+    "test:all-mine": "cross-env CORE_PREV=mine vitest run --project mine --passWithNoTests"
+  },
+  "dependencies": {
+    "ml-matrix": "^6.15.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "cross-env": "^10.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^5.0.5"
+  }
+}

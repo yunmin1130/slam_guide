@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.astro/
+site/dist/
+site/.astro/
+coverage/
+.env
+.env.*
+.DS_Store
+Thumbs.db
+# CI가 생성하는 테스트 결과 (impl.ts는 없으면 빈 값으로 처리)
+site/src/data/test-results.json
+site/src/data/mine-syntax.json
+# 대용량 데이터셋은 저장소에 넣지 않는다 (DATA §1)
+datasets/raw/

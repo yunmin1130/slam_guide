@@ -103,7 +103,7 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
   - 해당 함수의 mine 테스트가 전부 통과 → mine
   - 실패·TODO·`syntax-error`·결과 없음 → reference + "아직 내 구현 아님" 배지
   - 주차 파일 전체가 import 실패해 결과가 비면 그 주차 전체를 reference로 처리한다.
-- `site/src/data/test-results.json`은 placeholder `{}`를 커밋해 둔다. 로컬 빌드에서 CI 결과가 없어도 빌드가 깨지지 않게 한다.
+- `test-results.json`과 `mine-syntax.json`은 생성물이라 gitignore한다. `impl.ts`는 `import.meta.glob`으로 읽어서, 파일이 없으면 빈 결과로 처리한다 (로컬 빌드에서도 깨지지 않음).
 - mine 실행 중 예외가 나면 에러 메시지를 데모 안에 보여주고 reference로 되돌릴 수 있게 한다 (5주차에 추가).
 - 비교 모드(두 결과 겹쳐 그리기)는 5주차에 추가한다.
 
@@ -114,8 +114,8 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
 - 테스트는 구현체를 인자로 받아 `ref`·`mine` 양쪽에 돈다 (작성법은 LESSON_TEMPLATE §4).
 - **CI 순서 (GitHub Actions)**
   1. `test:ref` — **통과 조건**. 실패하면 배포 중단. `--passWithNoTests`.
-  2. **mine 구문 검사** — `core/mine/*.ts`를 파일마다 esbuild로 변환해 본다. 실패한 파일은 빌드용으로 TODO 스텁(시그니처만 같은 파일)으로 바꿔 끼우고 `syntax-error`로 기록한다. github.dev에서 반쯤 짠 코드를 push해도 배포가 막히지 않게 하기 위함.
-  3. `test:mine` — `--reporter=json --outputFile=site/src/data/test-results.json --passWithNoTests`. 실패해도 계속 (`|| true`). mine은 TODO 상태가 정상이기 때문. 2단계의 `syntax-error`를 결과에 합친다.
+  2. **mine 구문 검사** (`scripts/check-mine-syntax.mjs`) — `core/mine/*.ts`를 TypeScript 파서로 검사해 `site/src/data/mine-syntax.json`에 기록한다. CI에서만 실패한 파일을 TODO 스텁(reference와 같은 함수 이름)으로 바꿔 끼운다. 로컬에서는 파일을 절대 바꾸지 않는다. github.dev에서 반쯤 짠 코드를 push해도 배포가 막히지 않게 하기 위함.
+  3. `test:mine` — `--reporter=json --outputFile=site/src/data/test-results.json --passWithNoTests`. 실패해도 계속 (`|| true`). mine은 TODO 상태가 정상이기 때문. `impl.ts`가 두 결과 파일을 합쳐 읽는다.
   4. `astro build --root site` → Pages 배포.
 - 테스트 파일은 `IMPL` 값에 따라 한쪽 구현만 `await import()`로 불러온다. ref 실행이 mine 파일의 오류에 영향받지 않게 하기 위함 (LESSON_TEMPLATE §4).
 - 손코딩은 PC에서 한다. iPad에서는 github.dev(또는 Codespaces)로 `core/mine`을 편집하고 push하면 CI가 결과를 반영한다. 사이트 안 코드 에디터는 두지 않는다.

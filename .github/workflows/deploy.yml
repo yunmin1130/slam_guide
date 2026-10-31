@@ -1,0 +1,63 @@
+# 순서: test:ref(통과 조건) → mine 구문 검사 → test:mine(실패 허용) → build → Pages 배포
+# 근거: docs/ARCHITECTURE.md §6
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  # ref별로 분리: PR 실행이 main 배포를 대기열에서 밀어내지 않게
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test reference (gate)
+        run: npm run test:ref
+
+      - name: Check mine syntax (broken files -> TODO stubs)
+        run: node scripts/check-mine-syntax.mjs
+
+      - name: Test mine (failures allowed, writes test-results.json)
+        run: npm run test:mine || true
+
+      # 테스트 실패는 허용하지만, vitest 자체가 죽어서 결과 파일이 없으면 멈춘다
+      - name: Check mine results exist
+        run: test -s site/src/data/test-results.json
+
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: site/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

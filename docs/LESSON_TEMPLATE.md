@@ -113,7 +113,7 @@ export function project(p: Vec3, K: Intrinsics): Vec2 | null {
 - Vitest `ref`·`mine` project가 `IMPL` 환경변수로 구현을 하나만 고르고, **그쪽만 동적 import**한다. ref 실행이 mine 파일 오류의 영향을 받지 않게 하기 위함 (CI는 ARCHITECTURE §6).
   ```ts
   const IMPL = process.env.IMPL === "mine" ? "mine" : "reference";
-  const m = await import(`@core/${IMPL}/w04`);
+  const m: typeof import("../reference/w04") = await import(`@core/${IMPL}/w04.ts`); // 확장자 필수
 
   describe(IMPL, () => {
     describe("project", () => {
