@@ -99,7 +99,8 @@ Claude Code에 "N주차 레슨 만들어줘"라고 하면:
 3. `core/mine` 시그니처 + `core/reference` 정답 + `core/tests` 테스트 생성
 4. 데모가 있으면 `components/demos/`에 컴포넌트 생성
 5. reference 기준 테스트 통과 확인
-6. 만든 파일 목록과 내가 구현할 함수 목록을 요약
+6. `docs/WORKFLOW.md` 관문 G2 (code-reviewer) 실행, CRITICAL·HIGH 수정
+7. 만든 파일 목록과 내가 구현할 함수 목록을 요약
 
 ## 6. 문체
 
