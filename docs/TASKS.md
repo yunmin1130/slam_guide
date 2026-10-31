@@ -15,7 +15,7 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 - [ ] 빈 페이지가 `https://yunmin1130.github.io/slam_guide/`에 뜨는지 확인
 
 ### 2. core와 테스트
-- [ ] `core/{mine,reference,tests}` 구조, 루트 `tsconfig.json`(`@core/*` paths) + Vite `resolve.alias` + `server.fs.allow`
+- [ ] `core/{mine,reference,tests}` 구조, 루트 `tsconfig.json`(`@core/*`, `@core/prev/*` paths) + Vite `resolve.alias` + `server.fs.allow`
 - [ ] 루트 `vitest.config.ts`: `ref`·`mine` 두 project, `IMPL` env 주입
 - [ ] `skew` 1세트: mine TODO 스텁 + reference + 테스트(제목 규칙 준수). `dot`·`cross`는 mine에서 reference re-export
 - [ ] `test:ref`, `test:mine`(JSON → `site/src/data/test-results.json`) 스크립트, `--passWithNoTests`

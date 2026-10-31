@@ -70,7 +70,12 @@ slam_guide/
 
 **패키지 구조**: 의존성은 루트에서 설치한다(npm workspaces로 hoist). core는 위로 올라가며 모듈을 찾으므로 `site/node_modules`에만 있으면 ml-matrix를 못 찾는다. Astro는 `astro build --root site`로 실행하고, `@core` 별칭은 tsconfig `paths`와 Vite `resolve.alias` 양쪽에 둔다 (Vite는 tsconfig paths를 자동으로 읽지 않는다).
 
-**함수 → 파일 매핑**: 레슨 주차가 파일을 정한다. `w04` 레슨의 `tasks`는 `core/mine/w04.ts`, `core/reference/w04.ts`, `core/tests/w04.test.ts`에 있다. 이전 주차 함수를 재사용할 때는 그 주차 파일에서 import한다. TaskCard는 frontmatter `week`와 함수명으로 위치를 찾는다.
+**함수 → 파일 매핑**: 레슨 주차가 파일을 정한다. `w04` 레슨의 `tasks`는 `core/mine/w04.ts`, `core/reference/w04.ts`, `core/tests/w04.test.ts`에 있다. TaskCard는 frontmatter `week`와 함수명으로 위치를 찾는다.
+
+**이전 주차 함수 재사용**: mine·reference 모두 이전 주차 함수는 `@core/prev/w{NN}` 별칭으로 import한다.
+- 기본값: `@core/prev/*` → `core/reference/*`. 내 6주차 버그가 11주차로 번지지 않게 해서, 실패하면 이번 주 함수만 의심하면 된다.
+- `CORE_PREV=mine`일 때: `@core/prev/*` → `core/mine/*`. **M1 리포트를 낼 때** 전부 내 구현으로 이어서 돌려보는 용도다 (`test:all-mine` 스크립트).
+- 같은 주차 안의 함수끼리는 상대 경로로 import한다.
 
 `core/`는 `site/` 밖에 있으므로 tsconfig `paths` 별칭(`@core/*`)과 Vite `server.fs.allow`에 등록한다.
 

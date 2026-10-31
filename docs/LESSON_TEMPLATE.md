@@ -7,6 +7,7 @@
 - 위치: `site/src/content/lessons/`
 - 이름: `w{주차 두 자리}-{영문 슬러그}.mdx` (예: `w04-pinhole.mdx`)
 - 과제 함수 위치는 주차로 정해진다: `core/{mine,reference}/w{NN}.ts`, `core/tests/w{NN}.test.ts` (ARCHITECTURE §3)
+- 여러 단위짜리 레슨(7a/7b, 11a~d 등)도 **MDX 파일 하나**에 두고 세션으로 나눈다. 파트 구분은 `## 개념` 안의 소제목으로 한다. 길어서 불편하면 그때 `part` 필드를 도입한다 (1주차 레슨을 만든 뒤 판단).
 
 ## 2. 메타데이터 (frontmatter)
 
