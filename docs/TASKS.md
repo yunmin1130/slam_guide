@@ -1,0 +1,49 @@
+# TASKS
+
+현재 진행 중인 단계의 체크리스트. 완료하면 체크하고, 단계가 끝나면 다음 단계 목록으로 교체한다 (지난 목록은 git 기록에 남는다).
+
+## 현재: 0주차 플랫폼 뼈대 (WORKFLOW B단계)
+
+AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서대로 하고, 미룬 항목은 아래 "나중에"에 있다.
+사용자가 직접 리뷰·이해할 범위는 **`impl.ts`와 테스트 구조 두 가지**로 한정한다. 나머지는 AI가 만들고 G1이 검토한다.
+
+### 1. 저장소와 첫 배포 (빈 페이지)
+- [ ] 저장소 public 확인 (무료 계정의 private 저장소는 Pages 불가)
+- [ ] 루트 `package.json` (npm workspaces: `site`), lockfile, Node 버전 고정(`.nvmrc` + `engines`), `.gitignore`
+- [ ] Astro + MDX + React 초기화 (`site/`), `site`·`base: "/slam_guide/"` 설정
+- [ ] GitHub Actions: build → Pages 배포. `permissions: pages: write, id-token: write`. 저장소 설정에서 Pages 소스를 "GitHub Actions"로
+- [ ] 빈 페이지가 `https://yunmin1130.github.io/slam_guide/`에 뜨는지 확인
+
+### 2. core와 테스트
+- [ ] `core/{mine,reference,tests}` 구조, 루트 `tsconfig.json`(`@core/*` paths) + Vite `resolve.alias` + `server.fs.allow`
+- [ ] 루트 `vitest.config.ts`: `ref`·`mine` 두 project, `IMPL` env 주입
+- [ ] `skew` 1세트: mine TODO 스텁 + reference + 테스트(제목 규칙 준수). `dot`·`cross`는 mine에서 reference re-export
+- [ ] `test:ref`, `test:mine`(JSON → `site/src/data/test-results.json`) 스크립트, `--passWithNoTests`
+- [ ] placeholder `site/src/data/test-results.json` (`{}`) 커밋
+- [ ] CI에 테스트 단계 추가: `test:ref`(통과 조건) → mine 구문 검사 → `test:mine || true` → build → deploy (ARCHITECTURE §6)
+
+### 3. 사이트 기본
+- [ ] remark-math + rehype-katex (빌드 타임 수식)
+- [ ] 다크 모드, 1단 모바일 레이아웃, safe-area inset
+- [ ] 레슨 컬렉션 스키마 (LESSON_TEMPLATE §2 frontmatter 검증, `sessions.device` 포함)
+- [ ] 레슨 컴포넌트: `LABox`, `TaskCard`(+`readOnly`), `Details`, `SessionBreak`, 체크 질문
+- [ ] `lib/impl.ts`: `test-results.json` 키(`w{NN}/{함수명}`) 기반 기본값 + 토글 + "아직 내 구현 아님" 배지
+- [ ] `lib/storage.ts`: localStorage 전용 구현 (인터페이스는 ARCHITECTURE §7)
+- [ ] 대시보드: 레슨 목록 + 현재 기기 기준 "다음 세션"
+
+### 4. 완료 확인
+- [ ] 1주차 LA1 레슨 MDX 생성 + 빌드 통과 (손코딩 자체는 1주차에서)
+- [ ] iPhone 14 Pro 세로에서 레슨 읽기·토글 확인
+- [ ] WORKFLOW 관문 G1 (architect) 통과
+
+## 나중에 (붙이는 시점)
+
+| 항목 | 시점 |
+| --- | --- |
+| 공용 3D 뷰어 (r3f 정적 장면, 회전만) | 1주차 레슨 데모 만들 때 |
+| CSP meta (ARCHITECTURE §7 정책) | 첫 배포 안정 후 |
+| Gist 동기화 + 동기화 버튼 | 3~4주차 (기기 간 불편이 생길 때) |
+| 3D 뷰어 터치 게이팅, 두 손가락 조작 | 4주차 |
+| `datasets/` PC Python 스크립트 (`calibrate.py`, `export_matches.py`) | 4~5주차 |
+| mine 예외 시 reference 복귀 UI, 비교 오버레이 | 5주차 |
+| WSL2 / Docker 세팅 | 12주차 (M1 이후) |
