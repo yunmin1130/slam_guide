@@ -43,6 +43,8 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 | 항목 | 시점 |
 | --- | --- |
 | CSP meta (ARCHITECTURE §7 정책) | 첫 배포 안정 후 |
+| 3D 뷰어 좌표 통일: `cameraPosition`·`target`도 수학 좌표(z 위)로 받기, 카메라 좌표(z 앞) 변환 함수 하나 분리 | 2주차 데모 준비 때 |
+| 파트별 레슨 페이지 분리 지원 (LESSON_TEMPLATE §1: glob, `part` 스키마, 진도 키, prereq) | 7주차 레슨 준비 때 |
 | Gist 동기화 + 동기화 버튼 | 3~4주차 (기기 간 불편이 생길 때) |
 | 3D 뷰어 터치 게이팅, 두 손가락 조작 | 4주차 |
 | `datasets/` PC Python 스크립트 (`calibrate.py`, `export_matches.py`) | 4~5주차 |
