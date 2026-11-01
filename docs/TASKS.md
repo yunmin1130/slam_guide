@@ -21,7 +21,7 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 - [x] `skew` 1세트: mine TODO 스텁 + reference + 테스트(제목 규칙 준수). `dot`·`cross`는 mine에서 reference re-export
 - [x] `test:ref`, `test:mine`(JSON → `site/src/data/test-results.json`) 스크립트, `--passWithNoTests`
 - [x] 결과 JSON은 gitignore, `impl.ts`가 `import.meta.glob`으로 없으면 빈 값 처리 (placeholder 커밋 대신)
-- [x] CI 테스트 단계: `test:ref`(통과 조건) → `scripts/check-mine-syntax.mjs` → `test:mine || true` → build → deploy
+- [x] CI 테스트 단계: `test:ref`(통과 조건) → `scripts/check-mine-syntax.mjs` → `test:mine || true` → import 검사(`--after-tests`) → build → deploy
 
 ### 3. 사이트 기본
 - [x] remark-math + rehype-katex (빌드 타임 수식)
@@ -34,15 +34,14 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 - [x] 사이트 로직 테스트 (`test:site`, CI 통과 조건). 393px 가로 넘침·콘솔 에러 없음 확인 (headless)
 
 ### 4. 완료 확인
-- [ ] 1주차 LA1 레슨 MDX 생성 + 빌드 통과 (손코딩 자체는 1주차에서)
+- [x] 1주차 LA1 레슨 MDX 생성 + 빌드 통과 (손코딩 자체는 1주차에서). 공용 3D 뷰어(`viewer3d/`) + VectorViewer 데모 포함
 - [ ] iPhone 14 Pro 세로에서 레슨 읽기·토글 확인
-- [ ] WORKFLOW 관문 G1 (architect) 통과
+- [x] WORKFLOW 관문 G1 (architect) 통과 — 2026-11-01 조건부 통과, HIGH 2건 수정 (결과 JSON 클라이언트 번들 제외, mine import 오류 스텁)
 
 ## 나중에 (붙이는 시점)
 
 | 항목 | 시점 |
 | --- | --- |
-| 공용 3D 뷰어 (r3f 정적 장면, 회전만) | 1주차 레슨 데모 만들 때 |
 | CSP meta (ARCHITECTURE §7 정책) | 첫 배포 안정 후 |
 | Gist 동기화 + 동기화 버튼 | 3~4주차 (기기 간 불편이 생길 때) |
 | 3D 뷰어 터치 게이팅, 두 손가락 조작 | 4주차 |

@@ -53,7 +53,8 @@ slam_guide/
 │   │   │   └── test-results.json  # CI가 생성 (mine 테스트 결과)
 │   │   ├── lib/
 │   │   │   ├── storage.ts    # 저장 계층 (유일한 저장 진입점)
-│   │   │   └── impl.ts       # mine/reference 선택 로직 (유일한 분기점)
+│   │   │   ├── impl.ts       # mine/reference 선택 로직 (유일한 분기점)
+│   │   │   └── implStatus.ts # mine 테스트 상태 (빌드 전용, 결과 JSON 읽기)
 │   │   └── pages/            # 대시보드, 레슨 라우트
 │   └── public/data/          # 작은 샘플 데이터 (DATA §1 상한)
 ├── core/                     # 수학 코어 (TypeScript, 사이트와 독립)
@@ -103,7 +104,8 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
   - 해당 함수의 mine 테스트가 전부 통과 → mine
   - 실패·TODO·`syntax-error`·결과 없음 → reference + "아직 내 구현 아님" 배지
   - 주차 파일 전체가 import 실패해 결과가 비면 그 주차 전체를 reference로 처리한다.
-- `test-results.json`과 `mine-syntax.json`은 생성물이라 gitignore한다. `impl.ts`는 `import.meta.glob`으로 읽어서, 파일이 없으면 빈 결과로 처리한다 (로컬 빌드에서도 깨지지 않음).
+- `test-results.json`과 `mine-syntax.json`은 생성물이라 gitignore한다. 빌드 전용 `lib/implStatus.ts`가 `import.meta.glob`으로 읽어서, 파일이 없으면 빈 결과로 처리한다 (로컬 빌드에서도 깨지지 않음). 상태는 `.astro`에서 구해 props로 넘긴다. `impl.ts`는 클라이언트 번들에 들어가므로 결과 JSON을 import하지 않는다 (G1, 2026-11-01).
+- 예외: `components/lesson/context.ts`는 읽기만 카드에 보여줄 reference **소스 문자열**을 빌드 시점에 `?raw`로 읽는다. 실행하지 않으므로 분기점이 아니다.
 - mine 실행 중 예외가 나면 에러 메시지를 데모 안에 보여주고 reference로 되돌릴 수 있게 한다 (5주차에 추가).
 - 비교 모드(두 결과 겹쳐 그리기)는 5주차에 추가한다.
 
@@ -115,8 +117,9 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
 - **CI 순서 (GitHub Actions)**
   1. `test:ref` — **통과 조건**. 실패하면 배포 중단. `--passWithNoTests`.
   2. **mine 구문 검사** (`scripts/check-mine-syntax.mjs`) — `core/mine/*.ts`를 TypeScript 파서로 검사해 `site/src/data/mine-syntax.json`에 기록한다. CI에서만 실패한 파일을 TODO 스텁(reference와 같은 함수 이름)으로 바꿔 끼운다. 로컬에서는 파일을 절대 바꾸지 않는다. github.dev에서 반쯤 짠 코드를 push해도 배포가 막히지 않게 하기 위함.
-  3. `test:mine` — `--reporter=json --outputFile=site/src/data/test-results.json --passWithNoTests`. 실패해도 계속 (`|| true`). mine은 TODO 상태가 정상이기 때문. `impl.ts`가 두 결과 파일을 합쳐 읽는다.
-  4. `astro build --root site` → Pages 배포.
+  3. `test:mine` — `--reporter=json --outputFile=site/src/data/test-results.json --passWithNoTests`. 실패해도 계속 (`|| true`). mine은 TODO 상태가 정상이기 때문. `implStatus.ts`가 두 결과 파일을 합쳐 읽는다.
+  4. **mine import 검사** (`check-mine-syntax.mjs --after-tests`) — 구문은 맞지만 import가 깨진 주차(결과 JSON에서 "실패, 테스트 0개")를 찾아 `mine-syntax.json`에 `import 오류`로 덧붙이고, CI에서만 같은 방식으로 스텁을 끼운다. 그대로 두면 `impl.ts`의 mine glob 때문에 build가 실패한다.
+  5. `astro build --root site` → Pages 배포.
 - 테스트 파일은 `IMPL` 값에 따라 한쪽 구현만 `await import()`로 불러온다. ref 실행이 mine 파일의 오류에 영향받지 않게 하기 위함 (LESSON_TEMPLATE §4).
 - 손코딩은 PC에서 한다. iPad에서는 github.dev(또는 Codespaces)로 `core/mine`을 편집하고 push하면 CI가 결과를 반영한다. 사이트 안 코드 에디터는 두지 않는다.
 

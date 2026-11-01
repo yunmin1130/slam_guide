@@ -3,10 +3,11 @@
  * 과제 카드. frontmatter의 tasks(손코딩)·read_only(읽기만) 함수마다 하나 (LESSON_TEMPLATE §3 ④).
  * 사용: <TaskCard fn="skew">설명 + <Hint level={1}>…</Hint></TaskCard>
  *       <TaskCard fn="dot" readOnly>설명</TaskCard>
- * 테스트 상태는 빌드 시점의 test-results.json에서 온다 (lib/impl.ts).
+ * 테스트 상태는 빌드 시점의 test-results.json에서 온다 (lib/implStatus.ts).
  */
 import { Code } from "astro:components";
-import { fnStatus, STATUS_LABEL, syntaxMessage, type FnStatus } from "../../lib/impl";
+import { STATUS_LABEL, type FnStatus } from "../../lib/impl";
+import { fnStatus, syntaxMessage } from "../../lib/implStatus";
 import { coreFile, githubDevUrl, githubUrl, referenceFunctionSource, requireLesson } from "./context";
 
 interface Props {
@@ -27,7 +28,8 @@ const status = fnStatus(lesson.week, fn);
 const TONE: Record<FnStatus, string> = { pass: "mine", todo: "ref", missing: "ref", fail: "fail", "syntax-error": "fail" };
 const tone = readOnly ? "muted" : TONE[status];
 const label = readOnly ? "읽기만 · reference 사용" : STATUS_LABEL[status];
-const syntax = !readOnly && status === "syntax-error" ? syntaxMessage(lesson.week) : undefined;
+// 구문 오류(syntax-error)와 import 오류(결과 없음으로 나옴) 모두 메시지를 보여준다
+const syntax = readOnly ? undefined : syntaxMessage(lesson.week);
 const minePath = coreFile("mine", lesson.key);
 ---
 

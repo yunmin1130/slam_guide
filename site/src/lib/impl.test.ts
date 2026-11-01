@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { defaultImpl, fnKey, loadFn, loadWeek, summarizeResults, type FnStatus } from "./impl";
+import { defaultImpl, fnKey, loadFn, loadWeek, type FnStatus } from "./impl";
+import { summarizeResults } from "./implStatus";
 
 // Vitest JSON reporter 형식을 줄인 가짜 결과 (실제 필드명과 같다)
 function suite(file: string, tests: Array<[string, "passed" | "failed", string?]>, message = "") {

@@ -1,0 +1,25 @@
+/* 393px에서 화면 절반 이내 (LESSON_TEMPLATE §3 ③). 스크롤할 자리를 남기려고 300px로 둔다 */
+.frame {
+  position: relative;
+  height: 300px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: radial-gradient(circle at 50% 40%, var(--paper-raised), var(--paper-sunken));
+  overflow: hidden;
+}
+
+.fallback {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.hint {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+  pointer-events: none;
+}

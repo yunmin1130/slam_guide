@@ -47,6 +47,10 @@ jobs:
       - name: Check mine results exist
         run: test -s site/src/data/test-results.json
 
+      # 구문은 맞지만 import가 깨진 mine 주차 -> 스텁 (그대로 두면 build가 실패한다)
+      - name: Check mine imports (broken files -> TODO stubs)
+        run: node scripts/check-mine-syntax.mjs --after-tests
+
       - run: npm run build
 
       - uses: actions/upload-pages-artifact@v4

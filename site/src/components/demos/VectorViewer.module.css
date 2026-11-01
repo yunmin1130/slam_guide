@@ -1,0 +1,121 @@
+.demo {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.legend li::before {
+  content: "";
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.35em;
+  border-radius: 2px;
+  background: var(--c);
+  vertical-align: -0.05em;
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.slider label {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.slider output {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+/* 터치 영역 44px (ARCHITECTURE §8) */
+.slider input {
+  width: 100%;
+  height: var(--touch);
+  margin: 0;
+  accent-color: var(--accent);
+  background: transparent;
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+
+.values {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.skew {
+  display: grid;
+  gap: var(--space-2);
+}
+.skewTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.matrix {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  margin: 0;
+  width: auto;
+}
+.matrix td {
+  padding: 0.15em 0.6em;
+  text-align: right;
+  border: none;
+}
+.matrix td:first-child {
+  border-left: 2px solid var(--ink-soft);
+}
+.matrix td:last-child {
+  border-right: 2px solid var(--ink-soft);
+}
+
+.check {
+  margin: 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.loading {
+  margin: 0;
+  color: var(--ink-faint);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}

@@ -1,0 +1,15 @@
+---
+/**
+ * VectorViewer 데모 래퍼. 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * 3D 장면은 화면에 보일 때만 불러온다 (client:visible, ARCHITECTURE §8).
+ * 토글 배지는 손코딩 함수(skew)만 본다. dot·cross는 읽기만이라 mine도 reference를 쓴다.
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import VectorViewer from "./VectorViewer";
+
+const lesson = requireLesson(Astro.locals, "VectorViewer");
+const statuses = lesson.tasks.map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<VectorViewer client:visible week={lesson.week} statuses={statuses} />
