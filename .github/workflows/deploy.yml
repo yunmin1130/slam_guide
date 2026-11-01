@@ -34,6 +34,9 @@ jobs:
       - name: Test reference (gate)
         run: npm run test:ref
 
+      - name: Test site logic (gate)
+        run: npm run test:site
+
       - name: Check mine syntax (broken files -> TODO stubs)
         run: node scripts/check-mine-syntax.mjs
 

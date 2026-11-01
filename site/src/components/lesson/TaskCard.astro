@@ -1,0 +1,123 @@
+---
+/**
+ * 과제 카드. frontmatter의 tasks(손코딩)·read_only(읽기만) 함수마다 하나 (LESSON_TEMPLATE §3 ④).
+ * 사용: <TaskCard fn="skew">설명 + <Hint level={1}>…</Hint></TaskCard>
+ *       <TaskCard fn="dot" readOnly>설명</TaskCard>
+ * 테스트 상태는 빌드 시점의 test-results.json에서 온다 (lib/impl.ts).
+ */
+import { Code } from "astro:components";
+import { fnStatus, STATUS_LABEL, syntaxMessage, type FnStatus } from "../../lib/impl";
+import { coreFile, githubDevUrl, githubUrl, referenceFunctionSource, requireLesson } from "./context";
+
+interface Props {
+  fn: string;
+  readOnly?: boolean;
+}
+
+const { fn, readOnly = false } = Astro.props;
+const lesson = requireLesson(Astro.locals, "TaskCard");
+const field = readOnly ? "read_only" : "tasks";
+if (!lesson[field].includes(fn)) {
+  throw new Error(`${lesson.key}: <TaskCard fn="${fn}">가 frontmatter ${field}에 없다`);
+}
+const source = referenceFunctionSource(lesson.key, fn);
+if (!source) throw new Error(`core/reference/${lesson.key}.ts에 ${fn} 함수가 없다`);
+
+const status = fnStatus(lesson.week, fn);
+const TONE: Record<FnStatus, string> = { pass: "mine", todo: "ref", missing: "ref", fail: "fail", "syntax-error": "fail" };
+const tone = readOnly ? "muted" : TONE[status];
+const label = readOnly ? "읽기만 · reference 사용" : STATUS_LABEL[status];
+const syntax = !readOnly && status === "syntax-error" ? syntaxMessage(lesson.week) : undefined;
+const minePath = coreFile("mine", lesson.key);
+---
+
+<article class="task" id={`task-${fn}`} data-readonly={readOnly ? "" : undefined}>
+  <header class="task-head">
+    <span class="eyebrow">{readOnly ? "읽기만" : "손코딩"} · {lesson.key}</span>
+    <h3 class="task-name"><code>{fn}</code></h3>
+    <span class="badge" data-tone={tone}>{label}</span>
+  </header>
+
+  <div class="task-body"><slot /></div>
+
+  {syntax && <pre class="task-syntax">{syntax}</pre>}
+
+  {
+    readOnly ? (
+      <details class="fold">
+        <summary>reference 코드 읽기</summary>
+        <div class="fold-body">
+          <Code code={source} lang="ts" wrap themes={{ light: "github-light", dark: "github-dark" }} />
+        </div>
+      </details>
+    ) : (
+      <footer class="task-foot">
+        <a class="task-link" href={githubDevUrl(minePath)}>github.dev에서 편집</a>
+        <a class="task-link" href={githubUrl(minePath)}>{minePath}</a>
+        <p class="task-run">
+          <span class="eyebrow">PC</span> <code>npx vitest --project mine -t {fn}</code>
+        </p>
+      </footer>
+    )
+  }
+</article>
+
+<style>
+  .task {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    padding: var(--space-4);
+    margin: var(--space-6) 0;
+  }
+  .task[data-readonly] {
+    background: transparent;
+    box-shadow: none;
+    border-style: dashed;
+  }
+  .task-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0 var(--space-3);
+  }
+  .task-head .eyebrow {
+    grid-column: 1 / -1;
+  }
+  .task-name {
+    margin: 0;
+    font-size: var(--text-lg);
+  }
+  .task-name code {
+    background: none;
+    padding: 0;
+  }
+  .task-body {
+    margin-top: var(--space-3);
+  }
+  .task-syntax {
+    color: var(--fail);
+    background: var(--fail-bg);
+    white-space: pre-wrap;
+  }
+  .task-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--space-4);
+    border-top: 1px dashed var(--rule);
+    margin-top: var(--space-3);
+    padding-top: var(--space-2);
+  }
+  .task-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch);
+    font-size: var(--text-sm);
+  }
+  .task-run {
+    width: 100%;
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+</style>

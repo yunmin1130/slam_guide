@@ -1,17 +1,30 @@
 ---
-const base = import.meta.env.BASE_URL;
+/** 대시보드: 다음 세션(기기별) + 레슨 목록. 메타데이터는 레슨 frontmatter에서 자동 생성 (LESSON_TEMPLATE §2) */
+import Base from "../layouts/Base.astro";
+import Dashboard from "../components/Dashboard";
+import { getLessons, toLessonMeta } from "../lib/lessons";
+
+const lessons = (await getLessons()).map(toLessonMeta);
+const totalUnits = lessons.reduce((sum, l) => sum + l.units, 0);
 ---
-<!doctype html>
-<html lang="ko">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>SLAM 학습</title>
-  </head>
-  <body>
-    <main>
-      <h1>SLAM 학습</h1>
-      <p>플랫폼 준비 중. base: {base}</p>
-    </main>
-  </body>
-</html>
+
+<Base title="SLAM 학습">
+  <header class="hero">
+    <span class="eyebrow">손으로 짜는 Visual SLAM</span>
+    <h1>오늘 할 세션 하나만.</h1>
+    <p class="lede">레슨 {lessons.length}개 · {totalUnits}단위. 수학은 직접 짜고, 그림은 사이트가 그린다.</p>
+  </header>
+  <Dashboard client:load lessons={lessons} />
+</Base>
+
+<style>
+  .hero h1 {
+    font-size: clamp(2rem, 1.4rem + 3vw, 2.8rem);
+    letter-spacing: -0.03em;
+    margin: var(--space-1) 0 var(--space-2);
+  }
+  .lede {
+    color: var(--ink-soft);
+    margin-bottom: var(--space-6);
+  }
+</style>

@@ -1,0 +1,130 @@
+---
+/**
+ * 레슨 페이지. 본문 구성은 LESSON_TEMPLATE §3: ⓪ 복귀 박스 → 개념 → LA 박스 → 데모 → 과제 → 체크 질문.
+ * 빌드 시 검사: 모든 세션에 <SessionBreak>, 모든 tasks·read_only 함수에 <TaskCard>가 있어야 한다.
+ */
+import { render } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import CheckQuestion from "../../components/lesson/CheckQuestion.astro";
+import Details from "../../components/lesson/Details.astro";
+import Hint from "../../components/lesson/Hint.astro";
+import LABox from "../../components/lesson/LABox.astro";
+import LessonTracker from "../../components/lesson/LessonTracker";
+import SessionBreak from "../../components/lesson/SessionBreak.astro";
+import TaskCard from "../../components/lesson/TaskCard.astro";
+import { getLessons, lessonHref, type LessonEntry } from "../../lib/lessons";
+import { DEVICE_LABEL, lessonKey } from "../../lib/sessions";
+
+export async function getStaticPaths() {
+  const lessons = await getLessons();
+  return lessons.map((entry) => ({ params: { slug: entry.id }, props: { entry, all: lessons } }));
+}
+
+interface Props {
+  entry: LessonEntry;
+  all: LessonEntry[];
+}
+
+const { entry, all } = Astro.props;
+const d = entry.data;
+const key = lessonKey(d.week);
+const body = entry.body ?? "";
+
+function used(component: string, attr: string): string[] {
+  const re = new RegExp(`<${component}\\b[^>]*\\b${attr}="([^"]+)"`, "g");
+  return [...body.matchAll(re)].map((m) => m[1]!);
+}
+const breakList = used("SessionBreak", "id");
+const dupBreaks = breakList.filter((id, i) => breakList.indexOf(id) !== i);
+if (dupBreaks.length) throw new Error(`${entry.id}: <SessionBreak id>가 중복된다: ${dupBreaks.join(", ")}`);
+const breaks = new Set(breakList);
+const cards = new Set(used("TaskCard", "fn"));
+const missingBreaks = d.sessions.filter((s) => !breaks.has(s.id)).map((s) => s.id);
+const missingCards = [...d.tasks, ...d.read_only].filter((fn) => !cards.has(fn));
+if (missingBreaks.length) throw new Error(`${entry.id}: <SessionBreak>가 없는 세션: ${missingBreaks.join(", ")}`);
+if (missingCards.length) throw new Error(`${entry.id}: <TaskCard>가 없는 함수: ${missingCards.join(", ")}`);
+
+const prereqs = d.prereq.map((p) => {
+  const target = all.find((e) => lessonKey(e.data.week) === p);
+  return { key: p, title: target?.data.title, href: target ? lessonHref(target) : undefined };
+});
+
+Astro.locals.lesson = { key, week: d.week, tasks: d.tasks, read_only: d.read_only, sessions: d.sessions };
+const { Content } = await render(entry);
+const components = { CheckQuestion, Details, Hint, LABox, SessionBreak, TaskCard };
+---
+
+<Base title={`${key} ${d.title}`} description={d.summary}>
+  <LessonTracker client:idle lessonKey={key} />
+
+  <header class="lesson-head">
+    <span class="eyebrow">{key} · {d.units}단위 · 세션 {d.sessions.length}개{d.jetbot && " · JetBot"}</span>
+    <h1>{d.title}</h1>
+  </header>
+
+  <aside class="return-box" aria-label="복귀 박스">
+    <span class="eyebrow">⓪ 돌아왔다면 여기부터</span>
+    <p class="summary">{d.summary}</p>
+    {
+      prereqs.length > 0 && (
+        <p class="prereq">
+          선행:{" "}
+          {prereqs.map((p, i) => (
+            <>
+              {i > 0 && ", "}
+              {p.href ? <a href={p.href}>{p.key} {p.title}</a> : <span>{p.key} (아직 없음)</span>}
+            </>
+          ))}
+        </p>
+      )
+    }
+    <details class="fold sessions">
+      <summary>세션 {d.sessions.length}개 보기</summary>
+      <ol class="fold-body session-list">
+        {
+          d.sessions.map((s) => (
+            <li>
+              <span class="badge" data-tone="device">{DEVICE_LABEL[s.device]}</span> {s.title}
+            </li>
+          ))
+        }
+      </ol>
+    </details>
+  </aside>
+
+  <article class="lesson-body">
+    <Content components={components} />
+  </article>
+</Base>
+
+<style>
+  .lesson-head h1 {
+    margin-top: var(--space-1);
+  }
+  .return-box {
+    border-left: 4px solid var(--accent);
+    background: var(--paper-raised);
+    padding: var(--space-3) var(--space-4);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin-bottom: var(--space-6);
+  }
+  .summary {
+    margin: var(--space-1) 0 var(--space-2);
+    font-weight: 600;
+  }
+  .prereq {
+    font-size: var(--text-sm);
+    margin-bottom: var(--space-2);
+  }
+  .sessions {
+    margin-bottom: 0;
+    background: transparent;
+  }
+  .session-list {
+    margin: 0;
+    padding-left: 1.4em;
+    font-size: var(--text-sm);
+    display: grid;
+    gap: var(--space-1);
+  }
+</style>

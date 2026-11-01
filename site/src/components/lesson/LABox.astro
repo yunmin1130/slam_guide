@@ -1,0 +1,30 @@
+---
+/**
+ * 선형대수 박스 (기본 접힘). frontmatter la_box 항목마다 하나.
+ * 내용 순서: 한 줄 정의 → 기하학적 의미 → SLAM에서 어디 쓰이나 → 이전 레슨 링크 (LESSON_TEMPLATE §3 ②)
+ */
+interface Props {
+  term: string;
+}
+const { term } = Astro.props;
+---
+
+<details class="fold la">
+  <summary><span class="la-tag">LA</span>{term}</summary>
+  <div class="fold-body"><slot /></div>
+</details>
+
+<style>
+  .la {
+    border-left: 4px solid var(--device);
+  }
+  .la-tag {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--device);
+    background: var(--device-bg);
+    padding: 0.2em 0.45em;
+    border-radius: 4px;
+  }
+</style>

@@ -12,8 +12,8 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 - [x] 루트 `package.json` (npm workspaces: `site`), lockfile, Node 버전 고정(`.nvmrc` + `engines`), `.gitignore`
 - [x] Astro + MDX + React 초기화 (`site/`), `site`·`base: "/slam_guide/"` 설정
 - [x] GitHub Actions workflow 작성 (`.github/workflows/deploy.yml`, `permissions: pages: write, id-token: write`)
-- [ ] **사용자**: 저장소 Settings → Pages → Source를 "GitHub Actions"로
-- [ ] main에 머지·push 후 빈 페이지가 `https://yunmin1130.github.io/slam_guide/`에 뜨는지 확인
+- [x] **사용자**: 저장소 Settings → Pages → Source를 "GitHub Actions"로
+- [x] main에 머지·push 후 빈 페이지가 `https://yunmin1130.github.io/slam_guide/`에 뜨는지 확인 (2026-11-01)
 
 ### 2. core와 테스트
 - [x] `core/{mine,reference,tests}` 구조, 루트 `tsconfig.json`(`@core/*`, `@core/prev/*` paths) + Vite `resolve.alias` + `server.fs.allow`
@@ -24,13 +24,14 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 - [x] CI 테스트 단계: `test:ref`(통과 조건) → `scripts/check-mine-syntax.mjs` → `test:mine || true` → build → deploy
 
 ### 3. 사이트 기본
-- [ ] remark-math + rehype-katex (빌드 타임 수식)
-- [ ] 다크 모드, 1단 모바일 레이아웃, safe-area inset
-- [ ] 레슨 컬렉션 스키마 (LESSON_TEMPLATE §2 frontmatter 검증, `sessions.device` 포함)
-- [ ] 레슨 컴포넌트: `LABox`, `TaskCard`(+`readOnly`), `Details`, `SessionBreak`, 체크 질문
-- [ ] `lib/impl.ts`: `test-results.json` 키(`w{NN}/{함수명}`) 기반 기본값 + 토글 + "아직 내 구현 아님" 배지
-- [ ] `lib/storage.ts`: localStorage 전용 구현 (인터페이스는 ARCHITECTURE §7)
-- [ ] 대시보드: 레슨 목록 + 현재 기기 기준 "다음 세션"
+- [x] remark-math + rehype-katex (빌드 타임 수식)
+- [x] 다크 모드(기기 설정 따름), 1단 모바일 레이아웃, safe-area inset
+- [x] 레슨 컬렉션 스키마 (LESSON_TEMPLATE §2 frontmatter 검증, `sessions.device` 포함)
+- [x] 레슨 컴포넌트: `LABox`, `TaskCard`(+`readOnly`), `Details`, `Hint`, `SessionBreak`, `CheckQuestion`
+- [x] `lib/impl.ts`: `test-results.json` 키(`w{NN}/{함수명}`) 기반 기본값 + `ImplToggle` + "아직 내 구현 아님" 배지
+- [x] `lib/storage.ts`: localStorage 전용 구현 (인터페이스는 ARCHITECTURE §7)
+- [x] 대시보드: 레슨 목록 + 현재 기기 기준 "다음 세션"
+- [x] 사이트 로직 테스트 (`test:site`, CI 통과 조건). 393px 가로 넘침·콘솔 에러 없음 확인 (headless)
 
 ### 4. 완료 확인
 - [ ] 1주차 LA1 레슨 MDX 생성 + 빌드 통과 (손코딩 자체는 1주차에서)
@@ -48,3 +49,4 @@ AI 주도, PC에서만. 목표는 **최소 범위**다. 위에서부터 순서�
 | `datasets/` PC Python 스크립트 (`calibrate.py`, `export_matches.py`) | 4~5주차 |
 | mine 예외 시 reference 복귀 UI, 비교 오버레이 | 5주차 |
 | WSL2 / Docker 세팅 | 12주차 (M1 이후) |
+| 체크 질문 풀이 저장 (`checked`에 `q:` 접두사 id로 넣어 세션 id와 충돌 방지) | 2주 복귀 복습 기능 만들 때 |

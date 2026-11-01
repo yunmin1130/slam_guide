@@ -1,0 +1,67 @@
+---
+week: 1
+title: 선형대수 ① 벡터와 행렬
+summary: 내적·외적으로 각도와 방향을 재고, 외적을 행렬 곱 [v]×로 바꾸는 법을 익힌다
+prereq: []
+la_box: [벡터·노름, 내적과 투영, 외적, 선형변환과 행렬곱, 역행렬·행렬식, 동차좌표]
+tasks: [skew]
+read_only: [dot, cross]
+deliverables: []
+demo: VectorViewer
+jetbot: false
+units: 1
+sessions:
+  - { id: s1, device: phone, title: "개념: 벡터, 내적, 외적" }
+  - { id: s2, device: phone, title: "개념: 선형변환과 행렬" }
+  - { id: s3, device: phone, title: "LA 박스 훑기" }
+  - { id: s4, device: pad, title: "손으로 [v]× 유도하기" }
+  - { id: s5, device: pc, title: "과제: skew 구현·테스트 통과" }
+  - { id: s6, device: pc, title: "읽기만: dot, cross" }
+  - { id: s7, device: phone, title: "체크 질문" }
+---
+
+> 4단계(LA1 레슨 완성)에서 본문을 채운다. 지금은 플랫폼 컴포넌트 확인용 뼈대다.
+
+## 개념
+
+외적은 행렬 곱으로 바꿔 쓸 수 있다. 모든 $w$에 대해
+
+$$
+v \times w = [v]_\times \, w
+$$
+
+<SessionBreak id="s1" />
+
+<SessionBreak id="s2" />
+
+<LABox term="외적">
+  두 벡터에 모두 수직인 벡터를 만든다. 크기는 두 벡터가 만드는 평행사변형의 넓이 $\lVert a \rVert \lVert b \rVert \sin\theta$다.
+</LABox>
+
+<SessionBreak id="s3" />
+
+<SessionBreak id="s4" />
+
+## 과제
+
+<TaskCard fn="skew">
+  벡터 $v$로 반대칭 행렬 $[v]_\times$를 만든다.
+
+  <Hint level={1}>$[v]_\times w$의 각 성분을 $v \times w$의 각 성분과 비교해 본다.</Hint>
+</TaskCard>
+
+<SessionBreak id="s5" />
+
+<TaskCard fn="dot" readOnly>두 벡터의 내적.</TaskCard>
+
+<TaskCard fn="cross" readOnly>두 벡터의 외적.</TaskCard>
+
+<SessionBreak id="s6" />
+
+## 체크 질문
+
+<CheckQuestion q="[v]×의 대각 성분은 왜 모두 0인가?" kind="왜">
+  $v \times v = 0$이기 때문이다.
+</CheckQuestion>
+
+<SessionBreak id="s7" />

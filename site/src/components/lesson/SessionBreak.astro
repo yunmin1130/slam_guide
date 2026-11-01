@@ -1,0 +1,36 @@
+---
+/**
+ * 세션 끝 표시 + 완료 체크. 세션 내용이 끝나는 곳에 둔다 (LESSON_TEMPLATE §3).
+ * 사용: <SessionBreak id="s1" />  — id는 frontmatter sessions의 id
+ */
+import SessionCheck from "./SessionCheck";
+import { requireLesson } from "./context";
+import { DEVICE_LABEL } from "../../lib/sessions";
+
+interface Props {
+  id: string;
+}
+
+const lesson = requireLesson(Astro.locals, "SessionBreak");
+const index = lesson.sessions.findIndex((s) => s.id === Astro.props.id);
+const session = lesson.sessions[index];
+if (!session) throw new Error(`${lesson.key}: <SessionBreak id="${Astro.props.id}">가 frontmatter sessions에 없다`);
+---
+
+<div class="session-break" id={`session-end-${session.id}`}>
+  <SessionCheck
+    client:visible
+    lessonKey={lesson.key}
+    sessionId={session.id}
+    allSessionIds={lesson.sessions.map((s) => s.id)}
+    title={session.title}
+    deviceLabel={DEVICE_LABEL[session.device]}
+    position={`${index + 1}/${lesson.sessions.length}`}
+  />
+</div>
+
+<style>
+  .session-break {
+    margin: var(--space-8) 0;
+  }
+</style>

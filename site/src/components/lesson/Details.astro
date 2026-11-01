@@ -1,0 +1,13 @@
+---
+/** 긴 유도·부연 설명 접기 (기본 닫힘). LESSON_TEMPLATE §3 ① */
+interface Props {
+  summary: string;
+  open?: boolean;
+}
+const { summary, open = false } = Astro.props;
+---
+
+<details class="fold" open={open}>
+  <summary>{summary}</summary>
+  <div class="fold-body"><slot /></div>
+</details>

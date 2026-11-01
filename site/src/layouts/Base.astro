@@ -1,0 +1,63 @@
+---
+/** 모든 페이지 공통 껍데기: 메타, KaTeX CSS, 전역 스타일, 상단 내비. */
+import "katex/dist/katex.min.css";
+import "../styles/global.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "SLAM을 손코딩으로 배우는 개인 학습 사이트" } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const isHome = Astro.url.pathname === base || Astro.url.pathname === base.replace(/\/$/, "");
+---
+
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#15130f" media="(prefers-color-scheme: dark)" />
+    <title>{isHome ? title : `${title} · SLAM 학습`}</title>
+  </head>
+  <body>
+    <div class="page">
+      <header class="site-head">
+        <a href={base} class="brand" aria-current={isHome ? "page" : undefined}>
+          <span class="brand-mark" aria-hidden="true">◎</span> SLAM 학습
+        </a>
+      </header>
+      <main>
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>
+
+<style>
+  .site-head {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: var(--space-4);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--touch);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .brand-mark {
+    color: var(--accent);
+  }
+</style>

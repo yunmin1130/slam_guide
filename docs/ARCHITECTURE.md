@@ -21,7 +21,7 @@ SLAM 학습 사이트의 구조 설계 문서. 백엔드 없는 정적 사이트
 | 그래프 | uPlot 또는 손으로 그린 SVG | Plotly(약 3.5MB)는 모바일에 무거움 |
 | 영상 처리 | PC Python OpenCV (`datasets/`) | 캘리브레이션·특징점은 PC에서 JSON으로 내보냄. OpenCV.js는 선택 (8~10MB, 기본 빌드에 `fisheye` 없음) |
 | 선형대수 | ml-matrix | SVD, 역행렬 등 기본 연산. thin SVD 함정은 LESSON_TEMPLATE §4 |
-| 수식 | KaTeX (remark-math + rehype-katex) | 빌드 타임 렌더링 → 런타임 JS 0 |
+| 수식 | KaTeX (remark-math + rehype-katex) | 빌드 타임 렌더링 → 런타임 JS 0. Astro 7 기본 처리기(Sätteri)엔 KaTeX 플러그인이 없어 `markdown.processor: unified()`로 쓴다. katex는 rehype-katex와 같은 0.16.x로 맞춘다 (CSS·렌더러 버전 일치) |
 | 테스트 | Vitest (`ref`·`mine` 두 project) | §6 참고 |
 | 배포 | GitHub Pages + GitHub Actions | 무료, push 시 자동 배포, 포트폴리오 링크 |
 | C++ (12주차~) | C++17 + Eigen + OpenCV, CMake, GTest | 채용 시장 요구. Windows에서는 WSL2 Ubuntu 22.04 또는 Docker |
@@ -164,7 +164,7 @@ interface LessonState {
   style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;
   connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'self'
   ```
-  `style-src 'unsafe-inline'`은 KaTeX의 인라인 `style` 속성 때문에 필요하다. 인라인 스크립트(island 하이드레이션, 다크 모드 깜빡임 방지)는 해시로 허용한다.
+  `style-src 'unsafe-inline'`은 KaTeX의 인라인 `style` 속성 때문에 필요하다. 인라인 스크립트(island 하이드레이션)는 해시로 허용한다. 다크 모드는 `prefers-color-scheme`만 따르므로 스크립트가 없다.
 
 ## 8. 모바일 우선 UI 원칙
 

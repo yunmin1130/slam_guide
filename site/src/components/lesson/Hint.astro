@@ -1,0 +1,21 @@
+---
+/** 과제 힌트 단계: ① 개념 → ② 수식 → ③ 의사코드. 정답 코드는 넣지 않는다 (LESSON_TEMPLATE §3 ④) */
+interface Props {
+  level: 1 | 2 | 3;
+}
+const LABEL = { 1: "힌트 ① 개념", 2: "힌트 ② 수식", 3: "힌트 ③ 의사코드" } as const;
+const { level } = Astro.props;
+if (!(level in LABEL)) throw new Error(`<Hint level>은 1·2·3 중 하나 (받은 값: ${level})`);
+---
+
+<details class="fold hint">
+  <summary>{LABEL[level]}</summary>
+  <div class="fold-body"><slot /></div>
+</details>
+
+<style>
+  .hint {
+    background: var(--paper);
+    margin: var(--space-2) 0;
+  }
+</style>

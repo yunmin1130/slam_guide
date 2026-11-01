@@ -14,7 +14,8 @@
     "preview": "astro preview --root site",
     "test:ref": "vitest run --project ref --passWithNoTests",
     "test:mine": "vitest run --project mine --passWithNoTests --reporter=json --outputFile=site/src/data/test-results.json",
-    "test:all-mine": "cross-env CORE_PREV=mine vitest run --project mine --passWithNoTests"
+    "test:all-mine": "cross-env CORE_PREV=mine vitest run --project mine --passWithNoTests",
+    "test:site": "vitest run --project site"
   },
   "dependencies": {
     "ml-matrix": "^6.15.1"

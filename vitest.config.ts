@@ -30,6 +30,14 @@ export default defineConfig({
           env: { IMPL: "mine" },
         },
       },
+      {
+        // 사이트 순수 로직 (impl·storage·sessions). core 테스트와 분리
+        extends: true,
+        test: {
+          name: "site",
+          include: ["site/src/lib/**/*.test.ts"],
+        },
+      },
     ],
   },
 });

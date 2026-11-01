@@ -1,0 +1,33 @@
+---
+/**
+ * 체크 질문 (면접형). 답은 접어둔다. 레슨당 3개: 개념 / 왜? / 실무 상황 (LESSON_TEMPLATE §3 ⑤)
+ * 사용: <CheckQuestion q="질문">답</CheckQuestion>
+ */
+interface Props {
+  q: string;
+  kind?: "개념" | "왜" | "실무";
+}
+const { q, kind } = Astro.props;
+---
+
+<section class="cq">
+  <p class="cq-q">
+    {kind && <span class="eyebrow">{kind}</span>}
+    <strong>{q}</strong>
+  </p>
+  <details class="fold">
+    <summary>답 보기</summary>
+    <div class="fold-body"><slot /></div>
+  </details>
+</section>
+
+<style>
+  .cq {
+    margin: var(--space-6) 0;
+  }
+  .cq-q {
+    display: grid;
+    gap: var(--space-1);
+    margin-bottom: var(--space-2);
+  }
+</style>
