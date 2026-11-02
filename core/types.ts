@@ -172,3 +172,21 @@ export interface PoseGraphResult {
   readonly converged: boolean;
   readonly costs: readonly number[];
 }
+
+/** 특징점 디스크립터 (10주차). 바이너리(ORB)는 바이트(0~255) 배열, 실수(SIFT)는 실수 배열 */
+export type Descriptor = readonly number[];
+
+/** 매칭 하나: query[query] ↔ train[train], 1위 거리와 2위 거리 */
+export interface Match {
+  readonly query: number;
+  readonly train: number;
+  readonly distance: number;
+  readonly secondDistance: number;
+}
+
+export interface RatioTestOptions {
+  /** "hamming": 바이트 배열의 다른 비트 수, "l2": 유클리드 거리 */
+  readonly metric: "hamming" | "l2";
+  /** 1위 거리 < ratio × 2위 거리 일 때만 받아들인다 (0 < ratio ≤ 1, 보통 0.7~0.8) */
+  readonly ratio: number;
+}

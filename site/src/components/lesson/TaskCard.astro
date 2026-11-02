@@ -121,16 +121,22 @@ const initialSource = mineText === undefined ? "" : normalizeNewlines(mineText);
   .task-foot {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 var(--space-4);
+    gap: 0 var(--space-2);
     border-top: 1px dashed var(--rule);
     margin-top: var(--space-3);
     padding-top: var(--space-2);
   }
+  /* 44px 터치 영역이 눈에 보이게 알약 모양으로 (글자만 있으면 작아 보여 잘못 누르기 쉽다) */
   .task-link {
     display: inline-flex;
     align-items: center;
     min-height: var(--touch);
+    margin: var(--space-1) 0;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
     font-size: var(--text-sm);
+    overflow-wrap: anywhere;
   }
   .task-run {
     width: 100%;

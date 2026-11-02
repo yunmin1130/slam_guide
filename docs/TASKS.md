@@ -20,7 +20,8 @@ B단계(0주차 플랫폼 뼈대)는 2026-11-01 완료, G1 통과. 그 체크리
 | 8a | 완료 (2026-11-02) | 없음 (데모 없음) | 아직 |
 | 8b | 완료 (2026-11-02) | 대기 (BA 데모, 모아서 확인) | 아직 |
 | 9 | 완료 (2026-11-02) | 없음 (데모 없음) | 아직 |
-| 10 | 다음 | | |
+| 10 | 완료 (2026-11-03) | 없음 (데모 없음) | 아직 · JetBot 주행 데이터셋 아직 |
+| 11 | 다음 | | |
 
 ### 플랫폼 추가 (C단계 중)
 - [x] 코드 연습장: 폰에서 편집·브라우저 채점·GitHub 제출 (2026-11-02, ARCHITECTURE §6.1)
@@ -32,11 +33,14 @@ B단계(0주차 플랫폼 뼈대)는 2026-11-01 완료, G1 통과. 그 체크리
 - [x] 데모에서 내 구현이 예외를 던지면 "정답으로 보기" (5주차 EpipolarDemo, ARCHITECTURE §5)
 - [x] `datasets/export_matches.py`: 사진 두 장 또는 영상 두 프레임의 ORB 대응점 → DATA §2 JSON, OpenCV E 추정 비교, `--selftest`
 - [x] "내 사진으로 해보기": 대응점·calib JSON을 브라우저에서 읽어 내 eightPoint·ransac으로 E 추정 (저장 안 함)
+- [x] `datasets/jetbot_to_std.py`: 주행 영상 → 표준 시퀀스 폴더(DATA §2), `--selftest` (10주차)
 - [x] 6주차 "3D 복원" 도구: 합성 장면(정답 비교) 또는 내 대응점 파일로 E → decomposeE → triangulate → pnpDLT, 위에서 본 점 구름 (`lib/reconstruct.ts`, `lib/matchPrep.ts`)
 
-### 다음 레슨(10주차) 준비 메모
-- 특징점·매칭 원리, KLT. 손코딩 `ratioTest`만 (추출·매칭은 PC Python). LA: 거리 척도(바이너리 해밍 / 실수 L2·코사인). 데모 없음.
-- JetBot: 집 안 주행 데이터셋 제작 시작 (CURRICULUM 10주차, DATA 문서와 맞춘다).
+### 다음 레슨(11주차) 준비 메모
+- 미니 VO (4.5단위, M1). 파트 11a `initMap`(2D-2D 초기화 + 시차 검사) / 11b `trackPnP`(맵 포인트 3D-2D PnP+RANSAC) / 11c `localBA`(`smallBA` 재사용, `vo` 조립은 읽기만) / 11d 평가 `alignUmeyama`(Sim(3)), `ate` (`rpe`, `selectKeyframe` 읽기만). 데모: VO 궤적.
+- M1 리포트는 TUM RGB-D 또는 KITTI(정답 궤적)로. JetBot 데이터(복귀 오차, 사각형)는 보너스. 10주차 `jetbot_to_std.py` 폴더를 입력으로.
+- 체크 질문: 2D-2D만 반복하면 왜 궤적이 이어지지 않나, 순수 회전에서 E 분해·삼각측량이 왜 무너지나(ORB-SLAM의 H/E 선택).
+- 끝나면 M1 관문(WORKFLOW §1): 커리큘럼 재검토(G0), 포트폴리오 관점 리뷰.
 - G3(폰 확인)는 모아서 한다: 대기 중인 데모는 7a GN 데모, 8b BA 데모.
 
 ## 나중에 (붙이는 시점)

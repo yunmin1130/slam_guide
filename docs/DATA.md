@@ -17,7 +17,7 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
 ```
 {sequence_name}/
 ├── meta.json            # 시퀀스 정보
-├── calib.json           # 카메라 캘리브레이션
+├── calib.json           # 카메라 캘리브레이션 (없으면 jetbot_to_std.py가 경고만 한다)
 ├── images/              # 프레임 이미지
 │   ├── 000000.jpg
 │   ├── 000001.jpg
@@ -61,11 +61,11 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
   "detector": "orb",                    // orb | sift
   "pts_i": [[412.3, 201.8], ...],       // 픽셀 좌표 (왜곡된 원본 이미지 기준)
   "pts_j": [[418.9, 199.2], ...],
-  "ratio": [0.61, ...]                  // 1·2위 거리비 (10주차 ratioTest 입력)
+  "ratio": [0.61, ...]                  // 1·2위 거리비 d₁/d₂ (10주차 비율 검사, 0.8 미만만 남는다)
 }
 ```
 - 어안 이미지는 core에서 `calib.json`으로 언프로젝션해 베어링 벡터(bearing vector, 광선 방향의 단위 벡터)로 바꾼 뒤 E를 추정한다 (CURRICULUM 5주차).
-- `datasets/export_matches.py`가 만든다: 사진 두 장(`a.jpg b.jpg`) 또는 영상의 두 프레임(`--video walk.mp4 --frames 45 75`). ORB 특징점 + 1·2위 거리비 0.8 미만만 남긴다. `--calib`을 주면 OpenCV `findEssentialMat`(RANSAC 2px)의 inlier 수도 출력한다(5주차 비교 기준).
+- `datasets/export_matches.py`가 만든다(기본 저장 `datasets/matches/{i}_{j}.json`, 시퀀스에 붙이려면 `--out datasets/sequences/{name}/matches/{i}_{j}.json`). 입력은 사진 두 장(`a.jpg b.jpg`) 또는 영상의 두 프레임(`--video walk.mp4 --frames 45 75`). ORB 특징점 + 1·2위 거리비 0.8 미만만 남긴다. `--calib`을 주면 OpenCV `findEssentialMat`(RANSAC 2px)의 inlier 수도 출력한다(5주차 비교 기준).
 
 ### imu.csv
 ```
@@ -169,4 +169,5 @@ gst-launch-1.0 -e nvarguscamerasrc sensor-mode=3 \
 
 - 사이트 샘플에는 §1 상한만큼만 잘라서 넣고, 페이지에 출처를 표기한다.
 - 스크립트는 `datasets/` 폴더에 둔다: `kitti_to_std.py`, `euroc_to_std.py`, `tum_to_std.py`, `jetbot_to_std.py`, `calibrate.py`, `export_matches.py`
+- `datasets/jetbot_to_std.py`(10주차): 주행 영상 mp4 → 표준 시퀀스 폴더(`images/`, `timestamps.txt`, `meta.json`, 선택 `calib.json`). 기본 3장마다 1장, 결과는 `datasets/sequences/{name}/`(저장소에 올리지 않는다). `--selftest`로 합성 영상 검증.
 - 스크립트는 PC 전용이며 사이트 빌드에 포함하지 않는다.
