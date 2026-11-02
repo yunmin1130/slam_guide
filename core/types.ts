@@ -42,3 +42,25 @@ export interface BrownDistortion {
 
 /** 어안 렌즈 왜곡 (Kannala-Brandt, OpenCV fisheye) [k1, k2, k3, k4] */
 export type FisheyeDistortion = readonly [number, number, number, number];
+
+/** RANSAC 설정 (5주차). T = 데이터 하나(예: 대응점 쌍), M = 모델(예: F 행렬) */
+export interface RansacOptions<T, M> {
+  /** 모델 하나를 맞추는 데 필요한 최소 개수 (8점 알고리즘이면 8) */
+  readonly sampleSize: number;
+  /** 표본으로 모델을 맞춘다. 표본이 퇴화해서 못 맞추면 null */
+  readonly fit: (sample: readonly T[]) => M | null;
+  /** 모델에 대한 데이터 하나의 오차 (0 이상) */
+  readonly error: (model: M, item: T) => number;
+  /** 오차가 이 값보다 작으면 inlier */
+  readonly threshold: number;
+  /** 표본을 뽑아 볼 횟수 */
+  readonly iterations: number;
+  /** [0, 1) 난수. Math.random 대신 시드 고정 RNG를 넣는다 (LESSON_TEMPLATE §4) */
+  readonly rng: () => number;
+}
+
+export interface RansacResult<M> {
+  readonly model: M;
+  /** inlier 데이터의 번호 (오름차순) */
+  readonly inliers: readonly number[];
+}

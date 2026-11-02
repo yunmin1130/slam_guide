@@ -1,0 +1,16 @@
+---
+/**
+ * EpipolarDemo 데모 래퍼. 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * 그림은 SVG 두 장이라 WebGL을 쓰지 않는다. 화면에 보일 때만 불러온다 (client:visible).
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import EpipolarDemo from "./EpipolarDemo";
+
+const lesson = requireLesson(Astro.locals, "EpipolarDemo");
+// 데모가 실제로 부르는 손코딩 함수만 배지에 넣는다
+const DEMO_FNS = ["epipolarLine", "eightPoint", "ransac"];
+const statuses = lesson.tasks.filter((fn) => DEMO_FNS.includes(fn)).map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<EpipolarDemo client:visible week={lesson.week} statuses={statuses} />

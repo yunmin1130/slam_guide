@@ -107,8 +107,9 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
   - 주차 파일 전체가 import 실패해 결과가 비면 그 주차 전체를 reference로 처리한다.
 - `test-results.json`과 `mine-syntax.json`은 생성물이라 gitignore한다. 빌드 전용 `lib/implStatus.ts`가 `import.meta.glob`으로 읽어서, 파일이 없으면 빈 결과로 처리한다 (로컬 빌드에서도 깨지지 않음). 상태는 `.astro`에서 구해 props로 넘긴다. `impl.ts`는 클라이언트 번들에 들어가므로 결과 JSON을 import하지 않는다 (G1, 2026-11-01).
 - 예외: `components/lesson/context.ts`는 읽기만 카드에 보여줄 reference **소스 문자열**을 빌드 시점에 `?raw`로 읽는다. 실행하지 않으므로 분기점이 아니다.
-- mine 실행 중 예외가 나면 에러 메시지를 데모 안에 보여주고 reference로 되돌릴 수 있게 한다 (5주차에 추가).
-- 비교 모드(두 결과 겹쳐 그리기)는 5주차에 추가한다.
+- mine 실행 중 예외가 나면 에러 메시지를 데모 안에 보여주고 reference로 되돌릴 수 있게 한다 (5주차 `EpipolarDemo`부터, 2026-11-02). 데모는 함수마다 따로 try로 감싸서, 한 함수가 TODO여도 나머지 결과는 그린다. 내 구현에서 오류가 나면 "정답으로 보기" 버튼이 토글을 reference로 바꾼다.
+- 비교 그리기: 5주차 데모는 같은 구현 안에서 "8점 전체"와 "RANSAC" 결과를 겹쳐 그린다. 내 구현과 정답을 동시에 겹쳐 그리는 모드는 필요해지면 붙인다 (TASKS "나중에").
+- 사용자 파일: 5주차 "내 사진으로 해보기"는 사용자가 고른 JSON(대응점·calib)을 브라우저 안에서만 읽고 저장하지 않는다. 형식 검사는 `lib/matchesFile.ts` 한 곳에서 한다.
 
 ## 6. 과제 함수와 CI
 

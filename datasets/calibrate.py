@@ -197,7 +197,7 @@ def run(views, size, obj) -> tuple[dict, dict]:
         fish = summarize("fisheye", calibrate_fisheye(obj, views, size), views, size)
     except cv2.error as e:
         # 어안 캘리브레이션은 판 위치·각도가 비슷한 프레임만 있으면 "ill-conditioned" 오류로 멈춘다
-        last = str(e).strip().splitlines()[-1]
+        last = (str(e).strip().splitlines() or [type(e).__name__])[-1]
         sys.exit(f"캘리브레이션 실패: {last}\n판을 화면 구석구석에 두고, 여러 방향으로 기울인 프레임을 더 찍어서 다시 해 봐")
     print_table([pin, fish])
     return pin, fish

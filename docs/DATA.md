@@ -65,6 +65,7 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
 }
 ```
 - 어안 이미지는 core에서 `calib.json`으로 언프로젝션해 베어링 벡터(bearing vector, 광선 방향의 단위 벡터)로 바꾼 뒤 E를 추정한다 (CURRICULUM 5주차).
+- `datasets/export_matches.py`가 만든다: 사진 두 장(`a.jpg b.jpg`) 또는 영상의 두 프레임(`--video walk.mp4 --frames 45 75`). ORB 특징점 + 1·2위 거리비 0.8 미만만 남긴다. `--calib`을 주면 OpenCV `findEssentialMat`(RANSAC 2px)의 inlier 수도 출력한다(5주차 비교 기준).
 
 ### imu.csv
 ```
