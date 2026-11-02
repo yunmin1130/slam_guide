@@ -1,0 +1,16 @@
+---
+/**
+ * VoDemo 래퍼 (11c). 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * vo는 11a~11c의 손코딩 세 함수로 조립되고, 평가는 11d의 ate를 쓰므로 그 함수들을 배지에 넣는다.
+ * 그림은 SVG 하나라 WebGL을 쓰지 않는다. 화면에 보일 때만 불러온다 (client:visible).
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import VoDemo from "./VoDemo";
+
+const lesson = requireLesson(Astro.locals, "VoDemo");
+const DEMO_FNS = ["initMap", "trackPnP", "localBA", "alignUmeyama", "ate"];
+const statuses = DEMO_FNS.map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<VoDemo client:visible week={lesson.week} statuses={statuses} />

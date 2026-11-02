@@ -190,3 +190,139 @@ export interface RatioTestOptions {
   /** 1위 거리 < ratio × 2위 거리 일 때만 받아들인다 (0 < ratio ≤ 1, 보통 0.7~0.8) */
   readonly ratio: number;
 }
+
+/**
+ * 프레임 하나에서 본 특징점 (11주차). id는 추적 번호: 여러 프레임에서 같은 3D 점을 가리킨다
+ * (KLT 추적이나 디스크립터 매칭으로 이어 붙인 결과). uv는 왜곡을 이미 편 픽셀 좌표.
+ */
+export interface Feature {
+  readonly id: number;
+  readonly uv: Vec2;
+}
+
+/** 맵 포인트 (11주차): 추적 번호 id인 점의 월드 좌표 */
+export interface MapPoint {
+  readonly id: number;
+  readonly X: Vec3;
+}
+
+/** 키프레임 (11주차): 프레임 번호, 자세 T_cw (p_c = R·X + t), 그 프레임의 특징점 */
+export interface Keyframe {
+  readonly frame: number;
+  readonly T: SE3;
+  readonly features: readonly Feature[];
+}
+
+/** 2D-2D 초기화 설정 (11a) */
+export interface InitOptions {
+  /** RANSAC inlier 기준과 삼각측량 점의 재투영 오차 상한 (픽셀) */
+  readonly threshold: number;
+  readonly iterations: number;
+  /** 시차각 중앙값이 이보다 작으면 초기화를 미룬다 (도) */
+  readonly minParallaxDeg: number;
+  /** 살아남은 맵 포인트가 이보다 적으면 초기화를 미룬다 */
+  readonly minPoints: number;
+  readonly rng: () => number;
+}
+
+export interface InitResult {
+  /** 프레임 1 → 프레임 2 상대 자세 T21 (프레임 1이 월드). |t| = 1 */
+  readonly T: SE3;
+  /** 두 카메라 앞에 있고 재투영 오차가 작은 점들 (id 오름차순) */
+  readonly points: readonly MapPoint[];
+  /** 남은 점들의 시차각 중앙값 (도) */
+  readonly parallaxDeg: number;
+}
+
+/** PnP 추적 설정 (11b) */
+export interface TrackOptions {
+  /** 재투영 오차 inlier 기준 (픽셀) */
+  readonly threshold: number;
+  readonly iterations: number;
+  /** inlier가 이보다 적으면 추적 실패 (6 이상) */
+  readonly minInliers: number;
+  readonly rng: () => number;
+}
+
+export interface TrackResult {
+  /** 현재 프레임 자세 T_cw */
+  readonly T: SE3;
+  /** inlier 특징점의 id (오름차순) */
+  readonly inliers: readonly number[];
+}
+
+/** local BA 설정 (11c) */
+export interface LocalBAOptions {
+  /** 최근 몇 개의 키프레임을 최적화하나 (2 이상) */
+  readonly window: number;
+  /** LM 설정 (로버스트 커널 포함) */
+  readonly solver: SolverOptions;
+}
+
+export interface LocalBAResult {
+  /** 창 안의 키프레임만 자세가 바뀐다 (창의 가장 오래된 둘과 창 밖 키프레임은 고정) */
+  readonly keyframes: readonly Keyframe[];
+  /** 최적화한 점만 바뀐다 */
+  readonly map: readonly MapPoint[];
+  /** smallBA가 받아들인 업데이트마다의 비용 (처음 값 포함) */
+  readonly costs: readonly number[];
+}
+
+/** 새 키프레임 판정 규칙 (11c, 읽기만) */
+export interface KeyframeRule {
+  /** 지난 키프레임 뒤로 최소 몇 프레임 */
+  readonly minFrames: number;
+  /** 이만큼 지나면 무조건 키프레임 */
+  readonly maxFrames: number;
+  /** 추적 inlier가 지난 키프레임의 이 비율 아래로 떨어지면 키프레임 */
+  readonly minTrackedRatio: number;
+}
+
+export interface VoOptions {
+  readonly init: InitOptions;
+  readonly track: TrackOptions;
+  readonly keyframe: KeyframeRule;
+  /** null이면 local BA를 건너뛴다 (비교용) */
+  readonly ba: LocalBAOptions | null;
+  /** 프레임 하나를 처리할 때마다 부른다 (진행 표시용, 선택) */
+  readonly onFrame?: (frame: number) => void;
+}
+
+export interface VoResult {
+  /** 프레임마다 자세 T_cw. 초기화 전·추적 실패 뒤는 null */
+  readonly poses: readonly (SE3 | null)[];
+  readonly keyframes: readonly Keyframe[];
+  readonly map: readonly MapPoint[];
+  /** 초기화에 쓴 두 프레임 [기준, 두 번째]. 초기화 못 했으면 null */
+  readonly initFrames: readonly [number, number] | null;
+  /** 추적이 끊긴 프레임. 끝까지 갔으면 null */
+  readonly lostAt: number | null;
+}
+
+/** 닮음 변환 Sim(3) (11d): y = s·R·x + t */
+export interface Sim3 {
+  readonly s: number;
+  readonly R: Mat3;
+  readonly t: Vec3;
+}
+
+export interface AteResult {
+  /** 정렬 뒤 위치 오차의 제곱평균제곱근 */
+  readonly rmse: number;
+  readonly mean: number;
+  readonly median: number;
+  readonly max: number;
+  /** 점마다 정렬 뒤 위치 오차 */
+  readonly errors: readonly number[];
+  /** est → gt 정렬 변환 */
+  readonly align: Sim3;
+}
+
+export interface RpeResult {
+  /** 상대 이동 오차 RMSE (gt 단위) */
+  readonly transRmse: number;
+  /** 상대 회전 오차 RMSE (도) */
+  readonly rotRmseDeg: number;
+  /** 비교한 쌍의 수 */
+  readonly count: number;
+}

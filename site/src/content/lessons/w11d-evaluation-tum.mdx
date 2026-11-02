@@ -1,0 +1,276 @@
+---
+week: 11
+part: d
+title: 미니 VO (4) Sim(3) 정렬, ATE·RPE, TUM으로 M1 리포트
+summary: 스케일을 모르는 단안 궤적을 정답에 Sim(3)으로 맞추는 우메야마 정렬과 ATE를 구현하고, TUM RGB-D 시퀀스에서 내 VO를 채점해 M1 리포트를 만든다
+prereq: [w11c, w02]
+la_box: [직교 프로크루스테스 문제]
+tasks: [alignUmeyama, ate]
+read_only: [rpe]
+deliverables: ["M1 리포트: TUM RGB-D에서 내 VO의 ATE·RPE (local BA 켬/끔 비교, 궤적 그림, 실패 구간 분석)"]
+jetbot: false
+units: 1.25
+sessions:
+  - { id: s1, device: phone, title: "개념: ATE, RPE, 왜 Sim(3) 정렬인가" }
+  - { id: s2, device: phone, title: "개념: 우메야마 정렬 유도 + LA 박스" }
+  - { id: s3, device: pad, title: "손 유도: 정렬, 반사 경우" }
+  - { id: s4, device: pc, title: "과제: alignUmeyama 구현·테스트 통과" }
+  - { id: s5, device: pc, title: "과제: ate 구현, 읽기: rpe" }
+  - { id: s6, device: pc, title: "실습: TUM 받기, 트랙 파일 만들기, 실행" }
+  - { id: s7, device: pc, title: "실습: 기준 숫자와 비교, 설정 바꿔 보기" }
+  - { id: s8, device: pc, title: "M1 리포트 쓰기" }
+  - { id: s9, device: phone, title: "체크 질문" }
+---
+
+import VoFileRunner from "../../components/demos/VoFileRunner.astro";
+
+## 개념
+
+이번 파트를 마치면 내 VO가 얼마나 정확한지 숫자로 말할 수 있다. 정답 궤적이 있는 공개 데이터(TUM RGB-D)에서 그 숫자를 내는 것이 M1 마일스톤이다.
+
+### 두 가지 오차: ATE와 RPE
+
+- **ATE (absolute trajectory error, 절대 궤적 오차):** 추정 궤적 전체를 정답에 한 번 맞춰 놓고, 프레임마다 위치 차이를 잰다. 보통 RMSE(제곱 평균의 제곱근) 하나로 낸다. 궤적 전체의 모양이 얼마나 맞는지 보며, 누적 드리프트까지 포함한다.
+- **RPE (relative pose error, 상대 자세 오차):** $\Delta$(정수 프레임 수)만큼 떨어진 두 자세 사이의 상대 움직임을 정답의 상대 움직임과 비교한다. 짧은 구간의 정확도(오도메트리의 질)를 본다. 드리프트가 쌓여도 구간마다 맞으면 작다.
+
+### 왜 Sim(3)으로 맞추나
+
+VO의 월드는 첫 카메라이고, 길이 단위는 초기화의 $|t| = 1$이다. 정답은 모션캡처 좌표계와 미터 단위다.
+
+둘을 비교하려면 먼저 회전 $R$, 이동 $t$, **크기 $s$** 를 맞춰야 한다. 이 7자유도 변환이 닮음 변환 Sim(3)이다: $y = sRx + t$.
+
+비교하는 위치는 카메라 중심이다. VO 자세는 $T_{cw}$라서 $T_{wc}$로 뒤집고, 위치로 카메라 중심 $-R^\top t$를 쓴다(실행기는 `voEval`에서 이렇게 한다).
+
+크기를 맞추는 것이 단안 평가의 관례다. TUM 평가 도구와 궤적 평가 도구 evo(`-a`는 정렬, `-s`는 크기 맞춤, 합쳐서 `-as`)가 모두 그렇게 한다. 스테레오나 RGB-D, IMU처럼 크기를 아는 시스템이면 $s = 1$로 두고 SE(3)으로만 맞춘다.
+
+### RPE 식
+
+정답 자세를 $Q_i$, 추정 자세를 $P_i$(둘 다 $T_{wc}$)라 하자. 상대 움직임을 비교한 오차는 다음과 같다.
+
+$$
+E_i = (Q_i^{-1} Q_{i+\Delta})^{-1}\,(P_i^{-1} P_{i+\Delta})
+$$
+
+단안이면 $P$의 이동에 ATE 정렬의 $s$를 곱한 뒤 계산한다. $E_i$의 이동 크기와 회전각을 각각 RMSE로 모은다. 월드 회전·이동은 상대 움직임에서 지워지므로 정렬이 필요 없고, 크기만 필요하다.
+
+`rpe`의 $\Delta$는 정수 프레임 수다. TUM 관례는 1초 간격이라, 실행기는 1초에 해당하는 프레임 수를 쓴다(15Hz면 15, 10Hz면 10).
+
+<SessionBreak id="s1" />
+
+### 우메야마 정렬
+
+대응하는 점 $x_i$(추정), $y_i$(정답), $i = 1..n$에서 다음을 최소화하는 $s, R, t$를 찾는다.
+
+$$
+\sum_i \lVert y_i - (sRx_i + t) \rVert^2
+$$
+
+**1) $t$.** $t$로 미분해 0으로 두면 $t = \mu_y - sR\mu_x$다(평균끼리 맞춘다). 이제 중심을 뺀 $\bar x_i = x_i - \mu_x$, $\bar y_i = y_i - \mu_y$만 남는다.
+
+**2) $R$.** 제곱을 전개하면 $\lVert \bar y_i \rVert^2$, $s^2\lVert R\bar x_i \rVert^2$, 교차항이 나온다. 회전은 길이를 바꾸지 않아 $\lVert R\bar x_i \rVert = \lVert \bar x_i \rVert$이므로 $s^2\lVert \bar x_i \rVert^2$ 항은 $R$과 무관하다. 남는 교차항은 $-2s\sum_i \bar y_i^\top R \bar x_i = -2ns\,\mathrm{tr}(R^\top \Sigma)$이고, 교차 공분산은 $\Sigma = \frac{1}{n}\sum_i \bar y_i \bar x_i^\top$다.
+
+그러니 $\mathrm{tr}(R^\top\Sigma)$를 최대로 하는 회전을 찾으면 된다(LA 박스). $\Sigma = UDV^\top$이면 답은 $R = USV^\top$다. 여기서 $S = \mathrm{diag}(1, 1, \pm 1)$이고, $\det U \det V < 0$이면 $-1$을 써서 반사 대신 회전을 고른다.
+
+**3) $s$.** $s$로 미분하면 다음과 같다.
+
+$$
+s = \frac{\mathrm{tr}(DS)}{\sigma_x^2},\quad
+\sigma_x^2 = \frac{1}{n}\sum_i \lVert \bar x_i \rVert^2
+$$
+
+점들이 한 직선 위면 그 직선 둘레 회전을 정할 수 없다($\Sigma$의 둘째 특이값이 0). 이때는 예외를 던진다.
+
+<LABox term="직교 프로크루스테스 문제">
+  **정의:** 주어진 행렬 $\Sigma$에 대해 $\mathrm{tr}(R^\top\Sigma)$를 최대로 하는 직교 행렬 $R$을 찾는 문제. $\Sigma = UDV^\top$이면 $R = UV^\top$다. 회전($\det = +1$)으로 제한하면 $R = U\,\mathrm{diag}(1, 1, \det(UV^\top))\,V^\top$다.
+
+  **기하학적 의미:** 두 점 구름을 가장 잘 겹치는 회전이다. $\mathrm{tr}(R^\top U D V^\top) = \mathrm{tr}(D\,V^\top R^\top U)$에서 $V^\top R^\top U$는 직교 행렬이라 대각 원소가 1 이하이고, 모두 1일 때(단위 행렬일 때) 최대다.
+
+  **SLAM에서:** 궤적 정렬(ATE), 두 점 구름의 강체 정합(ICP의 한 단계), 6주차 PnP에서 가장 가까운 회전 찾기($M = UDV^\top \to UV^\top$)가 모두 이 문제다.
+
+  **이전 레슨:** [2주차 최소제곱과 SVD](../w02-least-squares-svd/)
+</LABox>
+
+<SessionBreak id="s2" />
+
+## 과제
+
+### 손 유도: 정렬, 반사 경우
+
+태블릿에 직접 쓴다.
+
+1. 목적 함수를 $t$로 미분해 $t = \mu_y - sR\mu_x$를 얻는다.
+2. $\sum_i \bar y_i^\top R \bar x_i = n\,\mathrm{tr}(R^\top\Sigma)$임을 보인다($a^\top R b = \mathrm{tr}(R^\top a b^\top)$을 쓴다).
+3. 2D 점 $x = \{(1, 0), (0, 1), (-1, 0)\}$을 90° 돌리고 2배 키운 뒤 $(3, 1)$만큼 옮긴 $y$를 만든다. 공식으로 $s$, $R$, $t$를 되찾는다. 2D에서는 $S = \mathrm{diag}(1, \pm 1)$이다. (힌트: $C = \frac{1}{n}\sum_i \bar x_i \bar x_i^\top$가 대각 행렬이라 $\Sigma = 2RC$로 쓸 수 있는지 본다.)
+4. $y$가 $x$의 거울상(예: $z \to -z$)이면 $\det U\det V < 0$이 된다. $S$의 $-1$이 없으면 $R$이 무엇이 되는지 설명한다.
+5. 같은 VO 결과인데 ATE는 크고 RPE는 작다면 궤적이 어떻게 생겼을까? 반대면?
+
+<SessionBreak id="s3" />
+
+<TaskCard fn="alignUmeyama">
+  추정 점들 `src`를 정답 점들 `dst`에 맞추는 $s, R, t$($dst \approx sR\,src + t$)를 최소제곱으로 구한다. `withScale`이 `false`면 $s = 1$이다. 길이가 다르거나, 3개 미만이거나, NaN·무한대가 있거나, 점들이 한 점·한 직선 위면 예외를 던진다.
+
+  <Hint level={1}>
+    평균을 빼고 교차 공분산 $\Sigma$(3×3)를 만든 뒤 `ml-matrix`의 SVD를 쓴다. 회전은 $USV^\top$, 크기는 $\mathrm{tr}(DS)/\sigma_x^2$, 이동은 평균으로 구한다.
+
+    ```ts
+    import { determinant, Matrix,
+      SingularValueDecomposition }
+      from "ml-matrix";
+    ```
+  </Hint>
+
+  <Hint level={2}>
+    $\Sigma$의 $(r, c)$ 원소는 $\frac{1}{n}\sum_i \bar y_i[r]\,\bar x_i[c]$다. 순서($\bar y \bar x^\top$)를 바꾸면 $R$ 대신 $R^\top$이 나온다.
+
+    특이값은 0번부터 세고 내림차순이다($D_0 \ge D_1 \ge D_2$). 퇴화 검사는 $\sigma_x^2 > 0$이고 $D_1 > 10^{-10} D_0$(둘째 특이값이 첫째에 비해 0이 아닌지)로 한다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    검사 (길이, 3개 이상, NaN)
+    μx, μy ← 평균
+    Σ ← (1/n) Σᵢ
+      (yᵢ − μy)(xᵢ − μx)ᵀ
+    σx² ← (1/n) Σᵢ |xᵢ − μx|²
+    U, D, V ← SVD(Σ)
+    σx² ≈ 0 또는 D₁ ≈ 0 이면 예외
+    d ← det U · det V < 0 ? −1 : 1
+    R ← U · diag(1, 1, d) · Vᵀ
+    s ← withScale
+        ? (D₀ + D₁ + d·D₂) / σx²
+        : 1
+    t ← μy − s · R · μx
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s4" />
+
+<TaskCard fn="ate">
+  추정 위치 `est`를 정답 위치 `gt`에 Sim(3)으로 맞춘 뒤(`alignUmeyama`, 크기 포함) 점마다 위치 오차를 구한다. 결과는 `rmse`, `mean`, `median`(짝수 개면 가운데 둘의 평균), `max`, `errors`, `align`이다. 입력이 이상하면 `alignUmeyama`의 예외를 그대로 낸다.
+
+  <Hint level={1}>
+    정렬한 점은 $sR\,est_i + t$다. 오차 $e_i$는 그것과 $gt_i$ 사이 거리다. RMSE는 $\sqrt{\frac{1}{n}\sum e_i^2}$다.
+  </Hint>
+
+  <Hint level={2}>
+    `alignUmeyama(est, gt, true)`로 $s, R, t$를 얻는다. `median`은 `errors`를 복사해 정렬한 뒤 가운데 값을 쓰고, 짝수 개면 가운데 둘을 평균한다. 원래 `errors`는 점 순서 그대로 둔다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    align ← alignUmeyama(est,
+      gt, true)
+    errors ← i마다
+      |s·R·estᵢ + t − gtᵢ|
+    rmse ← √(Σ eᵢ² / n)
+    mean ← Σ eᵢ / n
+    sorted ← errors 복사 후 정렬
+    median ← 가운데 값
+      (짝수면 가운데 둘 평균)
+    max ← 가장 큰 eᵢ
+    { rmse, mean, median, max,
+      errors, align }
+    ```
+  </Hint>
+</TaskCard>
+
+### 테스트가 안 맞을 때
+
+- `alignUmeyama` 기본 테스트에서 회전만 틀리면 $\Sigma$를 $\bar x\bar y^\top$ 순서로 만든 것이다($R^\top$이 나온다).
+- 거울상 테스트에서 $\det R = -1$이면 $S$의 부호 처리를 빠뜨렸다.
+- 크기만 틀리면 $\sigma_x^2$를 정답 쪽($y$)으로 구했거나, $\mathrm{tr}(DS)$에서 셋째 특이값의 부호를 빠뜨렸다.
+- "최소제곱 해다" 테스트는 $s$, $R$, $t$를 조금씩 흔들어 오차가 커지는지 본다. 하나만 실패하면 그 항의 공식을 다시 본다.
+
+### 읽기: rpe
+
+<TaskCard fn="rpe" readOnly>
+  $T_{wc}$ 궤적 두 개(`est`, `gt`)와 간격 $\Delta$(정수 프레임 수), ATE 정렬의 크기 `scale`로 상대 자세 오차를 구한다. 결과는 이동 RMSE, 회전 RMSE(도), 비교한 쌍의 수다.
+
+  읽으며 확인할 것: 같은 파일의 `rel(A, B, s)`가 $A^{-1}B$를 구하고 이동을 $s$배 한다. 추정 쪽에만 `scale`을 넘기는 이유는? 회전 오차 $\theta = \arccos((\mathrm{tr}\,R_E - 1)/2)$는 3주차 `logSO3`의 회전각과 같은가?
+</TaskCard>
+
+<SessionBreak id="s5" />
+
+## 실습: TUM RGB-D로 내 VO 채점하기 (M1)
+
+### 데이터 받기와 트랙 파일 만들기
+
+1. [TUM RGB-D 다운로드 페이지](https://cvg.cit.tum.de/data/datasets/rgbd-dataset/download)에서 **freiburg1_xyz**의 tgz(약 0.45GB)를 받아 푼다. 라이선스는 CC BY 4.0이라 리포트에 출처만 적으면 된다.
+2. PC에서 트랙 파일을 만든다. 컬러 영상 2장마다 1장(15Hz)으로 300장을 KLT로 추적하고, 렌즈 왜곡을 펴고, 정답 자세를 붙인다. 몇 초면 끝난다.
+
+```text
+pip install opencv-python numpy
+python datasets/tum_tracks.py
+  path/to/rgbd_dataset_freiburg1_xyz
+```
+
+(보기 좋게 나눈 것이고, 실제로는 한 줄로 쓴다.) 명령은 저장소 루트 폴더에서 실행한다. 결과는 `datasets/tracks/` 폴더의 JSON(약 1.5MB)이고, 이 폴더는 저장소에 올리지 않는다.
+
+3. **freiburg1_desk**도 같은 다운로드 페이지에서 받아, 같은 명령에 그 폴더 경로만 바꿔 넣는다.
+4. 긴 시퀀스는 프레임 간격을 늘린다. **freiburg3_long_office_household**(약 1.5GB, 87초, 사무실 한 바퀴)는 `--every 3 --max-frames 800`으로 만든다.
+
+### 실행기
+
+트랙 파일을 열고 "VO 실행"을 누른다. 파일은 브라우저 안에서만 읽고 어디에도 올리지 않는다. 계산은 PC에서 300프레임에 10초 안팎이고, 폰은 몇 배 걸린다. 결과 아래 "내 궤적 저장"은 TUM 형식 궤적 파일을 내려받는다. 12주차에 evo로 같은 숫자가 나오는지 확인할 때 쓴다.
+
+<VoFileRunner />
+
+<SessionBreak id="s6" />
+
+### 정답 구현으로 낸 기준 숫자
+
+이 레슨을 만들 때 정답 구현과 기본 설정(추적 기준 6px, local BA 켬)으로 돌린 결과다(2026-11-03). 내 구현의 숫자가 여기서 크게 벗어나면 어딘가 다르다는 신호다.
+
+| 시퀀스 | 추적한 프레임 | ATE (경로 길이) |
+| --- | --- | --- |
+| fr1/xyz (15Hz) | 299/300 | 4.6 cm (6.5 m) |
+| fr1/desk (30Hz) | 155/600 | 8.6 cm (2.5 m) |
+| fr3/long_office (10Hz) | 799/800 | 17 cm (20.8 m) |
+
+- **local BA를 끄면** fr1/xyz는 151번, fr3/long_office는 92번 프레임에서 추적이 끊긴다. 긴 영상에서는 BA가 정확도뿐 아니라 추적 자체를 지킨다.
+- **fr1/desk**는 15Hz(기본 `--every 2`)로 만들면 77번 프레임에야 초기화되고 99번에서 끊긴다. 30Hz(`--every 1 --max-frames 600`)로 만들어도 198번에서 끊긴다. 책상 위를 빠르게 훑는 회전이 많은 시퀀스라, 재위치 인식(relocalization)이 없는 미니 VO의 한계가 그대로 보인다.
+- **fr3/long_office**의 ATE 17cm는 경로의 0.83%다. 루프 클로저 없이 한 바퀴를 돌면 스케일과 방향이 조금씩 흘러 출발점으로 정확히 돌아오지 못한다. 궤적 그림에서 시작과 끝이 벌어진 곳을 찾아본다. 9주차 포즈 그래프가 이 오차를 줄이는 도구다.
+
+### 설정 바꿔 보기
+
+- 추적 기준을 3px로 내리면 어떻게 되나? 합성 장면(11c)에서는 3px로 충분했는데 실제 데이터에서는 왜 모자랄까? (롤링 셔터, 보정 오차, 모션 블러)
+- fr1/desk 트랙을 `--features 500`으로 다시 만들면 더 오래 버티는가? 계산 시간은 얼마나 늘어나나?
+
+<SessionBreak id="s7" />
+
+### M1 리포트 쓰기
+
+리포트에 넣을 것:
+
+1. **무엇을 만들었나:** 미니 VO 구조 한 문단(초기화 → PnP 추적 → 키프레임·local BA), 내가 직접 구현한 함수 목록.
+2. **결과 표:** 시퀀스마다 추적한 프레임, ATE RMSE와 경로 대비 %, RPE(1초 간격, 15Hz면 15프레임), local BA 켬/끔.
+3. **궤적 그림:** 실행기 화면 캡처. 정답(점선)과 내 궤적이 크게 벌어지는 구간을 표시한다.
+4. **실패 분석:** 끊긴 프레임 근처에서 무슨 일이 있었나(빠른 회전, 흐린 사진, 특징점 부족). 원본 사진을 확인해 근거를 붙인다.
+5. **한계와 다음 단계:** 스케일 드리프트, 재위치 인식 없음, 루프 클로저 없음. 12주차 C++ 포팅에서 무엇을 바꿀지.
+
+리포트는 M1 관문에서 사이트에 페이지로 붙인다(관문 진행 중에 AI가 틀을 만든다). 그 전에는 마크다운 초안으로 둔다.
+
+<SessionBreak id="s8" />
+
+## 체크 질문
+
+<CheckQuestion q="ATE와 RPE는 각각 무엇을 재고, 단안 VO를 평가할 때 왜 Sim(3)으로 정렬하나?" kind="개념">
+  ATE는 궤적 전체를 한 번 맞춘 뒤 프레임마다의 위치 차이로, 누적 드리프트까지 포함한 전체 모양의 정확도다. RPE는 일정 간격 떨어진 두 자세의 상대 움직임을 비교해 짧은 구간의 정확도를 본다.
+
+  단안 VO는 길이 단위가 초기화의 $|t| = 1$로 임의라, 정답과 비교하려면 회전·이동과 함께 크기도 맞춰야 한다. 크기를 맞추지 않으면 ATE가 모양이 아니라 단위 차이를 재게 된다.
+</CheckQuestion>
+
+<CheckQuestion q="우메야마 정렬에서 det U · det V < 0일 때 마지막 축의 부호를 뒤집는 이유는 무엇인가?" kind="왜">
+  $UV^\top$은 직교 행렬이지만 행렬식이 $-1$이면 회전이 아니라 반사다. 잡음이 크거나 점들이 거의 평면에 있으면 반사가 오차를 더 줄이는 경우가 생긴다.
+
+  궤적은 실제로 거울에 비친 것이 아니므로 회전으로 제한한다. 가장 작은 특이값 방향(가장 덜 중요한 축)만 뒤집으면 회전 중 최선의 답이 된다. 크기도 같은 부호를 써서 $\mathrm{tr}(DS)$로 구한다.
+</CheckQuestion>
+
+<CheckQuestion q="면접에서 'TUM fr3/long_office에서 ATE 17cm'라고 했더니 '그게 좋은 숫자냐'고 묻는다. 어떻게 답하나?" kind="실무">
+  숫자만으로는 판단할 수 없다고 먼저 말하고, 비교 기준을 같이 댄다. 정답 경로 20.8m 대비 0.83%이고, 루프 클로저와 재위치 인식이 없는 단안 VO이며, 같은 데이터에서 local BA를 끄면 92프레임에서 추적을 잃는다는 비교를 붙인다.
+
+  그다음 오차가 어디서 오는지(스케일 드리프트, 한 바퀴 뒤 시작점이 벌어짐)와 줄이는 방법(루프 클로저와 포즈 그래프 최적화, IMU로 스케일 관측, 재위치 인식)을 말한다. 공개된 SLAM 시스템과 비교하려면 같은 정렬 방식(Sim(3))과 같은 프레임 구간을 썼는지 확인해야 한다.
+</CheckQuestion>
+
+<SessionBreak id="s9" />

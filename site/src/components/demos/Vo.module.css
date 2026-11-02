@@ -1,0 +1,216 @@
+/* 11주차 VO 데모·TUM 실행기 공용. 버튼·결과 표는 다른 데모와 같은 모양.
+   그림 색은 다른 데모와 같은 주황(추정)·청록(키프레임)을 여기 변수로 모은다 */
+.demo,
+.panel {
+  --vo-est: #f08a24;
+  --vo-est-text: #c4620c;
+  --vo-kf: #17a398;
+}
+@media (prefers-color-scheme: dark) {
+  .demo,
+  .panel {
+    --vo-est: #f6a85a;
+    --vo-est-text: #f6a85a;
+    --vo-kf: #4fd8c9;
+  }
+}
+.demo {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+.panel {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 400px; /* LESSON_TEMPLATE §3 ③ */
+}
+.ground {
+  fill: var(--paper-sunken);
+}
+.gtPath {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.estPath {
+  fill: none;
+  stroke: var(--vo-est);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.kf {
+  fill: var(--vo-kf);
+}
+.start {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+.axes {
+  stroke: var(--ink-soft);
+  fill: var(--ink-soft);
+  font-size: 12px;
+}
+.placeholder {
+  fill: var(--ink-soft);
+  font-size: 14px;
+}
+.axes text {
+  stroke: none;
+}
+.lgGt {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.lgEst {
+  color: var(--vo-est-text);
+  font-weight: 600;
+}
+.caption {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.segment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+}
+.option {
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.option[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.button {
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.option:focus-visible,
+.button:focus-visible,
+.file:focus-within,
+.check:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.file {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.file input {
+  max-width: 100%;
+  font: inherit;
+}
+.file input::file-selector-button {
+  min-height: var(--touch);
+  margin-right: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch);
+  font-size: var(--text-sm);
+  justify-self: start;
+}
+.check input {
+  width: 22px;
+  height: 22px;
+}
+.readout {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+.readout [role="status"]:empty {
+  display: none;
+}
+.values {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dt:not(:first-child) {
+  margin-top: var(--space-2);
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.muted {
+  margin: 0;
+  color: var(--ink-faint);
+}
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}

@@ -17,25 +17,104 @@ function costOf(r: VecN, robust: SolverOptions["robust"]): number {
   return robust ? r.reduce((s, v) => s + robust(v).rho, 0) : 0.5 * r.reduce((s, v) => s + v * v, 0);
 }
 
-/** 가중 정규방정식 H = JᵀWJ, g = JᵀWr */
-function normalEquations(J: MatN, r: VecN, robust: SolverOptions["robust"]): { H: Matrix; g: Matrix } {
-  const w = r.map((v) => (robust ? robust(v).weight : 1));
-  const Jm = new Matrix(J.map((row) => [...row]));
-  const WJ = new Matrix(J.map((row, i) => row.map((v) => v * w[i]!)));
-  const H0 = Jm.transpose().mmul(WJ);
-  // Jᵀ(WJ)는 수학적으로 대칭이지만 곱하는 순서 때문에 끝자리가 달라질 수 있다.
-  // ml-matrix 숄레스키는 정확히 대칭이 아니면 예외를 던지므로 (H + Hᵀ)/2로 맞춘다.
-  const H = H0.clone().add(H0.transpose()).div(2);
-  const g = WJ.transpose().mmul(Matrix.columnVector([...r]));
+/** 대칭 행렬 (행마다 Float64Array, 위·아래 삼각 모두 채움) */
+type SymMatrix = Float64Array[];
+
+/**
+ * 가중 정규방정식 H = JᵀWJ, g = JᵀWr.
+ * 행 하나씩 Hₐᵦ += wᵢ·Jᵢₐ·Jᵢᵦ 로 더하고 0인 칸은 건너뛴다. BA처럼 한 행에 0이 아닌 칸이 몇 개뿐인
+ * 야코비안에서는 행렬 곱 JᵀJ를 통째로 하는 것보다 훨씬 빠르다 (8b 희소성). 결과는 같다.
+ */
+function normalEquations(J: MatN, r: VecN, robust: SolverOptions["robust"]): { H: SymMatrix; g: Float64Array } {
+  const n = J[0]?.length ?? 0;
+  const H: SymMatrix = Array.from({ length: n }, () => new Float64Array(n));
+  const g = new Float64Array(n);
+  J.forEach((row, i) => {
+    const w = robust ? robust(r[i]!).weight : 1;
+    const nz: number[] = [];
+    row.forEach((v, k) => {
+      if (v !== 0) nz.push(k);
+    });
+    for (let p = 0; p < nz.length; p++) {
+      const a = nz[p]!;
+      const wa = w * row[a]!;
+      g[a]! += wa * r[i]!;
+      const Ha = H[a]!;
+      for (let q = p; q < nz.length; q++) Ha[nz[q]!]! += wa * row[nz[q]!]!; // 위 삼각만 (a ≤ b)
+    }
+  });
+  for (let a = 0; a < n; a++) for (let b = 0; b < a; b++) H[a]![b] = H[b]![a]!; // 아래 삼각은 복사 (정확히 대칭)
   return { H, g };
 }
 
+/** 변수가 이 개수 이하면 보통 숄레스키 (작은 문제의 결과를 예전과 똑같이 유지), 넘으면 희소 소거 */
+const DENSE_MAX = 64;
+
 /** H δ = −g 를 숄레스키로 푼다. H가 양의 정부호가 아니면 null */
-function solveSPD(H: Matrix, g: Matrix): number[] | null {
-  if (!H.to1DArray().every(Number.isFinite)) return null; // 잔차·야코비안에 NaN이 섞임
-  const chol = new CholeskyDecomposition(H);
+function solveSPD(H: SymMatrix, g: Float64Array): number[] | null {
+  if (!H.every((row) => row.every(Number.isFinite)) || !g.every(Number.isFinite)) return null; // 잔차·야코비안에 NaN이 섞임
+  return g.length <= DENSE_MAX ? solveDense(H, g) : solveSparse(H, g);
+}
+
+function solveDense(H: SymMatrix, g: Float64Array): number[] | null {
+  const chol = new CholeskyDecomposition(new Matrix(H.map((row) => Array.from(row))));
   if (!chol.isPositiveDefinite()) return null;
-  const d = chol.solve(g.clone().mul(-1)).getColumn(0);
+  const d = chol.solve(Matrix.columnVector(Array.from(g, (v) => -v))).getColumn(0);
+  return d.every(Number.isFinite) ? d : null;
+}
+
+/**
+ * 큰 문제용 숄레스키 (H = LLᵀ): 변수를 뒤에서부터 소거하고 0인 칸은 건너뛴다.
+ * BA는 변수가 [카메라, 점] 순서라 점을 먼저 지우게 되어 8b의 Schur 보수와 같은 계산이 된다:
+ * 점 하나를 지우면 그 점을 본 카메라끼리만 채워진다. 답은 순서와 상관없이 같다(반올림 차이만).
+ */
+function solveSparse(H: SymMatrix, g: Float64Array): number[] | null {
+  const n = g.length;
+  // A = 뒤집은 순서의 H (아래 삼각만 쓴다). A[i][j] = H[n−1−i][n−1−j]
+  const A: SymMatrix = Array.from({ length: n }, (_, i) => {
+    const src = H[n - 1 - i]!;
+    const row = new Float64Array(i + 1);
+    for (let j = 0; j <= i; j++) row[j] = src[n - 1 - j]!;
+    return row;
+  });
+  for (let k = 0; k < n; k++) {
+    const d = A[k]![k]!;
+    if (!(d > 0)) return null;
+    const lkk = Math.sqrt(d);
+    A[k]![k] = lkk;
+    const nz: number[] = [];
+    for (let i = k + 1; i < n; i++) {
+      if (A[i]![k] !== 0) {
+        A[i]![k]! /= lkk;
+        nz.push(i);
+      }
+    }
+    // 남은 부분 행렬에서 L[:,k]·L[:,k]ᵀ 를 뺀다 (0이 아닌 칸끼리만)
+    for (let p = 0; p < nz.length; p++) {
+      const a = nz[p]!;
+      const la = A[a]![k]!;
+      const rowA = A[a]!;
+      for (let q = 0; q <= p; q++) rowA[nz[q]!]! -= la * A[nz[q]!]![k]!;
+    }
+  }
+  // L y = −g (뒤집은 순서), Lᵀ x = y
+  const y = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = -g[n - 1 - i]!;
+    const row = A[i]!;
+    for (let j = 0; j < i; j++) if (row[j] !== 0) s -= row[j]! * y[j]!;
+    y[i] = s / row[i]!;
+  }
+  const x = new Float64Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    let s = y[i]!;
+    for (let j = i + 1; j < n; j++) {
+      const l = A[j]![i]!;
+      if (l !== 0) s -= l * x[j]!;
+    }
+    x[i] = s / A[i]![i]!;
+  }
+  const d = Array.from({ length: n }, (_, i) => x[n - 1 - i]!);
   return d.every(Number.isFinite) ? d : null;
 }
 
@@ -75,11 +154,11 @@ export function levenbergMarquardt<X>(problem: LsqProblem<X>, x0: X, opts: Solve
     const J = problem.jacobian(x);
     const { H, g } = normalEquations(J, r, opts.robust);
     // 감쇠: H + λ·diag(H). λ가 크면 짧은 경사하강, 작으면 GN
-    const damped = H.clone();
-    for (let i = 0; i < H.rows; i++) {
-      damped.set(i, i, H.get(i, i) * (1 + lambda) + 1e-12);
-    }
-    const dx = solveSPD(damped, g);
+    // 대각만 잠시 바꿨다가 되돌린다 (큰 BA에서 n×n 복사본을 반복마다 만들지 않게)
+    const diag = H.map((row, i) => row[i]!);
+    H.forEach((row, i) => (row[i] = diag[i]! * (1 + lambda) + 1e-12));
+    const dx = solveSPD(H, g);
+    H.forEach((row, i) => (row[i] = diag[i]!));
     if (!dx) {
       lambda *= LM_UP;
       continue;

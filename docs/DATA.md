@@ -67,6 +67,23 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
 - 어안 이미지는 core에서 `calib.json`으로 언프로젝션해 베어링 벡터(bearing vector, 광선 방향의 단위 벡터)로 바꾼 뒤 E를 추정한다 (CURRICULUM 5주차).
 - `datasets/export_matches.py`가 만든다(기본 저장 `datasets/matches/{i}_{j}.json`, 시퀀스에 붙이려면 `--out datasets/sequences/{name}/matches/{i}_{j}.json`). 입력은 사진 두 장(`a.jpg b.jpg`) 또는 영상의 두 프레임(`--video walk.mp4 --frames 45 75`). ORB 특징점 + 1·2위 거리비 0.8 미만만 남긴다. `--calib`을 주면 OpenCV `findEssentialMat`(RANSAC 2px)의 inlier 수도 출력한다(5주차 비교 기준).
 
+### tracks/{name}.json (11주차 VO 입력)
+`datasets/tum_tracks.py`가 TUM RGB-D 시퀀스에서 만든다(기본 저장 `datasets/tracks/`, 저장소에 올리지 않는다). 사이트 "TUM으로 VO 돌리기"(11d)가 읽는다(`site/src/lib/tracksFile.ts`).
+```jsonc
+{
+  "format": "slam-guide-tracks", "version": 1,
+  "name": "tum-freiburg1_xyz", "source": "tum", "license": "tum-cc-by",
+  "camera": { "fx": 517.3, "fy": 516.5, "cx": 318.6, "cy": 255.3, "width": 640, "height": 480 },
+  "every": 2,                                   // 원본 몇 장마다 하나
+  "frames": [ { "t": 1305031102.175304,          // 초 (TUM 원본 시각)
+                "features": [[12, 412.31, 201.8], ...] } ],  // [추적 id, u, v], 왜곡을 편 픽셀
+  "groundtruth": [ [tx, ty, tz, qw, qx, qy, qz] | null, ... ]  // 프레임마다 T_world_cam, 20ms 안에 정답이 없으면 null
+}
+```
+- 특징점은 KLT 앞·뒤 추적(되돌아온 거리 1px 이하)으로 이어 붙이고, 목표 수의 70% 아래로 줄면 새로 채운다. 같은 id = 같은 3D 점.
+- 쿼터니언은 이 문서의 다른 파일과 같이 w가 먼저다(TUM 원본은 x, y, z, w 순서).
+- 사이트 상한: 프레임 2000장, 프레임당 특징점 2000개, 파일 30MB.
+
 ### imu.csv
 ```
 timestamp_ns,gx,gy,gz,ax,ay,az
@@ -164,10 +181,10 @@ gst-launch-1.0 -e nvarguscamerasrc sensor-mode=3 \
 | --- | --- | --- | --- |
 | KITTI Odometry | 11주차 VO, 12주차 C++ VO | CC BY-NC-SA 3.0 | 출처 표기·동일조건 공유 의무. 강의 판매 시 사용 불가 → 자체 데이터로 교체 |
 | EuRoC MAV | 13~14주차 EKF·VIO (기본 트랙) | 연구용 공개 | IMU + 스테레오 + 정답 궤적 (IMU 기준, §2 변환 필요) |
-| TUM RGB-D | JetBot 대안, 실내 VO | CC BY 4.0 | 정답 궤적 포함 |
+| TUM RGB-D | 11주차 M1 리포트(2026-11-03 선택), 실내 VO | CC BY 4.0 | 정답 궤적 포함. `tum_tracks.py`로 트랙 JSON |
 | TUM RS-VIO | 캡스톤 롤링셔터 비교 | 데이터셋 페이지 확인 | 글로벌·롤링셔터 동시 촬영 |
 
 - 사이트 샘플에는 §1 상한만큼만 잘라서 넣고, 페이지에 출처를 표기한다.
-- 스크립트는 `datasets/` 폴더에 둔다: `kitti_to_std.py`, `euroc_to_std.py`, `tum_to_std.py`, `jetbot_to_std.py`, `calibrate.py`, `export_matches.py`
+- 스크립트는 `datasets/` 폴더에 둔다: `kitti_to_std.py`, `euroc_to_std.py`, `tum_to_std.py`, `jetbot_to_std.py`, `calibrate.py`, `export_matches.py`, `tum_tracks.py`(11주차, 있음)
 - `datasets/jetbot_to_std.py`(10주차): 주행 영상 mp4 → 표준 시퀀스 폴더(`images/`, `timestamps.txt`, `meta.json`, 선택 `calib.json`). 기본 3장마다 1장, 결과는 `datasets/sequences/{name}/`(저장소에 올리지 않는다). `--selftest`로 합성 영상 검증.
 - 스크립트는 PC 전용이며 사이트 빌드에 포함하지 않는다.

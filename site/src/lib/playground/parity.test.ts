@@ -23,6 +23,9 @@ async function run(week: string, source: string): Promise<RunSummary> {
   return runDraft({ week, source }, { ...compileDeps, loadTestFile: freshImport });
 }
 
+// 11주차는 VO 전체를 몇 번 돌려서 수 초 걸린다 (전체 테스트를 함께 돌리면 더 느리다)
+const PARITY_TIMEOUT_MS = 30_000;
+
 describe("브라우저 채점 parity", () => {
   const weeks = availableWeeks();
 
@@ -38,7 +41,7 @@ describe("브라우저 채점 parity", () => {
     expect(failed).toEqual([]);
     const itCount = (read(`tests/${week}.test.ts`).match(/^\s*it\(/gm) ?? []).length;
     expect(summary.cases).toHaveLength(itCount);
-  });
+  }, PARITY_TIMEOUT_MS);
 
   it("w01: mine 스텁의 skew는 todo, 읽기만 함수(dot)는 통과", async () => {
     const stub = `import type { Vec3, Mat3 } from "../types";\nexport { dot, cross } from "../reference/w01";\nexport function skew(v: Vec3): Mat3 {\n  throw new Error("TODO");\n}\n`;

@@ -1,0 +1,15 @@
+---
+/**
+ * VoFileRunner 래퍼 (11d M1 리포트 도구). 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * 도구는 11a~11d의 손코딩 함수를 모두 쓴다 (vo 조립 + ate). 화면에 보일 때만 불러온다 (client:visible).
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import VoFileRunner from "./VoFileRunner";
+
+const lesson = requireLesson(Astro.locals, "VoFileRunner");
+const TOOL_FNS = ["initMap", "trackPnP", "localBA", "alignUmeyama", "ate"];
+const statuses = TOOL_FNS.map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<VoFileRunner client:visible week={lesson.week} statuses={statuses} />

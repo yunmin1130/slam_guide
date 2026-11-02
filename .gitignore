@@ -16,6 +16,7 @@ datasets/raw/
 # 내 사진·영상에서 만든 결과 (사진이 들어 있어 올리지 않는다)
 datasets/sequences/
 datasets/matches/
+datasets/tracks/
 # 자동 QA 결과·스크린샷 (scripts/qa.mjs)
 qa-output/
 # Python 캐시
