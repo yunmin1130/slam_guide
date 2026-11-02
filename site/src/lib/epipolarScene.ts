@@ -13,6 +13,8 @@ export const IMAGE = { width: 640, height: 480 } as const;
 const FOCAL = 500;
 const CX = IMAGE.width / 2;
 const CY = IMAGE.height / 2;
+/** 합성 장면 카메라의 내부 파라미터 (6주차 3D 복원이 픽셀 → 정규화 좌표에 쓴다) */
+export const SCENE_K = { fx: FOCAL, fy: FOCAL, cx: CX, cy: CY } as const;
 
 /** 시드 고정 난수 (mulberry32). 같은 시드면 같은 장면 */
 export function seededRng(seed: number): () => number {

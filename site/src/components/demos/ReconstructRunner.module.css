@@ -1,0 +1,215 @@
+/* 6주차 3D 복원 실습 도구. 버튼·결과 표는 EpipolarDemo와 같은 모양으로 맞춘다 */
+.runner {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.button {
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 내 사진으로: 접기 */
+.files {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.files summary {
+  min-height: var(--touch);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.files summary::-webkit-details-marker {
+  display: none;
+}
+.files summary::before {
+  content: "+";
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+}
+.files[open] summary::before {
+  content: "−";
+}
+.files[open] {
+  gap: var(--space-3);
+}
+.file {
+  display: grid;
+  gap: var(--space-1);
+}
+.file input {
+  min-height: var(--touch);
+  font: inherit;
+}
+/* 기본 "파일 선택" 버튼은 손가락으로 누르기 작다 → 44px */
+.file input::file-selector-button {
+  min-height: var(--touch);
+  margin-right: var(--space-2);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+.readout [role="status"]:empty {
+  display: none;
+}
+.alerts {
+  display: grid;
+  gap: var(--space-2);
+}
+/* 제목이 길어서 폰에서는 제목 아래에 값을 놓는다 (값이 여러 줄로 쪼개지지 않게) */
+.values {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dt:not(:first-child) {
+  margin-top: var(--space-2);
+}
+@media (min-width: 640px) {
+  .values {
+    grid-template-columns: auto 1fr;
+    gap: var(--space-1) var(--space-3);
+  }
+  .values dt:not(:first-child) {
+    margin-top: 0;
+  }
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.muted {
+  margin: 0;
+  color: var(--ink-faint);
+}
+.note {
+  margin: 0;
+  color: var(--ink-soft);
+}
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}
+
+/* 위에서 본 그림: 393px 폭에서 높이 약 250px (400px 이내) */
+.figure {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.topView {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+}
+.ground {
+  fill: var(--paper-sunken);
+}
+.baseline {
+  stroke: var(--ink-faint);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+.point {
+  fill: #17a398;
+  opacity: 0.85;
+}
+/* 다크 배경에서 점이 묻히지 않게 더 밝게 */
+@media (prefers-color-scheme: dark) {
+  .point {
+    fill: #4fd8c9;
+  }
+}
+.camLabel {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.axes line {
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+}
+.axes text {
+  fill: var(--ink-soft);
+  font-size: 11px;
+}
+/* 테마와 상관없이 같은 색 (본문이 "파랑"이라고 부른다) */
+.cam1 {
+  fill: #3b78e7;
+}
+.cam2 {
+  fill: #f08a24;
+}
+.caption {
+  color: var(--ink-soft);
+}
+.lgCam1::before,
+.lgCam2::before {
+  content: "";
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.3em;
+  border-radius: 50%;
+  vertical-align: -0.05em;
+}
+.lgCam1::before {
+  background: #3b78e7;
+}
+.lgCam2::before {
+  background: #f08a24;
+}

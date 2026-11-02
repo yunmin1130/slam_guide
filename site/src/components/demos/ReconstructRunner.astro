@@ -1,0 +1,16 @@
+---
+/**
+ * ReconstructRunner 래퍼 (6주차 JetBot 실습 도구). 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * 그림은 SVG 하나라 WebGL을 쓰지 않는다. 화면에 보일 때만 불러온다 (client:visible).
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import ReconstructRunner from "./ReconstructRunner";
+
+const lesson = requireLesson(Astro.locals, "ReconstructRunner");
+// 도구가 실제로 부르는 손코딩 함수만 배지에 넣는다
+const TOOL_FNS = ["decomposeE", "triangulate", "pnpDLT"];
+const statuses = lesson.tasks.filter((fn) => TOOL_FNS.includes(fn)).map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<ReconstructRunner client:visible week={lesson.week} statuses={statuses} />
