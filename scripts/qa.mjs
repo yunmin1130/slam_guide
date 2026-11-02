@@ -142,12 +142,38 @@ async function layoutChecks(page) {
       .filter((e) => outside(e) && !scrollsItself(e))
       .slice(0, 5)
       .map((e) => `${e.tagName.toLowerCase()}.${(e.getAttribute("class") ?? "").split(" ")[0]}`);
+    // 블록 수식이 자체 가로 스크롤로 넘치는 것도 폰에서는 읽기 어렵다 → 수식을 여러 줄로 나눠야 한다
+    const wideMath = [...document.querySelectorAll("main .katex-display")]
+      .filter((e) => e.scrollWidth > e.clientWidth + 1)
+      .slice(0, 5)
+      .map((e) => (e.querySelector(".katex-mathml annotation")?.textContent ?? "").replace(/\s+/g, " ").slice(0, 60));
     return {
+      wideMath,
       katexErrors: [...document.querySelectorAll(".katex-error")].map((e) => e.getAttribute("title") ?? e.textContent).slice(0, 5),
       overflow: document.documentElement.scrollWidth - vw,
       wide,
     };
   }, VIEWPORT.width);
+}
+
+/**
+ * 페이지를 끝까지 한 화면씩 내려서 client:visible 아일랜드를 모두 하이드레이션한다.
+ * 스크린샷이 "불러오는 중" 상태(비활성 버튼 등)로 찍혀 시각 검사를 속이지 않게 하고,
+ * 끝내 하이드레이션되지 않는 컴포넌트(로드 오류)를 잡는다.
+ */
+async function hydrateAll(page, fail) {
+  const height = await page.evaluate(() => document.documentElement.scrollHeight);
+  for (let y = 0; y < height; y += VIEWPORT.height / 2) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    await page.waitForTimeout(60);
+  }
+  try {
+    await page.waitForFunction(() => !document.querySelector("astro-island[ssr]"), null, { timeout: ACTION_TIMEOUT_MS });
+  } catch {
+    const stuck = await page.$$eval("astro-island[ssr]", (els) => els.map((e) => e.getAttribute("component-url")?.split("/").pop()));
+    fail(`하이드레이션되지 않은 컴포넌트: ${stuck.join(", ")}`);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
 }
 
 async function screenshots(page, name) {
@@ -266,6 +292,8 @@ async function checkPage(browser, origin, target, scheme) {
     const layout = await layoutChecks(page);
     if (layout.katexErrors.length) fail(`수식 렌더 오류 ${layout.katexErrors.length}개: ${layout.katexErrors.join(" | ")}`);
     if (layout.overflow > 1 || layout.wide.length) fail(`가로 넘침 ${layout.overflow}px: ${layout.wide.join(", ")}`);
+    if (layout.wideMath.length) fail(`화면보다 넓은 블록 수식 ${layout.wideMath.length}개 (줄 나누기 필요): ${layout.wideMath.join(" | ")}`);
+    await hydrateAll(page, fail);
     shots = await screenshots(page, `${target.name}-${scheme}`);
     // 인터랙션 검사는 라이트에서 한 번만 한다 (다크는 화면·오류 리스너만)
     if (target.lesson && scheme === "light") {
