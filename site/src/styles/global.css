@@ -171,6 +171,13 @@ pre {
   overflow-x: auto;
   line-height: 1.55;
 }
+/* 폰에서 코드·의사코드를 옆으로 밀지 않고 끝까지 읽게 줄바꿈한다 (복사하면 원래 한 줄 그대로).
+   Shiki가 pre에 인라인으로 거는 스타일보다 앞서도록 !important */
+pre,
+pre code {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+}
 
 /* Shiki 코드 블록: 기기 다크 모드면 dark 테마 색으로 바꾼다 (Astro 공식 방식) */
 @media (prefers-color-scheme: dark) {
@@ -193,6 +200,12 @@ td {
   border-bottom: 1px solid var(--rule);
   padding: var(--space-2) var(--space-3);
   text-align: left;
+}
+
+/* KaTeX 인라인 수식은 "c_y =" 다음에서 줄이 끊기지 않게 한 덩어리로 둔다.
+   대신 화면보다 긴 인라인 수식은 넘치므로 npm run qa의 가로 넘침 검사로 잡는다 */
+.katex {
+  white-space: nowrap;
 }
 
 /* KaTeX: 긴 블록 수식은 화면 밖으로 밀지 않고 가로 스크롤 */

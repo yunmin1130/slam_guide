@@ -147,8 +147,14 @@ async function layoutChecks(page) {
       .filter((e) => e.scrollWidth > e.clientWidth + 1)
       .slice(0, 5)
       .map((e) => (e.querySelector(".katex-mathml annotation")?.textContent ?? "").replace(/\s+/g, " ").slice(0, 60));
+    // 코드 블록도 폰에서 옆으로 밀어야 보이면 명령을 끝까지 못 읽는다 → 줄을 줄이거나 나눠야 한다
+    const wideCode = [...document.querySelectorAll("main pre")]
+      .filter((e) => e.scrollWidth > e.clientWidth + 1)
+      .slice(0, 5)
+      .map((e) => (e.textContent ?? "").split("\n").sort((a, b) => b.length - a.length)[0].slice(0, 60));
     return {
       wideMath,
+      wideCode,
       katexErrors: [...document.querySelectorAll(".katex-error")].map((e) => e.getAttribute("title") ?? e.textContent).slice(0, 5),
       overflow: document.documentElement.scrollWidth - vw,
       wide,
@@ -289,11 +295,14 @@ async function checkPage(browser, origin, target, scheme) {
   try {
     await page.goto(`${origin}${BASE_PATH}${target.path}`, { waitUntil: "load", timeout: 30_000 });
     await page.waitForLoadState("networkidle", { timeout: ACTION_TIMEOUT_MS }).catch(() => {}); // 폰트·KaTeX CSS까지 기다리되, 끝없는 요청이 있어도 진행
+    await hydrateAll(page, fail);
+    // 접힌 힌트·LA 박스 안의 수식·코드도 검사하고 스크린샷에 담는다
+    await page.evaluate(() => document.querySelectorAll("main details").forEach((d) => (d.open = true)));
     const layout = await layoutChecks(page);
     if (layout.katexErrors.length) fail(`수식 렌더 오류 ${layout.katexErrors.length}개: ${layout.katexErrors.join(" | ")}`);
     if (layout.overflow > 1 || layout.wide.length) fail(`가로 넘침 ${layout.overflow}px: ${layout.wide.join(", ")}`);
     if (layout.wideMath.length) fail(`화면보다 넓은 블록 수식 ${layout.wideMath.length}개 (줄 나누기 필요): ${layout.wideMath.join(" | ")}`);
-    await hydrateAll(page, fail);
+    if (layout.wideCode.length) fail(`화면보다 넓은 코드 블록 ${layout.wideCode.length}개 (가장 긴 줄): ${layout.wideCode.join(" | ")}`);
     shots = await screenshots(page, `${target.name}-${scheme}`);
     // 인터랙션 검사는 라이트에서 한 번만 한다 (다크는 화면·오류 리스너만)
     if (target.lesson && scheme === "light") {
