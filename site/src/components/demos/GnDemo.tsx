@@ -119,7 +119,7 @@ export default function GnDemo({ week, statuses }: GnDemoProps) {
         <svg className={styles.image} viewBox={`0 0 ${W} ${H_FIT}`} role="img" aria-label={`곡선 맞추기 ${sel}단계`}>
           <rect className={styles.ground} x={0} y={0} width={W} height={H_FIT} rx={6} />
           <line className={styles.axis} x1={PAD} y1={fy(0)} x2={W - PAD} y2={fy(0)} />
-          {[1, 2, 3].map((v) => (
+          {[0, 1, 2, 3].map((v) => (
             <g key={v}>
               <line className={styles.grid} x1={PAD} y1={fy(v)} x2={W - PAD} y2={fy(v)} />
               <text className={styles.tick} x={PAD - 6} y={fy(v) + 4} textAnchor="end">
@@ -140,7 +140,7 @@ export default function GnDemo({ week, statuses }: GnDemoProps) {
             ),
           )}
           <text className={styles.tick} x={W - PAD} y={fy(0) + 14} textAnchor="end">
-            t = {T_MAX}
+            t →
           </text>
         </svg>
         <figcaption className={styles.caption}>

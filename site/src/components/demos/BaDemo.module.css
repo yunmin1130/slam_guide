@@ -1,0 +1,166 @@
+/* 8b 번들 조정 데모. 버튼·결과 표는 다른 데모와 같은 모양 */
+.demo {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+.panel {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 400px; /* LESSON_TEMPLATE §3 ③ */
+}
+.ground {
+  fill: var(--paper-sunken);
+}
+.truthPt {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+}
+.startPt {
+  fill: var(--fail);
+}
+.resultPt {
+  fill: #17a398;
+}
+.truthCam {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.fixedCam {
+  fill: var(--ink);
+}
+.startCam {
+  fill: var(--fail);
+}
+.resultCam {
+  fill: #f08a24;
+}
+.label {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+.hCam {
+  fill: #f08a24;
+}
+.hCross {
+  fill: var(--ink-soft);
+}
+.hPoint {
+  fill: #17a398;
+}
+.split {
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+@media (prefers-color-scheme: dark) {
+  .resultPt,
+  .hPoint {
+    fill: #4fd8c9;
+  }
+}
+.caption {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.segment {
+  display: inline-flex;
+  justify-self: start;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+}
+.option {
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.option[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+.button {
+  justify-self: start;
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.option:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+.readout [role="status"]:empty {
+  display: none;
+}
+.alerts {
+  display: grid;
+  gap: var(--space-2);
+}
+/* 제목이 길어서 제목 아래에 값을 놓는다 */
+.values {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dt:not(:first-child) {
+  margin-top: var(--space-2);
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.muted {
+  margin: 0;
+  color: var(--ink-faint);
+}
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}

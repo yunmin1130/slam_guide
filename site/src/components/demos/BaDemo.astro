@@ -1,0 +1,16 @@
+---
+/**
+ * BaDemo 데모 래퍼 (8b). 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * 그림은 SVG 두 장이라 WebGL을 쓰지 않는다. 화면에 보일 때만 불러온다 (client:visible).
+ * 내 smallBA는 내 projectionJacobian(8a)을 부르므로 둘 다 배지에 넣는다.
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import BaDemo from "./BaDemo";
+
+const lesson = requireLesson(Astro.locals, "BaDemo");
+const DEMO_FNS = ["projectionJacobian", "smallBA"];
+const statuses = DEMO_FNS.map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<BaDemo client:visible week={lesson.week} statuses={statuses} />

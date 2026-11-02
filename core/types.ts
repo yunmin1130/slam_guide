@@ -109,3 +109,33 @@ export interface SolverResult<X> {
   /** 처음 값부터 받아들인 업데이트마다 하나씩 */
   readonly history: readonly SolverStep<X>[];
 }
+
+/** 번들 조정 관측 하나 (8주차): 카메라 cam이 점 point를 픽셀 uv에서 봤다 */
+export interface BAObservation {
+  readonly cam: number;
+  readonly point: number;
+  readonly uv: Vec2;
+}
+
+/**
+ * 번들 조정 문제 (8주차). 카메라 자세는 T_cw (월드 점 → 카메라 좌표: p_c = R·X + t).
+ * fixed에 든 카메라는 움직이지 않는다 (게이지 고정: 보통 처음 두 대).
+ */
+export interface BAProblem {
+  readonly K: Intrinsics;
+  readonly cameras: readonly SE3[];
+  readonly points: readonly Vec3[];
+  readonly observations: readonly BAObservation[];
+  readonly fixed: readonly number[];
+}
+
+export interface BAResult {
+  readonly cameras: SE3[];
+  readonly points: Vec3[];
+  /** 마지막 비용 (½Σ‖재투영 오차‖², 로버스트면 Σρ) */
+  readonly cost: number;
+  readonly iterations: number;
+  readonly converged: boolean;
+  /** 처음부터 받아들인 업데이트마다의 비용 */
+  readonly costs: readonly number[];
+}

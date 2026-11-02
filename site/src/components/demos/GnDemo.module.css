@@ -36,7 +36,8 @@
 .fit {
   fill: none;
   stroke: #f08a24;
-  stroke-width: 3;
+  stroke-width: 4;
+  opacity: 0.6;
 }
 .point {
   fill: #17a398;

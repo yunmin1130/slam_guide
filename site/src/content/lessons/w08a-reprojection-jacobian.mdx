@@ -1,0 +1,165 @@
+---
+week: 8
+part: a
+title: 번들 조정 준비, 재투영 오차의 야코비안
+summary: 카메라 자세와 3D 점을 함께 고치는 번들 조정의 잔차(재투영 오차)를 세우고, 그 자세·점 야코비안을 연쇄 법칙으로 유도해 구현한다
+prereq: [w04, w07b]
+la_box: []
+tasks: [projectionJacobian]
+read_only: []
+deliverables: []
+jetbot: false
+units: 1
+sessions:
+  - { id: s1, device: phone, title: "개념: 번들 조정과 재투영 오차" }
+  - { id: s2, device: phone, title: "개념: 연쇄 법칙으로 야코비안 쌓기" }
+  - { id: s3, device: pad, title: "손으로 재투영 야코비안 유도" }
+  - { id: s4, device: pc, title: "과제: projectionJacobian 구현" }
+  - { id: s5, device: pc, title: "과제: projectionJacobian 디버그·테스트 통과" }
+  - { id: s6, device: phone, title: "체크 질문" }
+---
+
+## 개념
+
+이번 주를 마치면 카메라 자세와 3D 점을 한꺼번에 고치는 번들 조정(bundle adjustment, BA)을 만들 수 있다. 8a에서는 BA의 잔차와 그 야코비안을, 8b에서는 최적화 루프와 큰 문제를 빠르게 푸는 구조를 다룬다. BA는 ORB-SLAM, COLMAP 같은 거의 모든 시각 SLAM·SfM(structure from motion, 여러 사진으로 장면 구조 복원)의 마지막 다듬기 단계다.
+
+### 번들 조정: 모든 광선을 한꺼번에 맞추기
+
+6주차에서는 두 카메라로 자세를 구하고 점을 삼각측량했다. 프레임이 늘면 작은 오차가 쌓여 궤적이 휘고, 같은 점을 여러 카메라가 본 정보도 따로따로 쓰게 된다. BA는 카메라 $C$대와 점 $P$개를 모두 변수로 두고, 모든 관측을 한꺼번에 맞춘다.
+
+이름의 "번들"은 점 하나에서 여러 카메라로 뻗는 광선 다발이다. 카메라와 점을 조금씩 옮겨 모든 광선 다발이 관측과 맞게 조정한다는 뜻이다.
+
+### 재투영 오차
+
+카메라 $i$(자세 $T_i = (R_i, t_i)$, 월드 → 카메라)가 점 $X_j$를 픽셀 $u_{ij}$에서 봤다고 하자. 지금 추정한 자세와 점으로 다시 투영한 위치와 관측의 차이가 재투영 오차(reprojection error)다.
+
+$$
+e_{ij} = \pi\big(R_i X_j + t_i\big) - u_{ij}
+$$
+
+$\pi$는 4주차의 핀홀 투영 $\pi(p) = [\,f_x\, x/z + c_x,\; f_y\, y/z + c_y\,]$다. 잔차는 관측 하나에 2개(가로·세로)이고, BA의 비용은 $\tfrac{1}{2}\sum \lVert e_{ij} \rVert^2$(7a의 최소제곱)이다.
+
+잡음이 가우시안이면 이것이 최대 우도 추정이다(7a). 픽셀 단위라 기준을 잡기도 쉽다. "재투영 오차 RMS 0.5픽셀"처럼 결과를 바로 해석할 수 있다.
+
+<SessionBreak id="s1" />
+
+### 연쇄 법칙으로 야코비안 쌓기
+
+GN·LM에는 잔차의 야코비안이 필요하다. 재투영은 "월드 점 → 카메라 좌표 $p$ → 픽셀 $u$" 두 단계라, 각 단계의 미분을 곱한다(연쇄 법칙, chain rule).
+
+여기서 $p = (x, y, z)$는 카메라 좌표의 점이다. 4주차의 $(X, Y, Z)$, 7b의 $Tp$가 이 $p$이고, 이번 주의 $X$는 월드 점이다. 픽셀 $u$는 (가로, 세로) 두 성분을 세로로 쌓은 벡터다.
+
+첫 단계 $p = RX + t$에서, 자세를 7b의 좌섭동 $\delta = [\rho;\, \phi]$로 움직이면 $\partial p / \partial \delta = [\, I \;|\; -[p]_\times \,]$($3 \times 6$)다. $-[p]_\times$는 1주차 `skew`의 부호를 바꾼 것이다. 점 $X$를 움직이면 $\partial p / \partial X = R$($3 \times 3$)이다.
+
+둘째 단계 $u = \pi(p)$를 $p = (x, y, z)$로 미분하면 다음과 같다($2 \times 3$).
+
+$$
+\frac{\partial u}{\partial p} = \begin{bmatrix} f_x / z & 0 & -f_x x / z^2 \\ 0 & f_y / z & -f_y y / z^2 \end{bmatrix}
+$$
+
+곱하면 자세 야코비안 $\tfrac{\partial u}{\partial p}\,[\, I \;|\; -[p]_\times \,]$($2 \times 6$)과 점 야코비안 $\tfrac{\partial u}{\partial p}\,R$($2 \times 3$)이 나온다. 관측 하나는 카메라 하나와 점 하나에만 닿으므로, 큰 야코비안에서 이 두 블록 말고는 모두 0이다(8b의 희소성).
+
+<Details summary="자세 야코비안을 풀어 쓰면">
+  $p = (x, y, z)$, $\delta = [\rho;\, \phi]$일 때 첫 줄은 다음과 같다.
+
+  $$
+  \begin{aligned}
+  &\text{이동: } \Big[\tfrac{f_x}{z},\ 0,\ -\tfrac{f_x x}{z^2}\Big] \\
+  &\text{회전: } \Big[-\tfrac{f_x x y}{z^2},\ f_x\big(1 + \tfrac{x^2}{z^2}\big),\ -\tfrac{f_x y}{z}\Big]
+  \end{aligned}
+  $$
+
+  둘째 줄은 다음과 같다.
+
+  $$
+  \begin{aligned}
+  &\text{이동: } \Big[0,\ \tfrac{f_y}{z},\ -\tfrac{f_y y}{z^2}\Big] \\
+  &\text{회전: } \Big[-f_y\big(1 + \tfrac{y^2}{z^2}\big),\ \tfrac{f_y x y}{z^2},\ \tfrac{f_y x}{z}\Big]
+  \end{aligned}
+  $$
+
+  회전 3칸은 $\phi_x, \phi_y, \phi_z$ 순서다. 교재마다 $\delta$의 순서($[\phi;\, \rho]$)나 섭동 방향이 달라서 열 순서·부호가 다를 수 있다. 직접 구현할 때는 이 식을 외우지 말고 두 행렬을 곱한다.
+</Details>
+
+이동 부분($\rho$ 열)은 $1/z$에 비례한다. 먼 점은 카메라가 조금 옮겨 가도 사진에서 거의 안 움직인다는 뜻이다. 그래서 먼 점은 회전에 대한 정보는 주지만 이동에 대한 정보는 거의 주지 못한다.
+
+<SessionBreak id="s2" />
+
+## 과제
+
+### 손으로 재투영 야코비안 유도
+
+태블릿에 직접 쓴다.
+
+1. $u = f_x\, x/z + c_x$를 $x$, $y$, $z$로 각각 미분해 $\partial u / \partial p$의 첫 줄을 유도한다. 둘째 줄도 같은 방법으로 쓴다.
+2. $-[p]_\times$를 성분으로 쓰고, $\partial u / \partial p$의 첫 줄과 곱해 자세 야코비안 첫 줄의 회전 부분(마지막 3칸)을 구한다. Details의 식과 맞는가?
+3. 광축 위의 점($x = y = 0$)에서 $\phi_y$가 작게 변하면 $u$가 얼마나(크기) 움직이나? "픽셀 = $f_x$ × 라디안"으로 해석한다.
+4. $f_x = 500$일 때, 2m 앞의 점과 20m 앞의 점에서 카메라가 옆으로 1cm 옮겨 가면 $u$가 각각 몇 픽셀 움직이나? 먼 점이 이동을 알려주지 못하는 이유를 쓴다.
+5. 점 야코비안이 $\tfrac{\partial u}{\partial p}\,R$인 이유를 쓴다. 월드에서 점을 $+x$로 옮기는 것과 카메라 좌표에서 $+x$로 옮기는 것은 언제 같은가?
+
+<SessionBreak id="s3" />
+
+<TaskCard fn="projectionJacobian">
+  카메라 자세 $T$(월드 → 카메라), 월드 점 $X$, 내부 파라미터 $K$로 재투영의 자세 야코비안 `pose`($2 \times 6$, 좌섭동 $\delta = [\rho;\, \phi]$)와 점 야코비안 `point`($2 \times 3$)를 돌려준다. 점이 카메라 뒤($z \le 0$)면 예외를 던진다.
+
+  <Hint level={1}>
+    세 행렬을 만든다. $\partial u/\partial p$($2 \times 3$), $[\,I \;|\; -[p]_\times\,]$($3 \times 6$), $R$($3 \times 3$). 그리고 둘씩 곱한다. $p = RX + t$를 먼저 구한다.
+  </Hint>
+
+  <Hint level={2}>
+    $-[p]_\times$는 다음과 같다.
+
+    $$
+    -[p]_\times = \begin{bmatrix} 0 & z & -y \\ -z & 0 & x \\ y & -x & 0 \end{bmatrix}
+    $$
+
+    행렬 곱은 작은 함수 하나(`A`의 행 × `B`의 열)로 쓰면 두 번 다 쓸 수 있다. 테스트는 7b와 같은 방식(좌섭동, 중앙 차분)의 수치 야코비안과 비교한다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    p ← R·X + t,  (x, y, z) ← p
+    z ≤ 0 이면 예외
+    D ← [[fx/z, 0, −fx·x/z²],
+         [0, fy/z, −fy·y/z²]]
+    P ← [[1,0,0,  0,  z, −y],
+         [0,1,0, −z,  0,  x],
+         [0,0,1,  y, −x,  0]]
+    pose ← D · P      (2×6)
+    point ← D · R     (2×3)
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s4" />
+
+### projectionJacobian 테스트가 안 맞을 때
+
+- 회전 부분(마지막 3열)의 부호만 다르면 $+[p]_\times$를 썼거나, 우섭동 식($-R[X]_\times$ 꼴)을 쓴 것이다. 이 과정은 좌섭동이다.
+- 앞 3열과 뒤 3열이 통째로 바뀌었으면 $\delta$ 순서를 $[\phi;\, \rho]$로 쓴 것이다. 이동이 먼저다.
+- 점 야코비안만 틀리면 $R$ 대신 $R^\top$을 곱했는지 본다.
+- $\partial u/\partial p$의 셋째 열 부호를 본다. $z$가 커지면 $u$는 가운데($c_x$)로 다가가므로 음수다.
+
+<SessionBreak id="s5" />
+
+## 체크 질문
+
+<CheckQuestion q="번들 조정은 무엇을 변수로 두고 무엇을 최소화하나?" kind="개념">
+  모든 카메라의 자세(6자유도씩)와 모든 3D 점(3자유도씩)을 변수로 둔다. 각 관측의 재투영 오차(다시 투영한 위치 − 관측 픽셀)의 제곱합을 최소화한다.
+
+  잡음이 가우시안이면 최대 우도 추정이고, 픽셀 단위라 결과를 해석하기 쉽다. 실제로는 아웃라이어 때문에 로버스트 커널을 함께 쓴다(7a).
+</CheckQuestion>
+
+<CheckQuestion q="자세 야코비안의 이동 부분이 1/z에 비례한다. 이것은 무엇을 뜻하고, VO에 어떤 영향을 주나?" kind="왜">
+  카메라를 옆으로 옮겼을 때 사진에서 점이 움직이는 양은 점까지의 거리에 반비례한다. 먼 점은 이동을 거의 알려주지 못하고 회전만 알려준다.
+
+  그래서 먼 점만 보이는 장면(넓은 실외 등)에서는 이동 추정이 불안정하다. 가까운 점이 충분히 있어야 이동이 잘 잡히고, 키프레임 사이 기준선도 길어야 한다(6주차 시차).
+</CheckQuestion>
+
+<CheckQuestion q="재투영 야코비안을 직접 짜서 BA에 넣었더니 비용은 줄지만 수렴이 아주 느리다. 무엇부터 확인하나?" kind="실무">
+  야코비안과 업데이트(박스 플러스)의 섭동 규약이 같은지 본다. 야코비안은 좌섭동인데 업데이트를 우섭동으로 하면 방향이 조금 어긋나 느리게만 수렴한다. $\delta$ 순서($[\rho;\, \phi]$와 $[\phi;\, \rho]$)가 다르면 열이 통째로 어긋나 엉뚱한 방향으로 간다. 8b의 `smallBA` 테스트가 이것을 잡는다.
+
+  그다음 같은 업데이트로 만든 수치 야코비안과 원소별로 비교한다(7b). 부호, 전치, $f_x$와 $f_y$를 바꿔 쓴 실수가 흔하다.
+</CheckQuestion>
+
+<SessionBreak id="s6" />
