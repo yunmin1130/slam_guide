@@ -1,0 +1,17 @@
+---
+/**
+ * ProjectionDemo 데모 래퍼. 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * 3D 장면은 화면에 보일 때만 불러온다 (client:visible, ARCHITECTURE §8).
+ * 토글 배지는 손코딩 함수(project, distort)만 본다.
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import ProjectionDemo from "./ProjectionDemo";
+
+const lesson = requireLesson(Astro.locals, "ProjectionDemo");
+// 데모가 실제로 부르는 손코딩 함수만 배지에 넣는다 (과제가 늘어도 데모와 무관한 함수가 섞이지 않게)
+const DEMO_FNS = ["project", "distort"];
+const statuses = lesson.tasks.filter((fn) => DEMO_FNS.includes(fn)).map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<ProjectionDemo client:visible week={lesson.week} statuses={statuses} />

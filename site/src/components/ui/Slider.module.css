@@ -1,0 +1,19 @@
+.slider label {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.slider output {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+/* 터치 영역 44px (ARCHITECTURE §8) */
+.slider input {
+  width: 100%;
+  height: var(--touch);
+  margin: 0;
+  accent-color: var(--accent);
+  background: transparent;
+}

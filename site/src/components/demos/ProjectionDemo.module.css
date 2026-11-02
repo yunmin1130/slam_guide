@@ -1,0 +1,111 @@
+.demo {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.legend li::before {
+  content: "";
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.35em;
+  border-radius: 2px;
+  background: var(--c);
+  vertical-align: -0.05em;
+}
+
+.legend li.dashed::before {
+  background: none;
+  border-top: 2px dashed var(--ink-faint);
+  height: 0;
+  vertical-align: 0.25em;
+}
+.legend li.cross::before {
+  content: "+";
+  background: none;
+  width: auto;
+  height: auto;
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+}
+
+/* 카메라 이미지 (820×616 비율). 393px 폭에서 높이 약 270px */
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+.sensor {
+  fill: var(--paper-sunken);
+  stroke: var(--ink-soft);
+  stroke-width: 3;
+}
+.boardLine {
+  stroke: #f08a24;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+/* 왜곡 전 (이상적인 핀홀) 위치: 휘기 전 직선과 비교용 */
+.idealLine {
+  stroke: var(--ink-faint);
+  stroke-width: 2;
+  stroke-dasharray: 8 8;
+}
+.principal {
+  stroke: var(--ink-soft);
+  stroke-width: 3;
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+
+.values {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.muted {
+  margin: 0;
+  color: var(--ink-faint);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}

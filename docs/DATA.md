@@ -64,7 +64,7 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
   "ratio": [0.61, ...]                  // 1·2위 거리비 (10주차 ratioTest 입력)
 }
 ```
-- 어안 이미지는 core에서 `calib.json`으로 언프로젝션해 방향 벡터(bearing vector)로 바꾼 뒤 E를 추정한다 (CURRICULUM 5주차).
+- 어안 이미지는 core에서 `calib.json`으로 언프로젝션해 베어링 벡터(bearing vector, 광선 방향의 단위 벡터)로 바꾼 뒤 E를 추정한다 (CURRICULUM 5주차).
 
 ### imu.csv
 ```
@@ -116,10 +116,18 @@ JetBot 카메라(IMX219-160)는 160° 광각이라 **어안(fisheye) 모델이 �
     "ticks_per_rev": null
   },
   "calibrated_at": "2026-11-10",
-  "reproj_error_px": null
+  "reproj_error_px": null,              // camera 모델(어안)의 전체 RMS
+  "comparison": {                       // 4주차: 같은 교차점으로 두 모델을 맞춘 결과 (calibrate.py가 씀)
+    "views": 0,                         // 판을 찾아 쓴 프레임 수
+    "pinhole": { "fx": 0, "fy": 0, "cx": 0, "cy": 0, "distortion": [0, 0, 0, 0, 0],
+                 "rms_px": 0, "center_rms_px": 0, "edge_rms_px": 0, "edge_points": 0 },
+    "fisheye": { "...": "pinhole과 같은 필드, distortion은 k1~k4" }
+  }
 }
 ```
 
+- `datasets/calibrate.py`가 이 파일을 쓴다. 이미 파일이 있으면 `imu`·`wheel`은 그대로 두고 `camera`·`comparison`만 갱신한다. 합성 데이터로 스크립트를 검증하려면 `--selftest`.
+- "가장자리"는 이미지 중심에서 반대각선 길이의 60%보다 먼 교차점이다. 광각 렌즈는 여기서 핀홀과 어안의 차이가 크게 난다.
 - 카메라가 흔들리거나 각도가 바뀌면 다시 캘리브레이션한다.
 - 수집할 때 해상도·센서 모드는 캘리브레이션 때와 같아야 한다.
 
@@ -128,6 +136,17 @@ JetBot 카메라(IMX219-160)는 160° 광각이라 **어안(fisheye) 모델이 �
 - **버전 확인**: 기본 JetBot은 카메라만, ROS 버전은 엔코더·IMU·RPLIDAR A1 포함. `meta.json`의 `robot`에 기록. ROS 버전 실습은 선택 트랙이다 (CURRICULUM).
 - **환경**: JetPack 4.6 (Ubuntu 18.04, Python 3.6, ROS Melodic EOL)이라 새 패키지를 올리지 않는다. 녹화만 한다.
 - **녹화 방법**: `gst-launch-1.0`으로 `nvarguscamerasrc` → mp4 한 줄. **센서 모드 1640×1232로 받아 820×616으로 축소**한다. 1280×720 모드는 센서를 크롭해서 화각이 줄고 캘리브레이션과 어긋난다.
+  - JetBot 터미널(SSH 또는 Jupyter 터미널)에서 실행하고, Ctrl+C로 멈춘다(`-e`가 있어야 mp4가 깨지지 않는다). 카메라를 쓰는 노트북 커널이 켜져 있으면 먼저 끈다.
+  - IMX219의 `sensor-mode=3`이 1640×1232다(JetPack 4.6 기준). 다른 모드 번호면 `nvarguscamerasrc` 실행 시 출력되는 모드 목록에서 1640×1232를 고른다.
+
+```text
+gst-launch-1.0 -e nvarguscamerasrc sensor-mode=3 \
+  ! 'video/x-raw(memory:NVMM),width=1640,height=1232,framerate=30/1' \
+  ! nvvidconv \
+  ! 'video/x-raw(memory:NVMM),width=820,height=616' \
+  ! nvv4l2h264enc bitrate=8000000 ! h264parse \
+  ! mp4mux ! filesink location=board.mp4
+```
 - **노출 고정**: 캡스톤의 `exposure: fixed` 조건은 `nvarguscamerasrc`의 노출·게인 범위를 고정해서 만든다.
 - **환경 세팅 상한**: 1~2주 이상 쓰지 않는다. "영상 녹화해서 PC로 옮기기"까지만 되면 충분.
 - **막히면 대안 경로**: iPhone 0.5× 초광각 영상(광각·롤링셔터 실험 대체 가능, `source: iphone`) + TUM RGB-D(CC BY 4.0)·EuRoC.

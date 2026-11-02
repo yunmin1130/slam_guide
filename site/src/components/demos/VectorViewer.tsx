@@ -6,10 +6,11 @@
 import { useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { BufferAttribute, BufferGeometry, DoubleSide } from "three";
-import { loadFn, type ImplKind } from "../../lib/impl";
-import { friendlyLoadError } from "../../lib/staleChunk";
+import type { ImplKind } from "../../lib/impl";
+import { useImplFns } from "../../lib/useImplFns";
 import { add, matVec, scale, sceneVectors, type M3, type V3 } from "../../lib/vectorScene";
 import ImplToggle, { defaultKind, type FnStatusEntry } from "../ui/ImplToggle";
+import Slider from "../ui/Slider";
 import Arrow from "../viewer3d/Arrow";
 import Viewer3D from "../viewer3d/Viewer3D";
 import styles from "./VectorViewer.module.css";
@@ -17,16 +18,17 @@ import styles from "./VectorViewer.module.css";
 type Dot = (a: V3, b: V3) => number;
 type Cross = (a: V3, b: V3) => V3;
 type Skew = (v: V3) => M3;
-interface Fns {
+type Fns = {
   dot: Dot;
   cross: Cross;
   skew: Skew;
-}
+};
+const FN_NAMES = ["dot", "cross", "skew"] as const;
 
 /** 축 색(빨강·초록·파랑)과 겹치지 않는 색 */
 const COLOR = { a: "#f08a24", b: "#9a6ae0", cross: "#17a398", proj: "#c7a03a" } as const;
-/** 장면(a, b, a×b)의 대략 가운데. Three.js 좌표 = 수학 (0.6, 0.4, 1.2) */
-const SCENE_CENTER: [number, number, number] = [0.6, 1.2, -0.4];
+/** 장면(a, b, a×b)의 대략 가운데 (수학 좌표, z 위쪽) */
+const SCENE_CENTER: [number, number, number] = [0.6, 0.4, 1.2];
 
 interface VectorViewerProps {
   week: number;
@@ -44,27 +46,6 @@ function fmt(x: number): string {
 }
 
 const vecText = (v: V3): string => `[${v.map(fmt).join(", ")}]`;
-
-interface LoadedFns {
-  kind: ImplKind | null;
-  fns: Fns | null;
-  loadError: string | null;
-}
-
-/** 불러온 구현에 kind를 붙여 둔다. 토글 직후 이전 구현 결과가 새 라벨로 보이지 않게 한다 */
-function useFns(week: number, kind: ImplKind): { fns: Fns | null; loadError: string | null } {
-  const [state, setState] = useState<LoadedFns>({ kind: null, fns: null, loadError: null });
-  useEffect(() => {
-    let alive = true;
-    Promise.all([loadFn<Dot>(week, "dot", kind), loadFn<Cross>(week, "cross", kind), loadFn<Skew>(week, "skew", kind)])
-      .then(([dot, cross, skew]) => alive && setState({ kind, fns: { dot, cross, skew }, loadError: null }))
-      .catch((e: unknown) => alive && setState({ kind, fns: null, loadError: friendlyLoadError(e) }));
-    return () => {
-      alive = false;
-    };
-  }, [week, kind]);
-  return state.kind === kind ? state : { fns: null, loadError: null };
-}
 
 /** 0, a, a+b, b가 만드는 평행사변형. 넓이 = |a×b| */
 function Parallelogram({ a, b, color }: { a: V3; b: V3; color: string }) {
@@ -92,40 +73,6 @@ function Parallelogram({ a, b, color }: { a: V3; b: V3; color: string }) {
   );
 }
 
-interface SliderProps {
-  id: string;
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit: string;
-  onChange: (v: number) => void;
-}
-
-function Slider({ id, label, value, min, max, step, unit, onChange }: SliderProps) {
-  return (
-    <div className={styles.slider}>
-      <label htmlFor={id}>
-        {label}{" "}
-        <output htmlFor={id}>
-          {value}
-          {unit}
-        </output>
-      </label>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.currentTarget.value))}
-      />
-    </div>
-  );
-}
-
 function MatrixTable({ M }: { M: M3 }) {
   return (
     <table className={styles.matrix} aria-label="[a]× 행렬">
@@ -149,7 +96,7 @@ export default function VectorViewer({ week, statuses }: VectorViewerProps) {
   const [thetaDeg, setTheta] = useState(60);
   const [tiltDeg, setTilt] = useState(0);
   const [bLength, setBLength] = useState(1.5);
-  const { fns, loadError } = useFns(week, kind);
+  const { fns, loadError } = useImplFns<Fns>(week, FN_NAMES, kind);
 
   const { a, b } = useMemo(() => sceneVectors({ thetaDeg, tiltDeg, bLength }), [thetaDeg, tiltDeg, bLength]);
 

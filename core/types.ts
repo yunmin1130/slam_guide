@@ -22,3 +22,23 @@ export interface SE3 {
   readonly R: Mat3;
   readonly t: Vec3;
 }
+
+/** 카메라 내부 파라미터 (픽셀 단위). u = fx·x + cx, v = fy·y + cy. calib.json의 fx, fy, cx, cy (DATA §3) */
+export interface Intrinsics {
+  readonly fx: number;
+  readonly fy: number;
+  readonly cx: number;
+  readonly cy: number;
+}
+
+/** 핀홀 렌즈 왜곡 (Brown-Conrady, OpenCV와 같은 계수 이름). 정규화 평면 좌표에 적용한다 */
+export interface BrownDistortion {
+  readonly k1: number;
+  readonly k2: number;
+  readonly p1: number;
+  readonly p2: number;
+  readonly k3: number;
+}
+
+/** 어안 렌즈 왜곡 (Kannala-Brandt, OpenCV fisheye) [k1, k2, k3, k4] */
+export type FisheyeDistortion = readonly [number, number, number, number];
