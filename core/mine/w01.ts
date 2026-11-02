@@ -18,5 +18,10 @@ export { dot, cross } from "../reference/w01";
  * @returns  3×3 반대칭 행렬 (행 우선)
  */
 export function skew(v: Vec3): Mat3 {
-  throw new Error("TODO");
+  const [x, y, z] = v;
+  return [
+    [0, -z, y],
+    [z, 0, -x],
+    [-y, x, 0]
+  ];
 }
