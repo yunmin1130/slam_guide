@@ -35,12 +35,22 @@ export const PENDING_LIMIT_MS = 30 * 60 * 1000;
 export function draftState(draft: DraftRecord | null, buildHash: string, now: number = Date.now()): DraftState {
   if (!draft) return { kind: "fresh" };
   if (draft.baseHash === buildHash) return { kind: "synced" };
-  const age = now - Date.parse(draft.updatedAt);
-  if (draft.pending && !(age > PENDING_LIMIT_MS)) return { kind: "pending-deploy" };
+  // 제출 시각 기준 (편집 시각이 아님). 시각이 없거나 깨졌으면 기다리지 않고 바뀐 것으로 본다
+  const age = now - Date.parse(draft.pendingSince ?? "");
+  if (draft.pending && Number.isFinite(age) && age <= PENDING_LIMIT_MS) return { kind: "pending-deploy" };
   return { kind: "repo-changed" };
 }
 
 /** 배포가 제출을 따라잡았으면 pending을 내린다 */
 export function settleDraft(draft: DraftRecord, buildHash: string): DraftRecord {
-  return draft.pending && draft.baseHash === buildHash ? { ...draft, pending: false } : draft;
+  if (!draft.pending || draft.baseHash !== buildHash) return draft;
+  const { pendingSince: _done, ...rest } = draft;
+  return { ...rest, pending: false };
+}
+
+/** CI가 구문·import 오류 파일을 바꿔 끼운 스텁인지 (scripts/check-mine-syntax.mjs의 첫 줄 표식) */
+export const CI_STUB_MARKER = "// CI 전용 자동 생성 스텁";
+
+export function isCiStub(source: string): boolean {
+  return source.startsWith(CI_STUB_MARKER);
 }

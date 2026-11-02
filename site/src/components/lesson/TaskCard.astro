@@ -8,7 +8,7 @@
 import { Code } from "astro:components";
 import { STATUS_LABEL, type FnStatus } from "../../lib/impl";
 import { fnStatus, syntaxMessage } from "../../lib/implStatus";
-import { contentHash, normalizeNewlines } from "../../lib/playground/draft";
+import { contentHash, isCiStub, normalizeNewlines } from "../../lib/playground/draft";
 import CodePlayground from "./CodePlayground";
 import { coreFile, githubDevUrl, githubUrl, mineSource, referenceFunctionSource, requireLesson } from "./context";
 
@@ -67,7 +67,7 @@ const initialSource = mineText === undefined ? "" : normalizeNewlines(mineText);
           path={minePath}
           initialSource={initialSource}
           buildHash={contentHash(initialSource)}
-          buildIsStub={syntax !== undefined}
+          buildIsStub={isCiStub(initialSource)}
         />
         <a class="task-link" href={githubDevUrl(minePath)}>github.dev에서 편집</a>
         <a class="task-link" href={githubUrl(minePath)}>{minePath}</a>

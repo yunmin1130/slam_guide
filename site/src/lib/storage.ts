@@ -168,6 +168,7 @@ export interface DraftRecord {
   code: string; // core/mine/wNN.ts 파일 전체
   baseHash: string; // 이 초안의 기준이 된 저장소 파일 내용 해시 (playground/draft.ts)
   pending: boolean; // 사이트에서 제출했고 배포를 기다리는 중
+  pendingSince?: string; // 제출 시각 ISO 8601 (pending일 때만). 편집해도 바뀌지 않는다
   updatedAt: string; // ISO 8601
 }
 
@@ -179,12 +180,14 @@ export interface DraftStore {
 
 function sanitizeDraft(raw: unknown): DraftRecord | null {
   if (!isRecord(raw) || typeof raw.code !== "string" || typeof raw.baseHash !== "string") return null;
-  return {
+  const draft: DraftRecord = {
     code: raw.code,
     baseHash: raw.baseHash,
     pending: raw.pending === true,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
   };
+  if (draft.pending && typeof raw.pendingSince === "string") draft.pendingSince = raw.pendingSince;
+  return draft;
 }
 
 export function createDraftStore(backend: KeyValueBackend | null): DraftStore {

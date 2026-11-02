@@ -147,6 +147,7 @@ function Panel({ week, fn, path, initialSource, buildHash, buildIsStub, onClose 
       setNotice({ tone: "fail", text: "원본을 불러오려면 GitHub 토큰이 필요해" });
       return;
     }
+    if (draft.code !== initialSource && !window.confirm("지금 쓴 코드를 GitHub 원본으로 바꿀까?")) return;
     try {
       takeVersion((await getFile(path, token)).text);
     } catch (e) {
@@ -170,7 +171,7 @@ function Panel({ week, fn, path, initialSource, buildHash, buildIsStub, onClose 
         </button>
       </header>
 
-      {buildIsStub && (
+      {buildIsStub && !draft.base.pending && (
         <div className={styles.banner} role="status">
           <p>배포된 파일은 구문·import 오류 때문에 TODO 스텁으로 바뀐 거야. 저장소의 원본을 불러와서 고쳐줘.</p>
           <div className={styles.row}>
@@ -193,7 +194,7 @@ function Panel({ week, fn, path, initialSource, buildHash, buildIsStub, onClose 
           </div>
         </div>
       )}
-      {!buildIsStub && draft.state.kind === "pending-deploy" && (
+      {(buildIsStub ? draft.base.pending : draft.state.kind === "pending-deploy") && (
         <p className={styles.note}>
           저장소가 사이트보다 앞서 있어 · 배포 기다리는 중.{" "}
           <a href={ACTIONS_URL} target="_blank" rel="noreferrer">

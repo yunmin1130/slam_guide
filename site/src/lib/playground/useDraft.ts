@@ -18,6 +18,7 @@ export function flushAllDrafts(): void {
 interface Base {
   hash: string;
   pending: boolean;
+  pendingSince?: string; // 제출 시각 (pending일 때)
 }
 
 export interface DraftApi {
@@ -42,7 +43,9 @@ export function useDraft(week: string, initialSource: string, buildHash: string)
     return r ? settleDraft(r, buildHash) : null;
   });
   const [code, setCodeState] = useState(record?.code ?? initialSource);
-  const [base, setBase] = useState<Base>(record ? { hash: record.baseHash, pending: record.pending } : { hash: buildHash, pending: false });
+  const [base, setBase] = useState<Base>(
+    record ? { hash: record.baseHash, pending: record.pending, pendingSince: record.pendingSince } : { hash: buildHash, pending: false },
+  );
   const [state, setState] = useState<DraftState>(() => draftState(record, buildHash));
   const [saveError, setSaveError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,7 +57,9 @@ export function useDraft(week: string, initialSource: string, buildHash: string)
     const { code: c, base: b, dirty } = latest.current;
     if (!dirty) return;
     try {
-      store.save(week, { code: c, baseHash: b.hash, pending: b.pending, updatedAt: new Date().toISOString() });
+      const now = new Date().toISOString();
+      const pendingSince = b.pending ? (b.pendingSince ?? now) : undefined;
+      store.save(week, { code: c, baseHash: b.hash, pending: b.pending, ...(pendingSince ? { pendingSince } : {}), updatedAt: now });
       latest.current.dirty = false;
       setSaveError(null);
     } catch (e) {
@@ -96,10 +101,12 @@ export function useDraft(week: string, initialSource: string, buildHash: string)
       schedule(c, base);
     },
     replace(c, b) {
+      const now = new Date().toISOString();
+      const next: Base = b.pending ? { ...b, pendingSince: b.pendingSince ?? now } : { hash: b.hash, pending: false };
       setCodeState(c);
-      setBase(b);
-      setState(draftState({ code: c, baseHash: b.hash, pending: b.pending, updatedAt: new Date().toISOString() }, buildHash));
-      schedule(c, b);
+      setBase(next);
+      setState(draftState({ code: c, baseHash: next.hash, pending: next.pending, pendingSince: next.pendingSince, updatedAt: now }, buildHash));
+      schedule(c, next);
       write();
     },
     keepDraft() {
