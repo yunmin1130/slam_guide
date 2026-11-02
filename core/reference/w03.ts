@@ -83,9 +83,9 @@ export function invSE3(T: SE3): SE3 {
   return { R: Rt, t: [-t[0], -t[1], -t[2]] };
 }
 
-export function expSO3(w: Vec3): Mat3 {
-  const th = Math.hypot(...w);
-  const W = skew(w);
+export function expSO3(omega: Vec3): Mat3 {
+  const th = Math.hypot(...omega);
+  const W = skew(omega);
   const W2 = matMul(W, W);
   if (th < SMALL_ANGLE) {
     // sinθ/θ ≈ 1 - θ²/6, (1 - cosθ)/θ² ≈ 1/2 - θ²/24
