@@ -139,3 +139,36 @@ export interface BAResult {
   /** 처음부터 받아들인 업데이트마다의 비용 */
   readonly costs: readonly number[];
 }
+
+/** 2D 자세 (9주차): 위치 (x, y)와 방향 θ (라디안). 월드에서 본 로봇 자세 T_wi */
+export interface Pose2 {
+  readonly x: number;
+  readonly y: number;
+  readonly theta: number;
+}
+
+/**
+ * 포즈 그래프 엣지 (9주차): 노드 i에서 본 노드 j의 상대 자세 측정 z_ij = T_i⁻¹·T_j.
+ * info는 3×3 정보 행렬 (측정 공분산의 역, 순서 [x, y, θ]). 오도메트리와 루프 클로저 모두 이 꼴이다.
+ */
+export interface PoseGraphEdge {
+  readonly i: number;
+  readonly j: number;
+  readonly measurement: Pose2;
+  readonly info: MatN;
+}
+
+export interface PoseGraphProblem {
+  readonly poses: readonly Pose2[];
+  readonly edges: readonly PoseGraphEdge[];
+  /** 움직이지 않는 노드 (게이지 고정, 보통 [0]) */
+  readonly fixed: readonly number[];
+}
+
+export interface PoseGraphResult {
+  readonly poses: Pose2[];
+  readonly cost: number;
+  readonly iterations: number;
+  readonly converged: boolean;
+  readonly costs: readonly number[];
+}
