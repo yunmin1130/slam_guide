@@ -116,8 +116,10 @@ export function project(p: Vec3, K: Intrinsics): Vec2 | null {
 **`core/tests/w{NN}.test.ts`**
 - Vitest `ref`·`mine` project가 `IMPL` 환경변수로 구현을 하나만 고르고, **그쪽만 동적 import**한다. ref 실행이 mine 파일 오류의 영향을 받지 않게 하기 위함 (CI는 ARCHITECTURE §6).
   ```ts
-  const IMPL = process.env.IMPL === "mine" ? "mine" : "reference";
-  const m: typeof import("../reference/w04") = await import(`@core/${IMPL}/w04.ts`); // 확장자 필수
+  import { describe, expect, it } from "vitest";
+  import { IMPL, loadImpl } from "./loadImpl";
+
+  const m = await loadImpl<typeof import("../reference/w04")>("w04");
 
   describe(IMPL, () => {
     describe("project", () => {
@@ -128,6 +130,8 @@ export function project(p: Vec3, K: Intrinsics): Vec2 | null {
   });
   ```
 - **테스트 제목 규칙 (강제)**: `describe(구현) > describe("<함수명>") > it("기본|경계|수치: …")`. `impl.ts`는 JSON 결과의 `ancestorTitles[1]`(함수명)과 파일명(`w{NN}`)으로 `w{NN}/{함수명}` 키를 만든다. 이 구조를 벗어나면 대시보드가 함수별 통과 여부를 알 수 없다.
+- **구현은 반드시 `loadImpl`로 불러온다**. 사이트 코드 연습장이 이 import를 초안으로 바꿔 끼운다 (ARCHITECTURE §6.1). 테스트 파일의 다른 import는 `vitest`, `./loadImpl`, `./rng`, `ml-matrix`처럼 브라우저에서 번들 가능한 것만 쓴다 (`node:*` 금지). 테스트 등록은 `it(`만 쓴다 (parity 테스트가 `it(` 개수로 빠진 케이스를 센다).
+- **쓸 수 있는 것은 `describe`, `it`, `expect`와 matcher 7개뿐**: `toBe`, `toEqual`, `toBeCloseTo`, `toBeLessThan`, `toBeLessThanOrEqual`, `toHaveLength`, `toThrow`. `vi`, `beforeEach`, `it.each`, `.not` 등이 필요하면 `site/src/lib/playground/shim.ts`와 `shim.test.ts`에 먼저 추가한다 (안 하면 브라우저 채점에서 그 케이스가 실패로 나온다).
 - 함수당 테스트 최소 3개: 기본 케이스 1, 경계 케이스 1, 수치 안정성/무작위 케이스 1.
 - 부동소수 비교는 허용 오차를 명시한다 (기본 1e-6).
 - **SVD·영공간·E/F 결과는 부호·스케일 불변으로 비교한다** (정규화 후 `±` 둘 중 가까운 쪽, 또는 제약식 잔차 `x'ᵀFx ≈ 0`으로 검사).

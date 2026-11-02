@@ -39,6 +39,17 @@ const referenceSources = import.meta.glob<string>("../../../../core/reference/w*
   eager: true,
 });
 
+const mineSources = import.meta.glob<string>("../../../../core/mine/w*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+});
+
+/** core/mine 파일 전체 (코드 연습장의 시작 내용). 없으면 undefined. */
+export function mineSource(key: string): string | undefined {
+  return Object.entries(mineSources).find(([path]) => path.endsWith(`/${key}.ts`))?.[1];
+}
+
 /** reference 파일에서 함수 하나의 소스(JSDoc 포함)를 꺼낸다. 없으면 undefined. */
 export function referenceFunctionSource(key: string, fn: string): string | undefined {
   const entry = Object.entries(referenceSources).find(([path]) => path.endsWith(`/${key}.ts`));

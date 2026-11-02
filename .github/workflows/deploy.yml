@@ -1,4 +1,4 @@
-# 순서: test:ref(통과 조건) → mine 구문 검사 → test:mine(실패 허용) → build → Pages 배포
+# 순서: test:ref·test:site(통과 조건) → mine 구문 검사 → test:mine(실패 허용) → build → Pages 배포
 # 근거: docs/ARCHITECTURE.md §6
 name: Deploy
 

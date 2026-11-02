@@ -3,12 +3,12 @@
  *   describe(구현) > describe("<함수명>") > it("기본|경계|수치: …")
  */
 import { describe, expect, it } from "vitest";
+import { IMPL, loadImpl } from "./loadImpl";
 import { createRng, randomVec3 } from "./rng";
 
 type W01 = typeof import("../reference/w01");
 
-const IMPL = process.env.IMPL === "mine" ? "mine" : "reference";
-const m: W01 = await import(`@core/${IMPL}/w01.ts`);
+const m = await loadImpl<W01>("w01");
 
 const TOL = 1e-9;
 

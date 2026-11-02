@@ -54,7 +54,8 @@ slam_guide/
 │   │   ├── lib/
 │   │   │   ├── storage.ts    # 저장 계층 (유일한 저장 진입점)
 │   │   │   ├── impl.ts       # mine/reference 선택 로직 (유일한 분기점)
-│   │   │   └── implStatus.ts # mine 테스트 상태 (빌드 전용, 결과 JSON 읽기)
+│   │   │   ├── implStatus.ts # mine 테스트 상태 (빌드 전용, 결과 JSON 읽기)
+│   │   │   └── playground/   # 코드 연습장: 브라우저 채점(워커·vitest shim)·초안·제출 (§6.1)
 │   │   └── pages/            # 대시보드, 레슨 라우트
 │   └── public/data/          # 작은 샘플 데이터 (DATA §1 상한)
 ├── core/                     # 수학 코어 (TypeScript, 사이트와 독립)
@@ -116,12 +117,34 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
 - 테스트는 구현체를 인자로 받아 `ref`·`mine` 양쪽에 돈다 (작성법은 LESSON_TEMPLATE §4).
 - **CI 순서 (GitHub Actions)**
   1. `test:ref` — **통과 조건**. 실패하면 배포 중단. `--passWithNoTests`.
+  1-1. `test:site` — **통과 조건**. 사이트 로직과 브라우저 채점 parity(§6.1).
   2. **mine 구문 검사** (`scripts/check-mine-syntax.mjs`) — `core/mine/*.ts`를 TypeScript 파서로 검사해 `site/src/data/mine-syntax.json`에 기록한다. CI에서만 실패한 파일을 TODO 스텁(reference와 같은 함수 이름)으로 바꿔 끼운다. 로컬에서는 파일을 절대 바꾸지 않는다. github.dev에서 반쯤 짠 코드를 push해도 배포가 막히지 않게 하기 위함.
   3. `test:mine` — `--reporter=json --outputFile=site/src/data/test-results.json --passWithNoTests`. 실패해도 계속 (`|| true`). mine은 TODO 상태가 정상이기 때문. `implStatus.ts`가 두 결과 파일을 합쳐 읽는다.
   4. **mine import 검사** (`check-mine-syntax.mjs --after-tests`) — 구문은 맞지만 import가 깨진 주차(결과 JSON에서 "실패, 테스트 0개")를 찾아 `mine-syntax.json`에 `import 오류`로 덧붙이고, CI에서만 같은 방식으로 스텁을 끼운다. 그대로 두면 `impl.ts`의 mine glob 때문에 build가 실패한다.
   5. `astro build --root site` → Pages 배포.
-- 테스트 파일은 `IMPL` 값에 따라 한쪽 구현만 `await import()`로 불러온다. ref 실행이 mine 파일의 오류에 영향받지 않게 하기 위함 (LESSON_TEMPLATE §4).
-- 손코딩은 PC에서 한다. iPad에서는 github.dev(또는 Codespaces)로 `core/mine`을 편집하고 push하면 CI가 결과를 반영한다. 사이트 안 코드 에디터는 두지 않는다.
+- 테스트 파일은 `core/tests/loadImpl.ts`의 `loadImpl("wNN")`으로 `IMPL` 쪽 구현 하나만 불러온다. ref 실행이 mine 파일의 오류에 영향받지 않게 하기 위함 (LESSON_TEMPLATE §4).
+- 손코딩은 어느 기기에서든 한다: PC는 `npm run test:mine`, 폰·패드는 과제 카드의 **코드 연습장**(아래), github.dev도 그대로 쓸 수 있다.
+
+### 6.1 코드 연습장 (사이트 안 편집·채점·제출) — 결정 변경 2026-11-02
+
+원래 결정("사이트 안 코드 에디터는 두지 않는다, github.dev로 대체")을 뒤집었다. github.dev는 터미널이 없고 CI 피드백이 몇 분 걸려 폰 손코딩이 사실상 불가능했기 때문. 설계는 서브에이전트 2개 안을 비교해 정했다.
+
+- **위치**: 과제 카드(`TaskCard.astro`)의 `CodePlayground` island. 편집 단위는 `core/mine/wNN.ts` 파일 전체, 한 페이지에 한 번에 하나만 연다.
+- **채점**: `site/src/lib/playground/`. 실행마다 새 Web Worker를 만들어 `core/tests` 파일을 **그대로** 돌린다 (케이스 중복 없음).
+  - sucrase로 타입만 지우고 `require` 허용 목록(`ml-matrix`, `../reference/wNN`, `@core/prev/wNN`, `../types`)으로 실행. 타입 검사는 하지 않는다.
+  - `vitePlugin.ts`가 core/tests 안의 `"vitest"` → `shim.ts`, `"./loadImpl"` → `draftImpl.ts`로 바꿔 끼운다 (페이지·워커 빌드, vitest `site` project).
+  - 5초 넘으면 워커를 끊는다 (무한 루프). 새 워커를 쓰는 이유: 테스트 파일은 모듈 캐시 때문에 한 번만 등록된다.
+  - **판정이 PC와 같아야 한다**: `shim.test.ts`가 matcher를 진짜 vitest expect와 나란히 비교하고, `parity.test.ts`가 reference 소스를 이 경로로 돌려 전부 통과·케이스 수 일치를 확인한다. 둘 다 CI `test:site`(통과 조건)에 들어간다.
+- **분기점은 그대로**: 초안 결과는 데모·배지에 영향이 없다. 배지와 데모 기본값은 계속 CI의 `test-results.json`(§5)으로만 정한다.
+- **제출**: GitHub Contents API로 그 파일을 main에 커밋 → CI가 테스트·배포 → 배지 갱신.
+  - 원격 파일 내용이 초안의 기준(`baseHash`)과 다르면 커밋하지 않고 "저장소 버전으로 바꾸기 / 그래도 덮어쓰기"를 묻는다 (PC에서 push한 코드 보호).
+  - 사이트에서 제출하면 main이 앞서므로, PC에서 작업하기 전에 `git pull`(작업 브랜치는 main을 merge)한다.
+  - **main에 브랜치 보호(PR 필수)를 걸지 않는다.** 걸면 제출이 422로 거절된다.
+  - AI 작업 브랜치는 기존 `core/mine` 파일을 고치지 않는다 (사이트 제출과 merge 충돌 방지, CLAUDE.md 규칙과 같음).
+  - 제출 후 30분이 지나도 배포가 따라오지 않으면 "저장소가 바뀜"으로 본다 (배포 실패·그 뒤 PC push 대비).
+- **한계**: 초안은 워커 전역에서 실행되므로 마음먹으면 채점을 속일 수 있다. 브라우저 통과는 연습용 신호이고, 배지는 CI 결과만 믿는다.
+- **워커는 같은 출처 파일로만 만든다** (blob·inline 금지). 같은 출처 URL 워커는 페이지 meta CSP를 물려받지 않아 `new Function`에 `'unsafe-eval'`이 필요 없다. blob 워커로 바꾸면 페이지 CSP를 물려받아 채점이 막힌다.
+- 번들: 화면 쪽 약 6KB gz, 채점 워커(sucrase·ml-matrix·테스트 포함) 약 65KB gz는 "테스트 실행"을 누를 때만 받는다.
 
 ## 7. 저장 계층 (`lib/storage.ts`)
 
@@ -148,6 +171,7 @@ interface LessonState {
 
 **단계적 구현**
 - 0주차: **localStorage 전용**.
+- 코드 초안은 진도와 다른 키 `slam-drafts`에 둔다 (`DraftStore`, 주차별 `{ code, baseHash, pending, updatedAt }`, 초안당 10만 자 제한). 타이핑마다 진도 JSON을 다시 쓰지 않고, Gist 동기화 때 따로 다루기 위함.
 - 3~4주차 (기기 간 불편이 실제로 생길 때): Gist 동기화 추가.
 
 **Gist 구현**
@@ -159,13 +183,15 @@ interface LessonState {
 
 **토큰 보안**
 - fine-grained PAT, 권한은 Gists 읽기·쓰기 하나만, 만료 90일. (발급 시 해당 권한이 없으면 classic 토큰 `gist` 스코프만.)
+- **제출용 토큰(§6.1)은 따로 둔다** (결정 변경 2026-11-02): fine-grained PAT(`github_pat_`만 받는다, classic 거절), 저장소는 `slam_guide` 하나, 권한은 Contents 읽기·쓰기 하나, 만료 90일. 키 `slam-github-token`. 채점 워커에는 넘기지 않는다.
+  - 위험: 이 토큰이 새면 `site/` 코드도 고쳐 main에 push할 수 있고, 배포되면 같은 origin의 Gist 토큰까지 읽힐 수 있다 (Workflows 권한이 없어 CI 파일은 못 고친다). 그래서 CSP는 미루지 않고 Gist 동기화 전에 넣는다.
 - 토큰은 해당 기기 localStorage에만 둔다. 로그·Gist·URL에 절대 쓰지 않는다.
 - `yunmin1130.github.io` 아래의 모든 Pages 저장소는 origin(=localStorage)을 공유한다. 같은 계정에 신뢰할 수 없는 Pages를 두지 않는다 (필요해지면 커스텀 도메인으로 분리).
 - 런타임 CDN 스크립트를 쓰지 않는다 (§2). CSP는 첫 배포가 안정된 뒤 프로덕션 빌드에만 meta로 넣는다:
   ```
   default-src 'self'; script-src 'self' (+Astro 인라인 스크립트 해시);
   style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;
-  connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'self'
+  connect-src 'self' https://api.github.com; worker-src 'self'; object-src 'none'; base-uri 'self'
   ```
   `style-src 'unsafe-inline'`은 KaTeX의 인라인 `style` 속성 때문에 필요하다. 인라인 스크립트(island 하이드레이션)는 해시로 허용한다. 다크 모드는 `prefers-color-scheme`만 따르므로 스크립트가 없다.
 
@@ -184,13 +210,12 @@ interface LessonState {
 
 | 기기 | 역할 |
 | --- | --- |
-| iPhone 14 Pro | 개념 읽기, 데모 조작, 체크 질문 (주 사용) |
-| iPad | 손으로 수식 풀기, 데모, github.dev로 가벼운 과제 |
+| iPhone 14 Pro | 개념 읽기, 데모 조작, 체크 질문, 코드 연습장으로 짧은 과제 (주 사용) |
+| iPad | 손으로 수식 풀기, 데모, 코드 연습장으로 과제 |
 | PC (Windows) | 사이트 개발(Claude Code), core/mine 구현, PC Python 영상 처리, WSL2/Docker에서 C++ VO·ORB-SLAM3 |
 
 ## 10. 하지 않는 것
 
 - 백엔드 서버, 로그인, 결제 (강의 판매를 고민할 때 다시 검토)
-- 사이트 안 코드 에디터 (github.dev로 대체)
 - 로봇에서의 실시간 SLAM 구동 (마지막 보너스 목표)
 - 대용량 데이터셋 사이트 업로드 (긴 데이터는 드래그앤드롭으로 로컬 파일 사용)

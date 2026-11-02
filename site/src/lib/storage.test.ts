@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createLocalStore, sanitizeProgress, STORAGE_KEY, type KeyValueBackend } from "./storage";
+import { createDraftStore, createLocalStore, createTokenStore, DRAFTS_KEY, MAX_DRAFT_CHARS, sanitizeProgress, STORAGE_KEY, TOKEN_KEY, type KeyValueBackend } from "./storage";
 
 function memoryBackend(initial: Record<string, string> = {}): KeyValueBackend & { data: Record<string, string> } {
   const data = { ...initial };
@@ -95,5 +95,67 @@ describe("createLocalStore", () => {
     await expect(store.update(() => { throw new Error("boom"); })).rejects.toThrow("boom");
     await store.update(() => ({ lessons: { w01: { status: "done", checked: [] } } }));
     expect((await store.load()).lessons.w01?.status).toBe("done");
+  });
+});
+
+function removableBackend() {
+  const m = new Map<string, string>();
+  return {
+    m,
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => void m.set(k, v),
+    removeItem: (k: string) => void m.delete(k),
+  };
+}
+
+describe("DraftStore", () => {
+  const draft = { code: "x", baseHash: "h", pending: false, updatedAt: "2026-11-02T00:00:00.000Z" };
+
+  it("주차별로 저장, 불러오기, 삭제하고 진도 키는 건드리지 않는다", () => {
+    const b = removableBackend();
+    const s = createDraftStore(b);
+    s.save("w01", draft);
+    s.save("w02", { ...draft, code: "y" });
+    expect(s.load("w01")).toEqual(draft);
+    s.remove("w01");
+    expect(s.load("w01")).toBeNull();
+    expect(s.load("w02")?.code).toBe("y");
+    expect(b.m.has(STORAGE_KEY)).toBe(false);
+  });
+
+  it("깨진 값은 초안 없음으로 본다", () => {
+    const b = removableBackend();
+    b.setItem(DRAFTS_KEY, "{not json");
+    expect(createDraftStore(b).load("w01")).toBeNull();
+    b.setItem(DRAFTS_KEY, JSON.stringify({ w01: { code: 1 } }));
+    expect(createDraftStore(b).load("w01")).toBeNull();
+  });
+
+  it("너무 긴 초안은 저장을 거절한다", () => {
+    expect(() => createDraftStore(removableBackend()).save("w01", { ...draft, code: "a".repeat(MAX_DRAFT_CHARS + 1) })).toThrow(/너무 길어/);
+  });
+
+  it("저장소가 막혀 있으면 저장 실패를 알린다", () => {
+    expect(() => createDraftStore(null).save("w01", draft)).toThrow(/저장할 수 없어/);
+  });
+});
+
+describe("TokenStore", () => {
+  const TOKEN = `github_pat_${"A".repeat(30)}`;
+
+  it("토큰 모양만 받고 앞뒤 공백은 지운다", () => {
+    const s = createTokenStore(removableBackend());
+    expect(() => s.set("hello")).toThrow(/토큰 모양/);
+    expect(() => s.set(`ghp_${"A".repeat(36)}`)).toThrow(/토큰 모양/); // classic 토큰 거절
+    s.set(`  ${TOKEN}\n`);
+    expect(s.get()).toBe(TOKEN);
+    s.clear();
+    expect(s.get()).toBeNull();
+  });
+
+  it("저장된 값이 토큰 모양이 아니면 없는 것으로 본다", () => {
+    const b = removableBackend();
+    b.setItem(TOKEN_KEY, "garbage");
+    expect(createTokenStore(b).get()).toBeNull();
   });
 });

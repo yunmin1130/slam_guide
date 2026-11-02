@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
+import { playgroundTestsPlugin } from "./site/src/lib/playground/vitePlugin.ts";
 
 const coreDir = fileURLToPath(new URL("./core", import.meta.url));
 // 이전 주차 함수: 기본은 reference, M1 리포트 때만 CORE_PREV=mine (ARCHITECTURE §3)
@@ -33,6 +34,8 @@ export default defineConfig({
       {
         // 사이트 순수 로직 (impl·storage·sessions). core 테스트와 분리
         extends: true,
+        // core/tests의 vitest·loadImpl import를 브라우저 채점기용으로 바꿔 끼운다 (parity 테스트)
+        plugins: [playgroundTestsPlugin()],
         test: {
           name: "site",
           include: ["site/src/lib/**/*.test.ts"],

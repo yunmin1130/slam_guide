@@ -1,0 +1,261 @@
+/* 과제 카드 안 코드 연습장. 폰(393px) 우선: 버튼은 손가락 크기, 입력칸 글자 16px(iOS 확대 방지) */
+
+.openBtn,
+.primary,
+.btn {
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  border-radius: 999px;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+.openBtn,
+.btn {
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+.openBtn {
+  width: 100%;
+  margin-top: var(--space-3);
+  border-style: dashed;
+}
+.primary {
+  border: 1.5px solid var(--mine);
+  background: var(--mine);
+  color: var(--paper);
+  flex: 1 1 100%;
+}
+.openBtn:active,
+.primary:active,
+.btn:active {
+  transform: translateY(1px);
+}
+.primary:disabled,
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.openBtn:focus-visible,
+.primary:focus-visible,
+.btn:focus-visible,
+.linkBtn:focus-visible,
+.symbol:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.linkBtn {
+  min-height: var(--touch);
+  padding: 0 var(--space-2);
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-decoration: underline;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.panel {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--rule);
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.editor {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 18rem;
+  max-height: 60vh;
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+}
+.textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.symbols {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+  scrollbar-width: none;
+}
+.symbol {
+  flex: 0 0 auto;
+  min-width: var(--touch);
+  min-height: var(--touch);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  cursor: pointer;
+}
+.symbol:active {
+  background: var(--paper-sunken);
+}
+
+.actions,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.banner {
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--ref-bg);
+  border-left: 3px solid var(--ref);
+  font-size: var(--text-sm);
+}
+.banner p {
+  margin: 0 0 var(--space-2);
+}
+.note,
+.notice {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.notice[data-tone="ok"] {
+  color: var(--mine);
+}
+.notice[data-tone="fail"],
+.error {
+  color: var(--fail);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.results {
+  display: grid;
+  gap: var(--space-2);
+}
+.headline {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--text-sm);
+}
+.headline[data-tone="mine"] {
+  color: var(--mine);
+}
+.headline[data-tone="fail"] {
+  color: var(--fail);
+}
+.headline[data-tone="muted"] {
+  color: var(--ink-soft);
+}
+.cases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.case {
+  display: grid;
+  grid-template-columns: 1.25rem 1fr;
+  gap: 0 var(--space-2);
+  font-size: var(--text-sm);
+  align-items: baseline;
+}
+.case[data-status="pass"] .icon {
+  color: var(--mine);
+}
+.case[data-status="fail"] .icon {
+  color: var(--fail);
+}
+.case[data-status="todo"] .icon {
+  color: var(--ink-faint);
+}
+.caseName {
+  overflow-wrap: anywhere;
+}
+.caseMsg {
+  grid-column: 2;
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2);
+  background: var(--fail-bg);
+  color: var(--fail);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.settings {
+  font-size: var(--text-sm);
+  border-top: 1px dashed var(--rule);
+  padding-top: var(--space-2);
+}
+.settings summary {
+  min-height: var(--touch);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+.settingsBody {
+  display: grid;
+  gap: var(--space-2);
+}
+.steps {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--ink-soft);
+}
+.tokenRow {
+  display: flex;
+  gap: var(--space-2);
+}
+.tokenInput {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+}

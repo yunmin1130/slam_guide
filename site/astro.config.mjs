@@ -6,6 +6,7 @@ import { unified } from "@astrojs/markdown-remark";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { fileURLToPath } from "node:url";
+import { playgroundTestsPlugin } from "./src/lib/playground/vitePlugin.ts";
 
 const coreDir = fileURLToPath(new URL("../core", import.meta.url));
 const prevImpl = process.env.CORE_PREV === "mine" ? "mine" : "reference";
@@ -23,6 +24,12 @@ export default defineConfig({
     shikiConfig: { themes: { light: "github-light", dark: "github-dark" } },
   },
   vite: {
+    // 코드 연습장: core/tests의 vitest·loadImpl import를 브라우저 채점기용으로 바꿔 끼운다 (lib/playground)
+    plugins: [playgroundTestsPlugin()],
+    worker: {
+      format: "es", // 테스트 파일의 top-level await
+      plugins: () => [playgroundTestsPlugin()],
+    },
     resolve: {
       // 순서 중요: 더 구체적인 @core/prev를 먼저 둔다 (ARCHITECTURE §3)
       alias: [

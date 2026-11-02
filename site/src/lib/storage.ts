@@ -158,6 +158,111 @@ export function getStore(): ProgressStore {
   return browserStore;
 }
 
+// ---- 코드 초안 (브라우저 채점기) ----
+// 진도와 다른 키에 둔다: 진도 JSON이 타이핑마다 다시 써지지 않게, Gist 동기화 때 따로 다룰 수 있게.
+
+export const DRAFTS_KEY = "slam-drafts";
+export const MAX_DRAFT_CHARS = 100_000;
+
+export interface DraftRecord {
+  code: string; // core/mine/wNN.ts 파일 전체
+  baseHash: string; // 이 초안의 기준이 된 저장소 파일 내용 해시 (playground/draft.ts)
+  pending: boolean; // 사이트에서 제출했고 배포를 기다리는 중
+  updatedAt: string; // ISO 8601
+}
+
+export interface DraftStore {
+  load(week: string): DraftRecord | null;
+  save(week: string, draft: DraftRecord): void;
+  remove(week: string): void;
+}
+
+function sanitizeDraft(raw: unknown): DraftRecord | null {
+  if (!isRecord(raw) || typeof raw.code !== "string" || typeof raw.baseHash !== "string") return null;
+  return {
+    code: raw.code,
+    baseHash: raw.baseHash,
+    pending: raw.pending === true,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
+  };
+}
+
+export function createDraftStore(backend: KeyValueBackend | null): DraftStore {
+  function readAll(): Record<string, unknown> {
+    const raw = backend?.getItem(DRAFTS_KEY);
+    if (!raw) return {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return isRecord(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  function writeAll(all: Record<string, unknown>): void {
+    if (!backend) throw new Error("이 브라우저에서는 저장할 수 없어 (사생활 모드?)");
+    backend.setItem(DRAFTS_KEY, JSON.stringify(all));
+  }
+  return {
+    load: (week) => sanitizeDraft(readAll()[week]),
+    save(week, draft) {
+      if (draft.code.length > MAX_DRAFT_CHARS) throw new Error(`초안이 너무 길어 (${MAX_DRAFT_CHARS.toLocaleString()}자 제한)`);
+      writeAll({ ...readAll(), [week]: draft });
+    },
+    remove(week) {
+      const { [week]: _removed, ...rest } = readAll();
+      writeAll(rest);
+    },
+  };
+}
+
+let browserDrafts: DraftStore | null = null;
+
+export function getDraftStore(): DraftStore {
+  browserDrafts ??= createDraftStore(browserBackend());
+  return browserDrafts;
+}
+
+// ---- GitHub 토큰 (사이트에서 제출) ----
+// 이 저장소 전용·Contents 쓰기 권한만 있는 fine-grained 토큰. 채점 워커에는 넘기지 않는다.
+
+export const TOKEN_KEY = "slam-github-token";
+// fine-grained(github_pat_)만 받는다. classic(ghp_)은 저장소 하나로 범위를 좁힐 수 없다
+const TOKEN_PATTERN = /^github_pat_[A-Za-z0-9_]{20,}$/;
+
+export function isValidTokenFormat(token: string): boolean {
+  return TOKEN_PATTERN.test(token);
+}
+
+export interface TokenStore {
+  get(): string | null;
+  set(token: string): void;
+  clear(): void;
+}
+
+type RemovableBackend = KeyValueBackend & { removeItem(key: string): void };
+
+export function createTokenStore(backend: RemovableBackend | null): TokenStore {
+  return {
+    get() {
+      const t = backend?.getItem(TOKEN_KEY) ?? null;
+      return t && isValidTokenFormat(t) ? t : null;
+    },
+    set(token) {
+      const t = token.trim();
+      if (!isValidTokenFormat(t)) throw new Error("토큰 모양이 아니야 (github_pat_로 시작해야 해)");
+      if (!backend) throw new Error("이 브라우저에서는 저장할 수 없어 (사생활 모드?)");
+      backend.setItem(TOKEN_KEY, t);
+    },
+    clear() {
+      backend?.removeItem(TOKEN_KEY);
+    },
+  };
+}
+
+export function getTokenStore(): TokenStore {
+  return createTokenStore(browserBackend() as RemovableBackend | null);
+}
+
 /** 한 레슨의 상태만 바꾸는 편의 함수 */
 export function updateLesson(
   key: string,

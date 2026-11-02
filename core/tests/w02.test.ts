@@ -4,12 +4,12 @@
  * 영공간 벡터는 부호·스케일이 정해지지 않으므로 단위화 후 ± 중 가까운 쪽으로 비교한다.
  */
 import { describe, expect, it } from "vitest";
+import { IMPL, loadImpl } from "./loadImpl";
 import { createRng, type Rng } from "./rng";
 
 type W02 = typeof import("../reference/w02");
 
-const IMPL = process.env.IMPL === "mine" ? "mine" : "reference";
-const m: W02 = await import(`@core/${IMPL}/w02.ts`);
+const m = await loadImpl<W02>("w02");
 
 const TOL = 1e-9;
 
