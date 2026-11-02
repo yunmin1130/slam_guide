@@ -3,6 +3,7 @@
  * 새 워커를 쓰는 이유: 테스트 파일은 모듈 캐시 때문에 한 워커에서 한 번만 등록된다 (runTests.ts).
  */
 import type { CaseResult, RunMessage, RunSummary, WorkerMessage } from "./protocol";
+import { LOAD_FAILED_MESSAGE, friendlyLoadError } from "../staleChunk";
 
 // 워커 시작·테스트 파일 로드 시간 포함. 느린 폰의 첫 실행도 넉넉히 들어오게
 export const RUN_TIMEOUT_MS = 8000;
@@ -61,12 +62,13 @@ export function runInWorker(opts: RunOptions): Promise<RunOutcome> {
       } else if (m.type === "summary") {
         finish(m.summary);
       } else {
-        finish({ kind: "crash", message: m.message, cases });
+        finish({ kind: "crash", message: friendlyLoadError(m.message), cases });
       }
     };
     worker.onerror = (e) => {
       e.preventDefault?.();
-      finish({ kind: "crash", message: e.message || "채점기 오류", cases });
+      // 워커 스크립트 자체가 404면(배포로 파일 이름이 바뀜) 메시지 없는 오류만 온다. 다른 원인일 수도 있어 단정하지 않는다
+      finish({ kind: "crash", message: e.message ? friendlyLoadError(e.message) : LOAD_FAILED_MESSAGE, cases });
     };
     worker.postMessage({ type: "run", week: opts.week, fn: opts.fn, source: opts.source });
   });

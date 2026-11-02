@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runInWorker, type WorkerLike } from "./client";
 import type { WorkerMessage } from "./protocol";
+import { LOAD_FAILED_MESSAGE, STALE_CHUNK_MESSAGE } from "../staleChunk";
 
 function fakeWorker(script: (w: WorkerLike) => void): { make: () => WorkerLike; terminated: () => boolean } {
   let terminated = false;
@@ -55,6 +56,23 @@ describe("runInWorker", () => {
 
   it("워커 내부 오류(crash 메시지)도 결과로 돌려준다", async () => {
     const f = fakeWorker((w) => send(w, { type: "crash", message: "boom" }));
+    const out = await runInWorker({ week: "w01", source: "", makeWorker: f.make });
+    expect(out).toMatchObject({ kind: "crash", message: "boom" });
+  });
+  it("배포로 테스트 파일이 사라졌으면 새로고침 안내로 바꾼다", async () => {
+    const f = fakeWorker((w) => send(w, { type: "crash", message: "Failed to fetch dynamically imported module: https://x/_astro/w01.test-A.js" }));
+    const out = await runInWorker({ week: "w01", source: "", makeWorker: f.make });
+    expect(out).toMatchObject({ kind: "crash", message: STALE_CHUNK_MESSAGE });
+  });
+
+  it("워커 스크립트를 못 불러오면(메시지 없는 onerror) 새로고침 안내로 알린다", async () => {
+    const f = fakeWorker((w) => w.onerror?.({ message: "", preventDefault: () => undefined } as unknown as ErrorEvent));
+    const out = await runInWorker({ week: "w01", source: "", makeWorker: f.make });
+    expect(out).toMatchObject({ kind: "crash", message: LOAD_FAILED_MESSAGE });
+  });
+
+  it("일반 오류 메시지는 그대로 둔다", async () => {
+    const f = fakeWorker((w) => w.onerror?.({ message: "boom", preventDefault: () => undefined } as unknown as ErrorEvent));
     const out = await runInWorker({ week: "w01", source: "", makeWorker: f.make });
     expect(out).toMatchObject({ kind: "crash", message: "boom" });
   });

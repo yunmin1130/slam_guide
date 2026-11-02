@@ -7,6 +7,7 @@ import { useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { BufferAttribute, BufferGeometry, DoubleSide } from "three";
 import { loadFn, type ImplKind } from "../../lib/impl";
+import { friendlyLoadError } from "../../lib/staleChunk";
 import { add, matVec, scale, sceneVectors, type M3, type V3 } from "../../lib/vectorScene";
 import ImplToggle, { defaultKind, type FnStatusEntry } from "../ui/ImplToggle";
 import Arrow from "../viewer3d/Arrow";
@@ -57,7 +58,7 @@ function useFns(week: number, kind: ImplKind): { fns: Fns | null; loadError: str
     let alive = true;
     Promise.all([loadFn<Dot>(week, "dot", kind), loadFn<Cross>(week, "cross", kind), loadFn<Skew>(week, "skew", kind)])
       .then(([dot, cross, skew]) => alive && setState({ kind, fns: { dot, cross, skew }, loadError: null }))
-      .catch((e: unknown) => alive && setState({ kind, fns: null, loadError: errorText(e) }));
+      .catch((e: unknown) => alive && setState({ kind, fns: null, loadError: friendlyLoadError(e) }));
     return () => {
       alive = false;
     };
