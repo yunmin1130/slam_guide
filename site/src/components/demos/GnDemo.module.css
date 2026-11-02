@@ -1,0 +1,188 @@
+/* 7a GN 수렴 데모. 버튼·결과 표는 다른 데모와 같은 모양으로 맞춘다 */
+.demo {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+.panel {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 넓은 화면에서도 그림 하나가 400px을 넘지 않게 (LESSON_TEMPLATE §3 ③) */
+  max-height: 400px;
+}
+.ground {
+  fill: var(--paper-sunken);
+}
+.axis {
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+}
+.grid {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+.truth {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+}
+.fit {
+  fill: none;
+  stroke: #f08a24;
+  stroke-width: 3;
+}
+.point {
+  fill: #17a398;
+}
+.outlier {
+  fill: var(--fail);
+  font-size: 18px;
+  font-weight: 700;
+}
+.tick {
+  fill: var(--ink-soft);
+  font-size: 12px;
+}
+.costLine {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.costDot {
+  fill: var(--ink);
+}
+.costSel {
+  fill: #f08a24;
+}
+@media (prefers-color-scheme: dark) {
+  .point {
+    fill: #4fd8c9;
+  }
+}
+.caption {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+.lgFit::before,
+.lgTruth::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 0;
+  margin-right: 0.3em;
+  vertical-align: 0.3em;
+}
+.lgFit::before {
+  border-top: 3px solid #f08a24;
+}
+.lgTruth::before {
+  border-top: 2px dashed var(--ink);
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+.segment {
+  display: inline-flex;
+  justify-self: start;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+}
+.option {
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.option[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.chip,
+.button {
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] {
+  border-color: #f08a24;
+  background: color-mix(in srgb, #f08a24 18%, var(--paper-raised));
+}
+.chip[aria-pressed="true"]::before {
+  content: "✓ ";
+}
+.option:focus-visible,
+.chip:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+.readout [role="status"]:empty {
+  display: none;
+}
+.alerts {
+  display: grid;
+  gap: var(--space-2);
+}
+.values {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+.muted {
+  margin: 0;
+  color: var(--ink-faint);
+}
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}

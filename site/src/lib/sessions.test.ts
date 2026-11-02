@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applySessionToggle,
+  compareLessons,
   detectDevice,
   lessonKey,
   nextSessions,
@@ -40,6 +41,23 @@ describe("lessonKey", () => {
   it("주차를 두 자리로 맞춘다", () => {
     expect(lessonKey(1)).toBe("w01");
     expect(lessonKey(12)).toBe("w12");
+  });
+
+  it("파트가 있으면 뒤에 붙는다 (파트끼리 진도 키가 다르다)", () => {
+    expect(lessonKey(7, "a")).toBe("w07a");
+    expect(lessonKey(7, "b")).toBe("w07b");
+  });
+});
+
+describe("compareLessons", () => {
+  it("주차 순, 같은 주차면 파트 순", () => {
+    const list = [
+      { week: 8, part: "a" as const },
+      { week: 7, part: "b" as const },
+      { week: 6 },
+      { week: 7, part: "a" as const },
+    ];
+    expect([...list].sort(compareLessons).map((l) => lessonKey(l.week, "part" in l ? l.part : undefined))).toEqual(["w06", "w07a", "w07b", "w08a"]);
   });
 });
 

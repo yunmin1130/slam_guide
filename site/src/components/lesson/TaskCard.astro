@@ -23,8 +23,8 @@ const field = readOnly ? "read_only" : "tasks";
 if (!lesson[field].includes(fn)) {
   throw new Error(`${lesson.key}: <TaskCard fn="${fn}">가 frontmatter ${field}에 없다`);
 }
-const source = referenceFunctionSource(lesson.key, fn);
-if (!source) throw new Error(`core/reference/${lesson.key}.ts에 ${fn} 함수가 없다`);
+const source = referenceFunctionSource(lesson.fileKey, fn);
+if (!source) throw new Error(`core/reference/${lesson.fileKey}.ts에 ${fn} 함수가 없다`);
 
 const status = fnStatus(lesson.week, fn);
 const TONE: Record<FnStatus, string> = { pass: "mine", todo: "ref", missing: "ref", fail: "fail", "syntax-error": "fail" };
@@ -32,10 +32,10 @@ const tone = readOnly ? "muted" : TONE[status];
 const label = readOnly ? "읽기만 · reference 사용" : STATUS_LABEL[status];
 // 구문 오류(syntax-error)와 import 오류(결과 없음으로 나옴) 모두 메시지를 보여준다
 const syntax = readOnly ? undefined : syntaxMessage(lesson.week);
-const minePath = coreFile("mine", lesson.key);
+const minePath = coreFile("mine", lesson.fileKey);
 // 코드 연습장 시작 내용 = 지금 배포되는 core/mine 파일 (CI가 구문 오류 파일을 스텁으로 바꿨다면 그 스텁)
-const mineText = readOnly ? undefined : mineSource(lesson.key);
-if (!readOnly && mineText === undefined) throw new Error(`core/mine/${lesson.key}.ts가 없다`);
+const mineText = readOnly ? undefined : mineSource(lesson.fileKey);
+if (!readOnly && mineText === undefined) throw new Error(`core/mine/${lesson.fileKey}.ts가 없다`);
 const initialSource = mineText === undefined ? "" : normalizeNewlines(mineText);
 ---
 
@@ -62,7 +62,7 @@ const initialSource = mineText === undefined ? "" : normalizeNewlines(mineText);
       <footer class="task-foot">
         <CodePlayground
           client:visible
-          week={lesson.key}
+          week={lesson.fileKey}
           fn={fn}
           path={minePath}
           initialSource={initialSource}

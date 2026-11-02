@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { useProgress } from "../lib/useProgress";
 import {
+  compareLessons,
   DEVICE_LABEL,
   detectDevice,
   nextSessions,
@@ -45,7 +46,7 @@ export default function Dashboard({ lessons }: DashboardProps) {
 
   const ready = progress !== null && device !== null;
   const next = ready ? nextSessions(lessons, progress, device) : null;
-  const ordered = [...lessons].sort((a, b) => a.week - b.week);
+  const ordered = [...lessons].sort(compareLessons);
 
   return (
     <div className={styles.dash}>
@@ -113,7 +114,7 @@ export default function Dashboard({ lessons }: DashboardProps) {
             return (
               <li key={lesson.key}>
                 <a className={styles.row} href={lesson.href}>
-                  <span className={styles.week}>{String(lesson.week).padStart(2, "0")}</span>
+                  <span className={styles.week}>{lesson.key.slice(1)}</span>
                   <span className={styles.rowMain}>
                     <span className={styles.rowTitle}>{lesson.title}</span>
                     <span className={styles.rowMeta}>

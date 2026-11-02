@@ -1,0 +1,16 @@
+---
+/**
+ * GnDemo 데모 래퍼 (7a). 빌드 시점에 테스트 상태를 구해 island에 넘긴다.
+ * 그림은 SVG 두 장이라 WebGL을 쓰지 않는다. 화면에 보일 때만 불러온다 (client:visible).
+ * levenbergMarquardt는 읽기만 함수라 배지에 넣지 않는다 (mine이 정답을 그대로 내보낸다).
+ */
+import { fnStatus } from "../../lib/implStatus";
+import { requireLesson } from "../lesson/context";
+import GnDemo from "./GnDemo";
+
+const lesson = requireLesson(Astro.locals, "GnDemo");
+const DEMO_FNS = ["gaussNewton", "huber"];
+const statuses = lesson.tasks.filter((fn) => DEMO_FNS.includes(fn)).map((fn) => ({ fn, status: fnStatus(lesson.week, fn) }));
+---
+
+<GnDemo client:visible week={lesson.week} statuses={statuses} />

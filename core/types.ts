@@ -64,3 +64,48 @@ export interface RansacResult<M> {
   /** inlier 데이터의 번호 (오름차순) */
   readonly inliers: readonly number[];
 }
+
+/**
+ * 비선형 최소제곱 문제 (7주차). X = 변수의 종류 (숫자 배열, 회전, 자세 …).
+ * 비용 = ½ Σ rᵢ(x)² (로버스트 커널이 있으면 Σ ρ(rᵢ)).
+ */
+export interface LsqProblem<X> {
+  /** 잔차 r(x) (길이 m) */
+  readonly residual: (x: X) => VecN;
+  /** 야코비안 J = ∂r(x ⊞ δ)/∂δ at δ = 0 (m × n). 숫자 배열이면 그냥 ∂r/∂x */
+  readonly jacobian: (x: X) => MatN;
+  /** 업데이트 x ⊞ δ (δ 길이 n). 숫자 배열이면 x + δ, 회전·자세면 7b의 섭동 규약 */
+  readonly plus: (x: X, delta: VecN) => X;
+}
+
+/** 로버스트 커널 값 하나: 비용 ρ(r)과 IRLS 가중치 w(r) = ρ'(r) / r */
+export interface RobustLoss {
+  readonly rho: number;
+  readonly weight: number;
+}
+
+export interface SolverOptions {
+  /** 최대 반복 수 (업데이트 시도 횟수) */
+  readonly maxIterations: number;
+  /** 업데이트 크기 ‖δ‖ 가 이보다 작으면 수렴 */
+  readonly tolerance: number;
+  /** 잔차마다 적용할 로버스트 커널 (없으면 보통 최소제곱) */
+  readonly robust?: (r: number) => RobustLoss;
+}
+
+export interface SolverStep<X> {
+  readonly x: X;
+  readonly cost: number;
+  /** LM의 감쇠 λ (GN은 없음) */
+  readonly lambda?: number;
+}
+
+export interface SolverResult<X> {
+  readonly x: X;
+  readonly cost: number;
+  /** 받아들인 업데이트 수 */
+  readonly iterations: number;
+  readonly converged: boolean;
+  /** 처음 값부터 받아들인 업데이트마다 하나씩 */
+  readonly history: readonly SolverStep<X>[];
+}

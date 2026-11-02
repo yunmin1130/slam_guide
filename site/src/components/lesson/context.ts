@@ -7,7 +7,9 @@ import type { SessionMeta } from "../../lib/sessions";
 export const REPO = "yunmin1130/slam_guide";
 
 export interface LessonContext {
-  key: string; // "w01"
+  key: string; // 진도 키: "w01", 파트가 있으면 "w07a"
+  /** 과제 파일 이름: "w07" (core/mine/w07.ts 등. 파트들이 한 파일을 나눠 쓴다, LESSON_TEMPLATE §1) */
+  fileKey: string;
   week: number;
   tasks: string[];
   read_only: string[];

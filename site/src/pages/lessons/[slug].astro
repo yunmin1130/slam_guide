@@ -27,7 +27,7 @@ interface Props {
 
 const { entry, all } = Astro.props;
 const d = entry.data;
-const key = lessonKey(d.week);
+const key = lessonKey(d.week, d.part);
 const body = entry.body ?? "";
 
 function used(component: string, attr: string): string[] {
@@ -48,11 +48,15 @@ if (d.demo && !new RegExp(`<${d.demo}\\b`).test(body)) {
 }
 
 const prereqs = d.prereq.map((p) => {
-  const target = all.find((e) => lessonKey(e.data.week) === p);
+  const target = all.find((e) => lessonKey(e.data.week, e.data.part) === p);
+  // w07처럼 파트가 있는 주차를 접미사 없이 가리키면 조용히 "(아직 없음)"이 되므로 빌드를 멈춘다
+  if (!target && all.some((e) => e.data.part && lessonKey(e.data.week) === p)) {
+    throw new Error(`${entry.id}: prereq ${p}는 파트로 나뉜 주차다. ${p}a처럼 파트까지 적는다`);
+  }
   return { key: p, title: target?.data.title, href: target ? lessonHref(target) : undefined };
 });
 
-Astro.locals.lesson = { key, week: d.week, tasks: d.tasks, read_only: d.read_only, sessions: d.sessions };
+Astro.locals.lesson = { key, fileKey: lessonKey(d.week), week: d.week, tasks: d.tasks, read_only: d.read_only, sessions: d.sessions };
 const { Content } = await render(entry);
 const components = { CheckQuestion, Details, Hint, LABox, SessionBreak, TaskCard };
 ---

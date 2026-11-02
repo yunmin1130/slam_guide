@@ -1,0 +1,177 @@
+---
+week: 7
+part: b
+title: 매니폴드 위의 최적화, 섭동 모델, 수치 야코비안
+summary: 회전과 자세를 그냥 더하지 않고 작은 회전 벡터로 고치는 박스 플러스 업데이트와 좌섭동 야코비안을 익히고, 수치 야코비안으로 해석 야코비안을 검사한다
+prereq: [w03, w07a]
+la_box: [매니폴드 업데이트와 섭동 모델]
+tasks: [numericJacobian]
+read_only: []
+deliverables: []
+jetbot: false
+units: 1
+sessions:
+  - { id: s1, device: phone, title: "개념: 회전에 그냥 더하면 안 되는 이유, 박스 플러스" }
+  - { id: s2, device: phone, title: "개념: 좌섭동 야코비안과 수치 야코비안" }
+  - { id: s3, device: phone, title: "LA 박스 + 예제 읽기: 회전 맞추기" }
+  - { id: s4, device: pad, title: "손으로 섭동 야코비안 유도" }
+  - { id: s5, device: pc, title: "과제: numericJacobian 구현·테스트 통과" }
+  - { id: s6, device: phone, title: "체크 질문" }
+---
+
+## 개념
+
+이번 주를 마치면 회전·자세 같은 변수를 7a의 최적화기로 다룰 수 있다. 8주차 번들 조정은 카메라 자세를 바꾸는 최적화라 이것이 꼭 필요하다. 함께 손으로 유도한 야코비안을 수치 미분으로 검사하는 습관을 만든다.
+
+### 회전에 그냥 더하면 안 되는 이유
+
+7a의 GN은 $x \leftarrow x + \delta$로 업데이트했다. 회전행렬 $R$은 숫자 9개지만 자유도는 3이다. $R + \delta R$은 대개 더 이상 회전이 아니다(직교성이 깨진다).
+
+쿼터니언을 더하면 크기가 1에서 벗어나고, 오일러 각을 쓰면 짐벌 락에서 야코비안이 망가진다(3주차). 그래서 "회전 자체"는 그대로 두고, 그 근처의 작은 회전 $\phi \in \mathbb{R}^3$만 최적화 변수로 쓴다.
+
+$$
+R \boxplus \phi = \mathrm{Exp}(\phi)\, R
+$$
+
+$\mathrm{Exp}$는 3주차의 `expSO3`(로드리게스)이고, 3주차 표기로는 $\mathrm{Exp}(\phi) = \exp([\phi]_\times)$다. 회전들의 집합처럼 휘어 있지만 아주 가까이서 보면 평평한 $\mathbb{R}^n$처럼 보이는 공간을 매니폴드(manifold)라 한다. $\boxplus$("박스 플러스")는 매니폴드 위에서 "작은 벡터만큼 움직이기"다.
+
+GN은 거의 그대로다. 야코비안을 $J = \partial r(x \boxplus \delta) / \partial \delta$($\delta = 0$에서)로 정의하고, 정규방정식으로 $\delta$를 구한 뒤 $x \leftarrow x \boxplus \delta$로 옮긴다. 7a `gaussNewton`의 `problem.plus`가 바로 이 $\boxplus$다.
+
+자세 $T = (R, t)$는 $\delta = [\rho;\, \phi]$(앞 3개 이동, 뒤 3개 회전)로 이렇게 고친다. 여기서 $\rho$는 이동 섭동이며, 7a의 Huber 비용 $\rho$와는 다른 기호다. SE(3)의 지수 사상 $\mathrm{Exp}(\delta)$를 정확히 쓰는 대신 이 과정은 아래 식을 쓰는데, 둘은 1차까지 같아서 야코비안이 똑같다.
+
+$$
+T \boxplus \delta = \big(\mathrm{Exp}(\phi) R,\; \mathrm{Exp}(\phi)\, t + \rho\big)
+$$
+
+<SessionBreak id="s1" />
+
+### 좌섭동 야코비안
+
+작은 회전은 $\mathrm{Exp}(\phi) \approx I + [\phi]_\times$다. 회전한 점 $Rp$를 왼쪽에서 살짝 더 돌리면 다음과 같다.
+
+$$
+\mathrm{Exp}(\phi)\,Rp \approx Rp + \phi \times Rp
+$$
+
+외적의 순서를 바꾸면 부호가 바뀌므로 $\phi \times Rp = -[Rp]_\times\, \phi$다.
+
+그래서 $\partial (Rp) / \partial \phi = -[Rp]_\times$다. 1주차의 `skew`가 여기서 야코비안이 된다. 같은 방법으로 자세에 대한 점의 야코비안은 $\partial (Tp) / \partial \delta = [\, I \;|\; -[Tp]_\times \,]$($3 \times 6$)다.
+
+이 과정의 규약은 **좌섭동**(left perturbation, $T \leftarrow \mathrm{Exp}(\delta)\,T$, $\delta = [\rho;\, \phi]$)으로 고정한다. 우섭동(right perturbation, $R\,\mathrm{Exp}(\phi)$)을 쓰면 같은 야코비안이 $-R[p]_\times$가 된다.
+
+둘 다 맞는 식이지만 섞으면 틀린다. 8주차 `projectionJacobian`과 11주차 `localBA`도 좌섭동을 따른다.
+
+### 수치 야코비안으로 검사하기
+
+손으로 유도한 야코비안은 부호 하나, 전치 하나만 틀려도 최적화가 느려지거나 엉뚱한 곳으로 간다. 그런데 비용이 조금은 줄어서 틀린 줄 모르기 쉽다. 그래서 수치 미분과 비교한다.
+
+$$
+J_{:,j} \approx \frac{f(x \boxplus \varepsilon e_j) - f(x \boxplus (-\varepsilon e_j))}{2\varepsilon}
+$$
+
+$e_j$는 $j$번째만 1인 벡터다. 양쪽으로 움직이는 중앙 차분은 오차가 $\varepsilon^2$에 비례해서, 한쪽 차분($\varepsilon$에 비례)보다 훨씬 정확하다. $\varepsilon$을 너무 작게 하면 뺄셈의 반올림 오차($10^{-16} / \varepsilon$ 정도, $10^{-16}$은 배정밀도 실수의 상대 반올림 크기)가 커지므로 $10^{-6}$ 안팎을 쓴다.
+
+수치 야코비안은 함수를 $2n$번 불러야 해서 느리다. 그래서 실제 최적화에는 해석 야코비안을 쓰고, 수치 야코비안은 테스트에서 둘을 비교하는 데 쓴다(Ceres의 gradient checker가 같은 일을 한다).
+
+<SessionBreak id="s2" />
+
+<LABox term="매니폴드 업데이트와 섭동 모델">
+  **정의:** 매니폴드 위의 변수 $x$를 작은 벡터 $\delta$만큼 움직이는 연산 $x \boxplus \delta$. 회전은 $\mathrm{Exp}(\phi) R$, 숫자 벡터는 $x + \delta$다. 야코비안은 $\delta = 0$에서 $\partial f(x \boxplus \delta) / \partial \delta$로 정의한다.
+
+  **기하학적 의미:** 휘어진 공간에 지금 위치에서 접하는 평평한 판(접공간)을 대고, 판 위에서 한 걸음 움직인 뒤 다시 공간으로 붙이는 것이다. 판의 차원이 진짜 자유도(회전 3, 자세 6)라 제약이 필요 없다.
+
+  **SLAM에서:** g2o의 `oplusImpl`, GTSAM의 `retract`, Ceres의 `Manifold::Plus`가 모두 이 $\boxplus$다. 라이브러리마다 좌섭동·우섭동이 달라서, 남의 코드를 읽을 때 가장 먼저 규약을 확인한다.
+
+  **이전 레슨:** [3주차 행렬 지수와 Lie 군](../w03-rotation-se3/), [7a 가우스-뉴턴](../w07a-gauss-newton/)
+</LABox>
+
+### 예제 읽기: 회전 맞추기를 매니폴드 GN으로
+
+점 $p_i$와, 그것을 진짜 회전 $R^*$로 돌린 점 $q_i$가 있다. $R$을 찾는 문제를 7a의 `gaussNewton`에 넣으면 이렇다. `mv`는 행렬×벡터, `mul`은 행렬×행렬, `sub`·`neg`는 빼기·부호 바꾸기다.
+
+```ts
+const problem = {
+  // 잔차: 돌린 점 − 목표 점 (점마다 3개)
+  residual: (R) => ps.flatMap((p, i) =>
+    sub(mv(R, p), qs[i])),
+  // 좌섭동 야코비안: 점마다 −[R·p]× (3×3)
+  jacobian: (R) => ps.flatMap((p) =>
+    neg(skew(mv(R, p)))),
+  // 박스 플러스: 작은 회전을 왼쪽에 곱한다
+  plus: (R, phi) => mul(expSO3(phi), R),
+};
+gaussNewton(problem, I, opts); // I: 단위행렬에서 시작
+```
+
+확인할 것:
+
+- `plus`를 `R + phi`처럼 쓰면 무엇이 깨지는가?
+- `jacobian`을 같은 `plus`, 차원 3으로 만든 `numericJacobian` 결과와 비교하면 어느 정도로 같아야 하나?
+- 우섭동 `mul(R, expSO3(phi))`로 `plus`를 바꾸면 `jacobian`도 무엇으로 바꿔야 하나?
+
+<SessionBreak id="s3" />
+
+## 과제
+
+### 손으로 섭동 야코비안 유도
+
+태블릿에 직접 쓴다.
+
+1. 로드리게스 식 $\mathrm{Exp}(\phi) = I + \frac{\sin\theta}{\theta}[\phi]_\times + \frac{1 - \cos\theta}{\theta^2}[\phi]_\times^2$($\theta = \lVert\phi\rVert$)에서 $\theta \to 0$일 때 $\mathrm{Exp}(\phi) \approx I + [\phi]_\times$임을 보인다.
+2. $\partial(\mathrm{Exp}(\phi) R p)/\partial \phi = -[Rp]_\times$를 유도한다($a \times b = -b \times a$를 쓴다).
+3. 우섭동 $R\,\mathrm{Exp}(\phi)\,p$의 야코비안이 $-R[p]_\times$임을 보인다. 좌섭동 결과와는 3주차 손 유도의 항등식 $[Rp]_\times = R[p]_\times R^\top$로 이어진다(확인만 하면 된다).
+4. 자세 $T \boxplus \delta = (\mathrm{Exp}(\phi)R,\ \mathrm{Exp}(\phi)t + \rho)$에서 점 $Tp = Rp + t$의 야코비안이 $[\,I \;|\; -[Tp]_\times\,]$임을 보인다.
+5. 2D 회전(각도 $\alpha$ 하나)에서 점 $Rp = (x, y)$를 왼쪽에서 더 돌리는 야코비안이 $[-y,\; x]^\top$임을 보인다(테스트의 2D 회전 맞추기 문제).
+6. $f(x + \varepsilon)$와 $f(x - \varepsilon)$를 각각 $\varepsilon^3$ 항까지 테일러 전개해서 빼 본다. 중앙 차분의 오차가 $\varepsilon^2$에 비례함을 보인다.
+
+<SessionBreak id="s4" />
+
+<TaskCard fn="numericJacobian">
+  함수 `f`, 기준점 `x`, 업데이트 `plus`, 차원 `dim`(회전 3, 자세 6)을 받아 중앙 차분으로 $m \times \mathrm{dim}$ 야코비안을 돌려준다. `dim`이 1 이상의 정수가 아니거나 `eps ≤ 0`이면 예외를 던진다.
+
+  <Hint level={1}>
+    열 하나씩 만든다. $j$번째 열은 $\delta = \pm\varepsilon e_j$로 `plus`한 두 점에서 `f`를 부른 차이를 $2\varepsilon$으로 나눈 것이다. `x`를 직접 더하지 않는다.
+  </Hint>
+
+  <Hint level={2}>
+    열 단위로 모은 뒤 행 우선($m$행 $\times$ dim열)으로 바꿔 돌려준다. $m$은 `f`가 돌려준 배열의 길이다. 테스트는 회전·자세처럼 숫자 배열이 아닌 `x`로도 부른다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    dim이 1 이상 정수 아님, eps ≤ 0 이면 예외
+    cols ← []
+    j = 0 … dim−1 마다:
+      d ← 길이 dim인 0 벡터, d[j] ← eps
+      fp ← f(plus(x, d))
+      fm ← f(plus(x, −d))
+      cols에 (fp − fm) / (2·eps) 추가
+    m ← cols[0]의 길이
+    J[i][j] ← cols[j][i]  (m × dim)
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s5" />
+
+## 체크 질문
+
+<CheckQuestion q="회전을 최적화할 때 회전행렬의 원소 9개나 쿼터니언 4개를 그대로 변수로 쓰지 않는 이유는? 대신 무엇을 하나?" kind="개념">
+  원소 9개(또는 4개)를 그냥 바꾸면 직교성(또는 크기 1)이 깨져 더 이상 회전이 아니고, 자유도(3)보다 변수가 많아 $J^\top J$가 특이해진다. 오일러 각은 짐벌 락에서 야코비안이 망가진다.
+
+  대신 현재 회전은 그대로 두고 작은 회전 벡터 $\phi$(3개)만 변수로 써서 $R \leftarrow \mathrm{Exp}(\phi) R$로 업데이트한다($\boxplus$). 매번 정확한 회전이 유지되고 변수 수가 자유도와 같다.
+</CheckQuestion>
+
+<CheckQuestion q="해석 야코비안을 직접 짰는데 최적화가 수렴은 하지만 느리다. 왜 의심해야 하고, 어떻게 확인하나?" kind="왜">
+  야코비안이 조금 틀려도 $-J^\top r$이 대략 비용이 줄어드는 쪽을 가리키면 최적화는 느리게나마 진행된다. 그래서 틀린 줄 모르기 쉽다. 흔한 원인은 부호, 전치, 좌·우섭동을 섞은 것이다.
+
+  무작위 지점 여러 곳에서 같은 $\boxplus$로 만든 수치 야코비안(중앙 차분, $\varepsilon \approx 10^{-6}$)과 원소별로 비교한다. $10^{-6}$ 수준으로 맞아야 한다.
+</CheckQuestion>
+
+<CheckQuestion q="오픈소스 SLAM의 자세 최적화 코드를 가져와 내 야코비안과 합쳤더니 결과가 엉망이다. 무엇부터 확인하나?" kind="실무">
+  섭동 규약부터 맞춘다. 좌섭동인지 우섭동인지, $\delta$가 $[\rho;\, \phi]$(이동 먼저)인지 $[\phi;\, \rho]$인지, 자세가 월드→카메라인지 카메라→월드인지 본다. 하나라도 다르면 야코비안 블록의 순서와 부호가 바뀐다.
+
+  그다음 그 코드의 `plus`($\boxplus$)로 수치 야코비안을 만들어 내 해석 야코비안과 비교한다. 같은 $\boxplus$를 써야 비교가 의미 있다.
+</CheckQuestion>
+
+<SessionBreak id="s6" />

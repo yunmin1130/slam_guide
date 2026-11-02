@@ -152,7 +152,7 @@
   display: block;
   height: 4px;
   border-radius: 2px;
-  background: var(--paper-sunken);
+  background: var(--rule);
   overflow: hidden;
 }
 .bar > span {

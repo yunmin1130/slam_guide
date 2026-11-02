@@ -1,0 +1,270 @@
+---
+week: 7
+part: a
+title: 비선형 최소제곱, 가우스-뉴턴, LM, Huber
+summary: 잔차의 제곱합을 반복해서 줄이는 가우스-뉴턴을 직접 만들고, 멀리서 시작해도 안전한 LM과 아웃라이어에 강한 Huber 커널을 붙인다
+prereq: [w02, w06]
+la_box: [야코비안과 1차 테일러, 정규방정식, 최소제곱 = 가우시안 최대 우도]
+tasks: [huber, gaussNewton]
+read_only: [levenbergMarquardt]
+deliverables: []
+demo: GnDemo
+jetbot: false
+units: 1.5
+sessions:
+  - { id: s1, device: phone, title: "개념: 최소제곱과 가우시안 MLE" }
+  - { id: s2, device: phone, title: "개념: 야코비안, 1차 테일러, 가우스-뉴턴" }
+  - { id: s3, device: phone, title: "개념: LM과 로버스트 커널" }
+  - { id: s4, device: phone, title: "LA 박스 + 데모 조작" }
+  - { id: s5, device: pad, title: "손으로 GN 한 걸음, 정규방정식, Huber 가중치" }
+  - { id: s6, device: pc, title: "과제: huber 구현·테스트 통과" }
+  - { id: s7, device: pc, title: "과제: gaussNewton 구현" }
+  - { id: s8, device: pc, title: "과제: gaussNewton 디버그·테스트 통과" }
+  - { id: s9, device: pc, title: "읽기만: levenbergMarquardt" }
+  - { id: s10, device: phone, title: "체크 질문" }
+---
+
+import GnDemo from "../../components/demos/GnDemo.astro";
+
+## 개념
+
+이번 주를 마치면 "잔차의 제곱합을 가장 작게 하는 값"을 반복해서 찾는 최적화기를 직접 만들 수 있다. 8주차 번들 조정, 9주차 포즈 그래프, 11주차 VO가 모두 이 최적화기 위에서 돈다. 7a는 숫자 벡터로, 7b는 회전·자세처럼 그냥 더할 수 없는 변수로 넓힌다.
+
+### 왜 제곱합인가: 가우시안 최대 우도
+
+관측 $z_i$가 모델 $h_i(x)$에 잡음 $\varepsilon_i$가 더해진 것이라 하자. 모델과 관측의 차이 $r_i(x) = h_i(x) - z_i$를 잔차(residual)라 한다. 잡음이 평균 0, 표준편차 $\sigma$인 가우시안이면, $x$일 때 관측이 나올 확률은 다음에 비례한다.
+
+$$
+p(z \mid x) \propto \exp\!\Big(-\sum_i \frac{r_i(x)^2}{2\sigma^2}\Big)
+$$
+
+이 확률을 가장 크게 하는 $x$(최대 우도, maximum likelihood)는 $\sum r_i^2$를 가장 작게 하는 $x$와 같다. 지수 안의 부호가 음수이기 때문이다.
+
+그래서 "잡음이 가우시안"이라고 믿는 순간 최소제곱이 정답이 된다(LA 박스). 2주차의 $A x = b$는 $r$이 $x$의 일차식이라 한 번에 풀렸지만, SLAM의 잔차(재투영 오차 등)는 비선형이라 조금씩 고쳐 가며 반복한다.
+
+<SessionBreak id="s1" />
+
+### 야코비안과 1차 테일러
+
+현재 값 $x$ 근처에서 잔차를 직선(평면)으로 근사한다. 이것이 1차 테일러 전개다.
+
+$$
+r(x + \delta) \approx r(x) + J\,\delta, \qquad J_{ij} = \frac{\partial r_i}{\partial x_j}
+$$
+
+$J$를 야코비안(Jacobian)이라 한다. 잔차가 $m$개, 변수가 $n$개면 $m \times n$ 행렬이다. 예를 들어 곡선 $y = a\,e^{bt}$의 잔차 하나 $r = a e^{bt} - y$의 야코비안 한 줄은 $[\,e^{bt},\; a t e^{bt}\,]$이다.
+
+### 가우스-뉴턴: 근사한 문제를 풀고 반복
+
+근사한 잔차로 비용을 쓰면 $\delta$에 대한 2주차 최소제곱이 된다.
+
+$$
+\min_\delta \tfrac{1}{2} \lVert r + J\delta \rVert^2 \;\Rightarrow\; J^\top J\,\delta = -J^\top r
+$$
+
+이것이 정규방정식이다(LA 박스). $\delta$를 풀어 $x \leftarrow x + \delta$로 옮기고, 그 자리에서 다시 근사해서 푼다. $\lVert \delta \rVert$가 충분히 작아지면 멈춘다. 이 방법을 가우스-뉴턴(Gauss–Newton, GN)이라 한다.
+
+$J^\top J$는 비용의 2차 미분(헤시안, Hessian)을 근사한 것이다. 답 근처에서는 근사가 좋아 몇 번 만에 수렴하지만, 멀리서 시작하면 근사가 틀려 엉뚱한 곳으로 가거나 발산할 수 있다. $J$의 열이 일차종속이면(관측이 부족하면) $J^\top J$가 풀리지 않는다.
+
+<SessionBreak id="s2" />
+
+### LM: 확신이 없으면 조심스럽게
+
+레벤버그-마콰트(Levenberg–Marquardt, LM)는 정규방정식에 감쇠 $\lambda$를 더한다.
+
+$$
+\big(J^\top J + \lambda\,\mathrm{diag}(J^\top J)\big)\,\delta = -J^\top r
+$$
+
+$\mathrm{diag}(J^\top J)$는 $J^\top J$의 대각 원소만 남긴 행렬이다. $\lambda$가 작으면 GN과 같고, 크면 비용이 줄어드는 방향(경사 하강, gradient descent)으로 짧게 움직인다.
+
+업데이트 후 비용이 줄었으면 받아들이고 $\lambda$를 줄여 GN에 가깝게 간다. 늘었으면 그 업데이트를 버리고 $\lambda$를 키워 더 조심스럽게 다시 시도한다.
+
+그래서 LM은 멀리서 시작해도 비용이 늘지 않는다. g2o, Ceres 같은 SLAM 최적화 라이브러리의 기본값이 LM인 이유다. 이번 주에는 읽기만 하고, 8주차 `smallBA`가 이것을 부른다.
+
+### 로버스트 커널: 아웃라이어의 목소리 줄이기
+
+제곱 비용에서는 잔차가 10배면 비용이 100배다. 잘못된 대응 몇 개가 나머지 수백 개를 끌고 간다. 5주차 RANSAC으로 걸러도 일부는 남는다.
+
+로버스트 커널(robust kernel)은 큰 잔차의 비용을 덜 키운다. 대표가 Huber 커널이다. 기준 $k$ 안쪽은 제곱 그대로, 바깥은 직선으로 자란다.
+
+$$
+\rho(r) = \begin{cases} \tfrac{1}{2} r^2 & |r| \le k \\ k\,(|r| - \tfrac{1}{2}k) & |r| > k \end{cases}
+$$
+
+비용 $\sum_i \rho(r_i)$를 $\delta$로 미분하면 $\sum_i \rho'(r_i)\, J_i^\top$이다($J_i$는 $J$의 $i$번째 행). 여기서 $w_i = \rho'(r_i)/r_i$로 두면 이것은 $\sum_i w_i r_i J_i^\top = J^\top W r$이 되어, 가중치 $w_i$를 단 최소제곱의 기울기와 똑같다($W$는 $w_i$를 대각에 놓은 행렬). 그래서 GN에 넣을 때는 $J^\top W J\,\delta = -J^\top W r$을 푼다.
+
+Huber의 가중치는 안쪽 1, 바깥 $k/|r|$이다. 가중치는 반복마다 현재 잔차로 다시 계산하며, 이 방법을 IRLS(Iteratively Reweighted Least Squares)라 한다.
+
+$k$는 보통 잡음 크기의 1~2배로 잡는다. ORB-SLAM은 재투영 오차에 Huber를 쓰고, 기준을 카이제곱(chi-square) 분포로 정한다. 픽셀 잡음 $\sigma$로 나눈 2차원 오차의 제곱합은 자유도 2인 카이제곱 분포를 따르고, 그 95%가 5.991 안에 든다. 그래서 기준은 $\sqrt{5.991}\,\sigma \approx 2.4\sigma$다.
+
+<SessionBreak id="s3" />
+
+<LABox term="야코비안과 1차 테일러">
+  **정의:** 벡터 함수 $r(x)$의 야코비안 $J$는 $J_{ij} = \partial r_i / \partial x_j$인 행렬이다. 1차 테일러 전개는 $r(x + \delta) \approx r(x) + J \delta$다.
+
+  **기하학적 의미:** 휘어진 함수를 지금 위치에서 가장 잘 맞는 평평한 면(접평면)으로 바꾸는 것이다. $\delta$가 작을수록 근사가 정확하다.
+
+  **SLAM에서:** 재투영 오차의 자세·점에 대한 야코비안(8주차), 포즈 그래프 엣지의 야코비안(9주차)이 모두 이것이다. 손으로 유도한 야코비안은 틀리기 쉬워서 7b의 수치 야코비안으로 검사한다.
+
+  **이전 레슨:** [1주차 선형변환](../w01-vectors/)
+</LABox>
+
+<LABox term="정규방정식">
+  **정의:** $\min_\delta \lVert J\delta + r \rVert^2$의 해는 $J^\top J \delta = -J^\top r$을 만족한다. $J^\top J$는 대칭이고, $J$의 열이 독립이면 양의 정부호다.
+
+  **기하학적 의미:** $-r$을 $J$의 열공간에 직교 투영하는 $\delta$를 찾는 것이다(2주차 최소제곱). 양의 정부호라 숄레스키 분해로 빠르고 안정하게 푼다.
+
+  **SLAM에서:** 번들 조정의 $J^\top J$는 크지만 대부분 0인 희소 행렬이다. 8주차에서 그 구조(Schur 보수)를 이용해 빠르게 푼다. $J^\top J$가 풀리지 않는 것은 관측이 부족하다는 신호다(예: 단안의 스케일, 게이지 자유도).
+
+  **이전 레슨:** [2주차 최소제곱](../w02-least-squares-svd/)
+</LABox>
+
+<LABox term="최소제곱 = 가우시안 최대 우도">
+  **정의:** 잡음이 서로 독립인 가우시안 $\mathcal{N}(0, \sigma_i^2)$이면 $-\log p(z \mid x) = \sum_i r_i^2 / (2\sigma_i^2) + \text{상수}$다. 최대 우도 추정이 가중 최소제곱과 같다.
+
+  **기하학적 의미:** 잡음이 큰 관측(큰 $\sigma_i$)은 가중치 $1/\sigma_i^2$이 작아 덜 믿는다. 잡음이 서로 얽혀 있으면 가중치가 공분산의 역행렬(정보 행렬)이 된다.
+
+  **SLAM에서:** g2o의 엣지마다 붙는 "정보 행렬"이 이 가중치다(9주차). 아웃라이어는 가우시안 가정을 깨므로 로버스트 커널로 가정을 완화한다.
+
+  **이전 레슨:** [2주차 최소제곱](../w02-least-squares-svd/)
+</LABox>
+
+## 데모
+
+곡선 $y = a\,e^{bt}$(진짜 $a = 2$, $b = -0.5$)를 점 20개에 맞춘다. 위 그림은 선택한 단계의 곡선, 아래 그림은 단계마다의 비용(로그 눈금)이다.
+
+- 기본 설정(시작 $a_0 = 1$, $b_0 = 0$, 가우스-뉴턴)에서 "보는 단계"를 0부터 끝까지 움직인다. 비용이 몇 단계 만에 바닥에 닿는가?
+- 시작을 $a_0 = 5$, $b_0 = 2$로 옮긴다. 가우스-뉴턴은 어디로 가는가? LM으로 바꾸면 어떻게 되는가? 아래 표의 "감쇠 λ"가 단계마다 어떻게 변하는지도 본다.
+- "아웃라이어 3개"를 켠다. 주황 곡선이 끌려가는가? "Huber"를 켜면 진짜 곡선(점선)에 얼마나 다시 붙는가? Huber를 켜면 비용이 $\sum \rho(r_i)$로 바뀌어서, 켜기 전후의 비용 값은 직접 비교하지 않는다.
+
+<GnDemo />
+
+<SessionBreak id="s4" />
+
+## 과제
+
+### 손으로 GN 한 걸음, 정규방정식, Huber 가중치
+
+태블릿에 직접 쓴다.
+
+1. 잔차 하나 $r(x) = x^2 - 2$를 $x_0 = 1$에서 시작해 GN으로 두 걸음 간다. $x_1$, $x_2$는? 무엇에 다가가는가?
+2. $\tfrac{1}{2}\lVert r + J\delta \rVert^2$를 전개하면 $\tfrac{1}{2} r^\top r + \delta^\top J^\top r + \tfrac{1}{2}\delta^\top J^\top J \delta$다. 이것을 $\delta$로 미분해 0으로 놓아 정규방정식을 유도한다. 벡터 미분 규칙 $\partial(\delta^\top a)/\partial\delta = a$, $\partial(\delta^\top A \delta)/\partial\delta = 2A\delta$($A$ 대칭)를 쓴다. 2주차처럼 "잔차 $r + J\delta$가 $J$의 열들과 수직" 조건으로 유도해도 된다.
+3. 관측마다 잡음 크기 $\sigma_i$가 다르면 최대 우도가 어떤 가중 최소제곱이 되는지 $-\log p$로 보인다.
+4. Huber $k = 0.1$에서 $r = 0.05$와 $r = 0.3$의 $\rho$와 가중치 $w$를 구한다. 제곱 비용과 비교하면 $r = 0.3$인 점이 답을 끄는 힘($\rho'$)이 몇 분의 1로 줄었나?
+5. 곡선 $y = a\,e^{bt}$의 잔차 하나에 대해 야코비안 한 줄을 유도한다(개념 절의 결과와 맞는가).
+6. 2번의 미분에 $\delta = 0$을 넣으면 비용의 기울기가 $J^\top r$임을 확인한다. LM에서 $\lambda \to 0$이면 GN이 되고, $\lambda$가 아주 크면 $\delta \approx -\tfrac{1}{\lambda}\,\mathrm{diag}(J^\top J)^{-1} J^\top r$이 됨을 보인다. $-J^\top r$은 비용의 어떤 방향인가?
+
+<SessionBreak id="s5" />
+
+<TaskCard fn="huber">
+  잔차 $r$과 기준 $k$를 받아 Huber 비용 $\rho(r)$와 가중치 $w(r) = \rho'(r)/r$을 `{ rho, weight }`로 돌려준다. $k \le 0$이면 예외를 던진다.
+
+  <Hint level={1}>
+    $|r| \le k$인지 아닌지로 나뉜다. 두 식이 $|r| = k$에서 이어지는지 손으로 확인해 본다.
+  </Hint>
+
+  <Hint level={2}>
+    바깥쪽 $\rho = k(|r| - k/2)$를 미분하면 $\rho' = k \cdot \mathrm{sign}(r)$이고, $w = \rho'/r = k / |r|$이다. 음수 $r$에서도 $w$는 양수다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    k ≤ 0 이면 예외
+    a ← |r|
+    a ≤ k 이면 { rho: r²/2, weight: 1 }
+    아니면 { rho: k·(a − k/2),
+            weight: k / a }
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s6" />
+
+<TaskCard fn="gaussNewton">
+  `problem`(잔차·야코비안·업데이트)과 시작 값 `x0`, 설정 `opts`를 받아 GN을 반복한다. 결과는 `x`, `cost`, `iterations`, `converged`, `history`를 담은 객체이고, `history[0]`은 시작 값이다. 정규방정식이 풀리지 않으면 예외를 던진다.
+
+  - 업데이트는 반드시 `problem.plus(x, δ)`로 한다(7b의 회전도 같은 함수로 풀기 위해서다).
+  - `opts.robust`가 있으면 잔차마다 가중치를 곱하고, 비용은 $\sum \rho(r_i)$다. 없으면 $\tfrac{1}{2}\sum r_i^2$다.
+  - $\lVert \delta \rVert$ < `opts.tolerance`면 수렴으로 끝낸다. 비용이 NaN·무한대가 되면 수렴 아님으로 끝낸다.
+
+  <Hint level={1}>
+    한 바퀴는 "잔차와 야코비안 → 가중치 → $H = J^\top W J$, $g = J^\top W r$ → $H\delta = -g$ → `plus` → 새 비용을 history에"다. 정규방정식은 ml-matrix의 숄레스키로 푼다.
+
+    ```ts
+    import { CholeskyDecomposition, Matrix }
+      from "ml-matrix";
+    ```
+  </Hint>
+
+  <Hint level={2}>
+    $J^\top W J$는 수학적으로 대칭이지만, 곱하는 순서 때문에 마지막 자리가 달라질 수 있다. ml-matrix 숄레스키는 정확히 대칭이 아니면 예외를 던지므로, 먼저 $H \leftarrow (H + H^\top)/2$로 맞춘다.
+
+    `new CholeskyDecomposition(H)`의 `isPositiveDefinite()`가 거짓이면 예외를 던진다. 참이면 `chol.solve(g.mul(-1))`이 $\delta$다(열벡터, `.getColumn(0)`).
+
+    $W J$는 $J$의 $i$번째 행에 $w_i$를 곱한 것이다. 큰 대각행렬 $W$를 만들 필요가 없다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    x ← x0, r ← residual(x)
+    cost ← 비용(r)
+    history ← [{ x, cost }]
+    maxIterations번:
+      J ← jacobian(x)
+      w ← 각 rᵢ의 가중치 (없으면 1)
+      H ← Jᵀ(wJ),  g ← Jᵀ(w·r)
+      H ← (H + Hᵀ) / 2   (정확히 대칭으로)
+      H가 양의 정부호 아니면 예외
+      δ ← H⁻¹(−g)   (숄레스키)
+      x ← plus(x, δ)
+      r ← residual(x), cost ← 비용(r)
+      history에 { x, cost } 추가
+      ‖δ‖ < tolerance 이면 수렴으로 끝
+      cost가 유한하지 않으면 멈춤
+    { x, cost, iterations: history 길이 − 1,
+      converged, history }
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s7" />
+
+### gaussNewton 테스트가 안 맞을 때
+
+- 선형 문제 테스트만 실패하면 부호를 본다. $H\delta = -g$다. $+g$로 풀면 비용이 커지는 쪽으로 간다.
+- history 테스트가 실패하면 처음 값을 history에 넣었는지, 마지막 항목의 `x`·`cost`가 결과와 같은지 본다.
+- 2D 회전 테스트만 실패하면 `x`를 숫자 배열처럼 더한 것이다. 반드시 `problem.plus(x, δ)`로 바꾼다.
+- 로버스트 테스트만 실패하면 가중치를 $H$와 $g$ 둘 다에 곱했는지, 비용을 $\sum \rho$로 냈는지 본다. "Matrix is not symmetric" 예외가 나면 $H$를 $(H + H^\top)/2$로 맞췄는지 본다.
+
+<SessionBreak id="s8" />
+
+<TaskCard fn="levenbergMarquardt" readOnly>
+  GN과 같은 입력·출력이다. 감쇠 $\lambda$를 $10^{-3}$에서 시작해, 비용이 줄면 받아들이고 $\lambda$를 10으로 나누고, 늘면 버리고 10을 곱한다. history에는 받아들인 업데이트만 들어가고 `lambda`도 함께 남는다.
+
+  읽으며 확인할 것: 버린 업데이트도 반복 수에 들어가는가? 대각에 $\lambda \cdot H_{ii}$를 더하는 것과 $\lambda$만 더하는 것은 변수의 단위가 서로 다를 때 어떻게 다른가?
+</TaskCard>
+
+<SessionBreak id="s9" />
+
+## 체크 질문
+
+<CheckQuestion q="가우스-뉴턴의 정규방정식은 어디서 나오고, 그 왼쪽의 행렬(J 전치 곱하기 J)은 무엇을 근사한 것인가?" kind="개념">
+  잔차를 1차 테일러로 $r + J\delta$로 근사하면 비용 $\tfrac{1}{2}\lVert r + J\delta \rVert^2$가 $\delta$의 이차식이 된다. 이것을 미분해 0으로 놓은 것이 정규방정식이다.
+
+  비용의 진짜 헤시안은 $J^\top J + \sum_i r_i \nabla^2 r_i$인데($\nabla^2 r_i$는 잔차 $r_i$의 2차 미분 행렬), GN은 두 번째 항(잔차 × 2차 미분)을 버린다. 답 근처에서는 잔차가 작아 이 근사가 좋다.
+</CheckQuestion>
+
+<CheckQuestion q="SLAM 최적화 라이브러리는 왜 GN보다 LM을 기본으로 쓰나?" kind="왜">
+  GN은 근사가 맞는 답 근처에서만 빠르고 안전하다. 초기값이 나쁘면 비용이 커지는 쪽으로 가거나 발산하고, $J^\top J$가 거의 특이하면 한 걸음이 폭발한다.
+
+  LM은 비용이 늘면 그 걸음을 버리고 $\lambda$를 키워 짧게 다시 가므로 비용이 줄어들기만 한다. 답 근처에서는 $\lambda$가 작아져 GN만큼 빨라진다. 대각에 감쇠가 더해져 특이한 $J^\top J$도 풀린다.
+</CheckQuestion>
+
+<CheckQuestion q="VO에서 번들 조정 결과가 가끔 크게 틀어진다. 잔차를 보니 몇 개가 수십 픽셀이다. 어떻게 대처하나?" kind="실무">
+  잘못된 대응(아웃라이어)이 제곱 비용을 지배한 것이다. 재투영 오차에 Huber 같은 로버스트 커널을 걸어 큰 잔차의 가중치를 줄인다. 기준 $k$는 픽셀 잡음에 맞춘다(예: 2D 오차의 카이제곱 95% 값 $\sqrt{5.991} \approx 2.4$픽셀).
+
+  최적화 후 잔차가 기준보다 큰 관측은 아웃라이어로 표시해 다음 최적화에서 뺀다(ORB-SLAM이 이렇게 한다). 대응 단계의 RANSAC과 함께 쓰면 더 안전하다.
+</CheckQuestion>
+
+<SessionBreak id="s10" />

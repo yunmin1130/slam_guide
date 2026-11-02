@@ -15,13 +15,15 @@ const session = z.object({
 });
 
 const lessons = defineCollection({
-  loader: glob({ pattern: "w[0-9][0-9]-*.mdx", base: "./src/content/lessons" }),
+  // w07-슬러그.mdx, 파트가 있으면 w07a-슬러그.mdx (LESSON_TEMPLATE §1)
+  loader: glob({ pattern: "w[0-9][0-9]*-*.mdx", base: "./src/content/lessons" }),
   schema: z
     .object({
       week: z.number().int().min(0),
+      part: z.enum(["a", "b", "c", "d"]).optional(),
       title: z.string().min(1),
       summary: z.string().min(1),
-      prereq: z.array(z.string().regex(/^w\d{2}$/)).default([]),
+      prereq: z.array(z.string().regex(/^w\d{2}[a-d]?$/, "선행 레슨은 w05 또는 w07a 꼴")).default([]),
       la_box: z.array(z.string()).default([]),
       tasks: z.array(fnName).default([]),
       read_only: z.array(fnName).default([]),

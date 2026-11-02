@@ -16,8 +16,10 @@ export interface SessionMeta {
 
 /** 대시보드·세션 계산에 필요한 레슨 요약 (frontmatter에서 만든다) */
 export interface LessonMeta {
-  key: string; // "w01"
+  key: string; // "w01", 파트가 있으면 "w07a"
   week: number;
+  /** 한 주차를 여러 페이지로 나눈 파트 (LESSON_TEMPLATE §1). 없으면 그 주차 페이지는 하나 */
+  part?: Part;
   title: string;
   href: string;
   units: number;
@@ -36,8 +38,16 @@ export interface NextSessions {
   forDevice?: SessionPick;
 }
 
-export function lessonKey(week: number): string {
-  return `w${String(week).padStart(2, "0")}`;
+export type Part = "a" | "b" | "c" | "d";
+
+/** 진도 저장 키이자 화면 표기: w07, 파트가 있으면 w07a (파트끼리 진도가 섞이지 않게) */
+export function lessonKey(week: number, part?: Part): string {
+  return `w${String(week).padStart(2, "0")}${part ?? ""}`;
+}
+
+/** 레슨 순서: 주차, 같은 주차면 파트 (파트 없는 쪽이 먼저) */
+export function compareLessons(a: { week: number; part?: Part }, b: { week: number; part?: Part }): number {
+  return a.week - b.week || (a.part ?? "").localeCompare(b.part ?? "");
 }
 
 function pendingSessions(lesson: LessonMeta, state: LessonState | undefined): SessionMeta[] {
@@ -47,7 +57,7 @@ function pendingSessions(lesson: LessonMeta, state: LessonState | undefined): Se
 }
 
 export function nextSessions(lessons: readonly LessonMeta[], progress: Progress, device: Device): NextSessions {
-  const ordered = [...lessons].sort((a, b) => a.week - b.week);
+  const ordered = [...lessons].sort(compareLessons);
   let overall: SessionPick | undefined;
 
   for (const lesson of ordered) {
