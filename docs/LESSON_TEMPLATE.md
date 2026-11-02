@@ -149,6 +149,7 @@ Claude Code에 "N주차 레슨 만들어줘"라고 하면:
 3. `core/mine` 시그니처 + `core/reference` 정답 + `core/tests` 테스트 생성
 4. 데모가 있으면 `components/demos/`에 컴포넌트 생성
 5. reference 기준 테스트 통과 확인
+   - 새 주차 파일을 처음 만든 직후 `Unknown variable dynamic import: ../reference/wNN.ts`가 나면 vitest 캐시가 옛 파일 목록을 들고 있는 것이다. `node_modules/.vitest-cache`를 지우고 다시 돌린다 (CI는 매번 새로 받아서 상관없다).
 6. `docs/WORKFLOW.md` 관문 G2 (code-reviewer) 실행, CRITICAL·HIGH 수정
 7. 만든 파일 목록과 내가 구현할 함수 목록을 요약
 
