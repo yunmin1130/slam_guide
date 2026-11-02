@@ -39,7 +39,8 @@ export default function PlaygroundResults({ outcome, cases, running }: Playgroun
   const head = headline(outcome, cases, running);
   if (!head.text) return null;
   return (
-    <section className={styles.results} aria-live="polite">
+    // data-outcome: 자동 QA(scripts/qa.mjs)가 문구 대신 이 값으로 결과 종류를 판정한다
+    <section className={styles.results} aria-live="polite" data-outcome={running ? "running" : outcome?.kind}>
       <p className={styles.headline} data-tone={head.tone}>
         {head.text}
       </p>

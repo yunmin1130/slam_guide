@@ -13,3 +13,5 @@ site/src/data/test-results.json
 site/src/data/mine-syntax.json
 # 대용량 데이터셋은 저장소에 넣지 않는다 (DATA §1)
 datasets/raw/
+# 자동 QA 결과·스크린샷 (scripts/qa.mjs)
+qa-output/
