@@ -15,3 +15,6 @@ site/src/data/mine-syntax.json
 datasets/raw/
 # 자동 QA 결과·스크린샷 (scripts/qa.mjs)
 qa-output/
+# Python 캐시
+__pycache__/
+*.pyc
