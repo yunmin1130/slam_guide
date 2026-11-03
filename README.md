@@ -11,7 +11,7 @@ SLAM 독학 사이트다. 선형대수부터 미니 Visual Odometry(VO), ESKF·I
 | Part | Contents |
 | --- | --- |
 | Lessons (weeks 0–11) | Linear algebra, rotations and SE(3), pinhole and fisheye cameras, epipolar geometry and RANSAC, triangulation and PnP, Gauss–Newton and LM, bundle adjustment with Schur complement, pose graphs, features and KLT, a mini monocular VO with ATE/RPE evaluation |
-| Lessons (weeks 12–18) | C++17/Eigen/OpenCV port with CMake, GTest and CI (optional Ceres local BA), error-state Kalman filter, IMU integration and on-manifold preintegration, lidar ICP (point-to-point, point-to-plane), direct methods/stereo/marginalization, ORB-SLAM3 and VINS-Mono code reading, capstone on camera effects in VO |
+| Lessons (weeks 12–18) | C++17/Eigen/OpenCV port with CMake, GTest and CI, Ceres local BA, error-state Kalman filter, IMU integration and on-manifold preintegration, lidar ICP (point-to-point, point-to-plane), direct methods/stereo/marginalization, ORB-SLAM3 and VINS-Mono code reading, capstone on camera effects in VO |
 | `core/mine` | My own implementations (hand-coded, graded by `core/tests`) |
 | `core/reference` | Reference solutions used to verify the tests and power the demos (written with AI assistance) |
 | `datasets/` | PC-side Python tools: camera calibration, ORB matches, JetBot sequences, TUM RGB-D → feature tracks, evo results → showcase JSON |

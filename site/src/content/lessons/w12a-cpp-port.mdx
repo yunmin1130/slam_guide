@@ -8,7 +8,7 @@ la_box: [쿼터니언 저장 순서]
 tasks: []
 read_only: []
 deliverables:
-  - "C++ 단안 VO (cpp/): TUM fr1/xyz·fr3/long_office 실행 파일과 BA 없이 추적한 프레임·끊긴 지점 기록 (끝까지 추적은 12b 또는 선택 접기의 Eigen local BA 뒤)"
+  - "C++ 단안 VO (cpp/): TUM fr1/xyz·fr3/long_office 실행 파일과 BA 없이 추적한 프레임·끊긴 지점 기록 (끝까지 추적은 12b Ceres local BA 뒤)"
   - "evo로 잰 ATE·RPE (두 시퀀스, 추적한 구간까지, ape.zip·rpe.zip·rpe_rot.zip)"
   - "CMake 빌드 + GTest 단위 테스트 (우메야마·ATE, 합성 데이터)"
   - "GitHub Actions CI (.github/workflows/cpp.yml)"
@@ -444,9 +444,9 @@ D=~/data/rgbd_dataset_freiburg1_xyz
 새 키프레임에서는 맵에 아직 없는 id를 그 점을 처음 본 프레임과 삼각측량해 맵에 더한다(11c `newPoints`). local BA는 12b에서 Ceres로 붙인다. 이 레슨에서는 BA 없이 어디까지 가는지 기록하는 것이 목표다.
 
 <Details summary="(선택) Eigen으로 local BA 옮기기">
-  11d 표에서 local BA를 끄면 fr1/xyz는 151, fr3은 92프레임에서 끊겼다. C++도 BA 없이는 비슷하게 끊길 수 있다. 12b(Ceres)로 바로 가는 것이 정석이다.
+  11d 표에서 local BA를 끄면 fr1/xyz는 151, fr3은 92프레임에서 끊겼다. C++도 BA 없이는 비슷하게 끊길 수 있다. 다음 레슨 12b(Ceres)에서 이 끊김을 잇는다.
 
-  12b를 미루고 싶으면 8b `smallBA`의 가우스-뉴턴 구조(재투영 잔차, `projectionJacobian`, 정규방정식)를 Eigen으로 옮기는 방법도 있다. 창이 작으면(키프레임 5개, 점 수백 개) 밀집 행렬 `Eigen::LDLT`로 풀어도 충분하다.
+  Ceres 없이 직접 짜 보고 싶으면 8b `smallBA`의 가우스-뉴턴 구조(재투영 잔차, `projectionJacobian`, 정규방정식)를 Eigen으로 옮기는 방법도 있다. 창이 작으면(키프레임 5개, 점 수백 개) 밀집 행렬 `Eigen::LDLT`로 풀어도 충분하다.
 </Details>
 
 <SessionBreak id="s16" />
@@ -470,7 +470,7 @@ evo가 읽는 TUM 형식은 한 줄에 여덟 숫자다. w가 마지막이다(LA
 이 세션의 완료 기준은 "끝까지"가 아니라 "어디까지 갔는지 기록"이다. BA가 없으니 TS 실행기의 BA 끔 결과(fr1/xyz 151, fr3 92프레임)와 비슷한 곳에서 끊기면 정상이다. 추적한 프레임 수, 끊긴 프레임 번호, 실행 시간(`std::chrono::steady_clock`)을 노트에 적는다.
 
 - 실행 시간은 TS 실행기(PC 브라우저)보다 몇 배 빨라야 정상이다.
-- 끝까지 잇는 일은 12b(Ceres local BA)나 위 선택 접기(Eigen local BA)에서 한다. 그 전에도 끊긴 지점까지의 궤적으로 아래 evo·쇼케이스를 진행할 수 있다.
+- 끝까지 잇는 일은 다음 레슨 12b(Ceres local BA)에서 한다. 그 전에도 끊긴 지점까지의 궤적으로 아래 evo·쇼케이스를 진행할 수 있다.
 - 몇십 프레임 만에 끊기면 BA 탓이 아니다. inlier 수를 프레임마다 찍어 어디서 떨어지는지 본다. 대개 새 점 추가(삼각측량 기준 프레임)나 맵 정리가 빠졌다.
 - 궤적이 거울에 비친 것처럼 뒤집혀 보이면 $T_{cw}$를 뒤집지 않고 그대로 출력했거나, 쿼터니언 순서가 틀렸다.
 

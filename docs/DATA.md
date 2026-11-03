@@ -198,7 +198,7 @@ gst-launch-1.0 -e nvarguscamerasrc sensor-mode=3 \
 
 | 데이터셋 | 용도 | 라이선스 | 비고 |
 | --- | --- | --- | --- |
-| KITTI Odometry | 12주차 이후 선택 확장 (C++ VO), 15주차 라이다 ICP 샘플 | CC BY-NC-SA 3.0 | 출처 표기·동일조건 공유 의무. 강의 판매 시 사용 불가 → 자체 데이터로 교체 |
+| KITTI Odometry | 12주차 이후 선택 확장 (C++ VO), 15주차 선택 PC 실습(Open3D, 기본 레슨은 합성 방 장면) | CC BY-NC-SA 3.0 | 출처 표기·동일조건 공유 의무. 강의 판매 시 사용 불가 → 자체 데이터로 교체 |
 | EuRoC MAV | 13~14주차 ESKF·VIO (기본 트랙) | 연구용 공개 | IMU + 스테레오 + 정답 궤적 (IMU 기준, §2 변환 필요) |
 | TUM RGB-D | 11주차 M1 리포트(2026-11-03 선택), 실내 VO | CC BY 4.0 | 정답 궤적 포함. `tum_tracks.py`로 트랙 JSON |
 | TUM RS-VIO | 캡스톤 롤링셔터 비교 | 데이터셋 페이지 확인 | 글로벌·롤링셔터 동시 촬영 |
