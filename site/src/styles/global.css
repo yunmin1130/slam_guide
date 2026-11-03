@@ -223,6 +223,8 @@ table {
   overflow-x: auto;
   border-collapse: collapse;
   font-size: var(--text-sm);
+  /* 표 바로 뒤 문단이 아래 테두리에 붙지 않게 */
+  margin-bottom: var(--space-4);
 }
 th,
 td {

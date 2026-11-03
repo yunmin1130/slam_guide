@@ -1,0 +1,335 @@
+---
+week: 15
+title: 라이다 ICP — 점-점, 점-평면
+summary: 두 라이다 스캔을 겹치는 강체 변환을 ICP(최근접 대응 → 우메야마 정렬 반복)로 구현하고, 점-평면 ICP가 왜 더 정확한지와 ICP가 실패하는 상황을 이해한다
+prereq: [w11d, w07a]
+la_box: [최근접 대응과 프로크루스테스 반복, 점-평면 가우스-뉴턴]
+tasks: [icpPointToPoint]
+read_only: [nearestNeighbors, icpPointToPlane]
+deliverables: []
+jetbot: false
+units: 2
+sessions:
+  - { id: s1, device: phone, title: "개념: 라이다 SLAM과 스캔 정합" }
+  - { id: s2, device: phone, title: "개념: ICP 반복, 비용이 줄어드는 이유, 초기값" }
+  - { id: s3, device: phone, title: "개념: 점-평면 ICP와 퇴화" }
+  - { id: s4, device: phone, title: "개념: 법선, k-d 트리, 라이다 SLAM 지형" }
+  - { id: s5, device: phone, title: "LA 박스: 프로크루스테스 반복, 점-평면 GN" }
+  - { id: s6, device: pad, title: "손으로 ICP 두 번 반복, 점-평면 야코비안 한 행" }
+  - { id: s7, device: pc, title: "과제: icpPointToPoint 구현" }
+  - { id: s8, device: pc, title: "과제: icpPointToPoint 디버그·테스트 통과" }
+  - { id: s9, device: pc, title: "읽기: nearestNeighbors, icpPointToPlane" }
+  - { id: s10, device: pc, title: "실험: 점-점 대 점-평면, maxDistance 바꿔 보기" }
+  - { id: s11, device: pc, title: "실데이터 (선택): KITTI 스캔 두 장 준비" }
+  - { id: s12, device: pc, title: "실데이터 (선택): Open3D로 두 ICP 비교" }
+  - { id: s13, device: phone, title: "체크 질문" }
+---
+
+## 개념
+
+이번 주를 마치면 라이다 스캔 두 장을 겹쳐 그 사이에 로봇이 얼마나 움직였는지 구할 수 있다. 이것이 라이다 오도메트리의 핵심이다. 국내 로봇·자율주행 인지 공고에서는 카메라보다 라이다 SLAM, 특히 라이다와 IMU를 묶는 LIO(LiDAR-Inertial Odometry)가 주류라서 커리큘럼에 넣었다.
+
+### 스캔 정합: 두 점군을 겹치기
+
+라이다는 한 바퀴 돌 때마다 주변 표면의 3D 점 수만 개를 준다. 이것을 스캔(scan) 또는 점군(point cloud)이라 한다. 로봇이 움직인 뒤 다시 찍은 스캔은 같은 벽과 바닥을 다른 자리에서 본 것이다.
+
+두 스캔을 가장 잘 겹치는 강체 변환 $T = (R, t)$를 찾는 문제를 스캔 정합(scan registration)이라 한다. 이 $T$가 두 시각 사이 로봇의 움직임이다. 이번 주 표기는 src를 dst에 맞추는 것, 곧 $\mathrm{dst} \approx R \cdot \mathrm{src} + t$다.
+
+11d 우메야마 정렬과 같은 문제처럼 보이지만 결정적 차이가 있다. 11d에서는 "이 점은 저 점"이라는 짝(대응)을 알았다. 라이다 점에는 id가 없고, 두 스캔이 같은 벽의 같은 자리를 정확히 다시 찍는 일도 없다.
+
+### ICP: 짝을 추측하고, 맞추고, 다시 추측한다
+
+ICP(Iterative Closest Point)는 짝을 모르는 문제를 "짝이 가장 가까운 점이라고 치자"로 푼다. 반복 한 번은 두 단계다.
+
+1. **대응:** 지금 $T$로 옮긴 src 점마다 dst에서 가장 가까운 점을 짝으로 고른다. 거리가 `maxDistance`보다 먼 짝은 버린다(겹치지 않는 부분, 이상치).
+2. **정렬:** 그 짝들로 11d 우메야마 정렬을 스케일 없이(`withScale = false`) 풀어 새 $T$를 얻는다.
+
+짝이 맞으면 한 번에 끝난다. 처음 짝은 대개 틀리지만, 정렬로 조금 가까워지면 다음 짝이 더 맞아진다. 짝지은 점 사이 거리의 RMSE가 더 이상 거의 줄지 않으면 멈춘다.
+
+<SessionBreak id="s1" />
+
+### 왜 비용이 줄어드나
+
+짝 $c(i)$를 정했을 때 비용을 $E(T, c) = \sum_i \lVert T s_i - d_{c(i)} \rVert^2$라 하자. 이상치를 버리지 않으면(모든 점이 짝을 가지면) 두 단계 모두 이 비용을 줄이거나 그대로 둔다.
+
+- 대응 단계는 $T$를 고정하고 점마다 가장 가까운 짝을 고르므로, 짝을 바꿔서 비용이 늘 수 없다.
+- 정렬 단계는 짝을 고정하고 비용을 최소로 하는 $T$를 정확히 푸므로(우메야마), 역시 늘 수 없다.
+
+그래서 RMSE가 반복마다 줄거나 같다(테스트 "이상치를 버리지 않으면 RMSE 가 반복마다 줄거나 같다"). 단, `maxDistance`로 짝을 버리면 반복마다 짝의 개수가 달라져 이 논증이 깨진다.
+
+### 줄어든다고 맞는 답은 아니다
+
+비용이 줄어든다는 것은 어딘가 바닥에 닿는다는 뜻일 뿐이다. 그 바닥이 진짜 답이라는 보장은 없다. ICP는 지역 최솟값(local minimum)에 잘 빠진다.
+
+테스트의 방을 74°쯤 돌려 놓고 초기값 없이 시작하면, 벽이 엉뚱한 벽과 짝지어져 90° 가까이 틀린 곳에 멈춘다. 같은 문제에 가까운 초기값(69°쯤)을 주면 정확히 찾는다. 그래서 실제 시스템은 IMU 적분(14주차)이나 등속 모델로 다음 자세를 예측해 ICP의 초기값으로 넣는다.
+
+<SessionBreak id="s2" />
+
+### 점-점의 한계: 짝이 근사다
+
+같은 점을 옮긴 dst라면 점-점 ICP는 변환을 정확히 찾는다. 실제 스캔은 같은 벽을 다른 자리에서 다시 샘플링한다. 그래서 가장 가까운 dst 점은 "같은 자리"가 아니라 벽 위 근처의 다른 점이다.
+
+점-점 ICP는 그 근처 점과의 거리까지 0으로 만들려고 해서, 벽을 따라 미끄러지는 방향으로도 엉뚱하게 당겨진다. 합성 방을 따로 두 번 샘플링한 한 번의 예에서, 점-점 ICP는 약 5.5&nbsp;cm 틀렸다.
+
+### 점-평면 ICP: 법선 방향 거리만 본다
+
+해결책은 "벽 위의 다른 점까지 거리"가 아니라 "벽까지 거리"를 줄이는 것이다. dst 점 $q$의 법선(표면에 수직인 단위 벡터) $n$을 알면, 옮긴 src 점 $x = T s$와 그 표면 사이 거리는 다음과 같다.
+
+$$
+r = n^\top (x - q)
+$$
+
+벽을 따라 미끄러진 차이는 $n$과 수직이라 $r$에 들어가지 않는다. 같은 예에서 점-평면 ICP는 약 2.5&nbsp;mm 틀렸다(합성 데이터 한 번의 예다).
+
+이 잔차는 $T$에 대해 비선형이라 우메야마처럼 닫힌 해가 없다. 그래서 7a 가우스-뉴턴으로 반복마다 한 걸음씩 푼다. 7주차 좌섭동 $T \leftarrow \mathrm{Exp}(\delta) T$, $\delta = [\rho;\ \phi]$에서 $\partial x / \partial \rho = I$, $\partial x / \partial \phi = -[x]_\times$이므로 잔차 하나의 야코비안 한 행은 이렇다.
+
+$$
+J = \big[\, n^\top,\ (x \times n)^\top \,\big]
+$$
+
+유도는 LA 박스와 손 유도에 있다. 미지수가 6개라 $J^\top J$는 $6 \times 6$이다.
+
+### 퇴화: 평면이 모든 방향을 막지 못할 때
+
+점-평면 잔차는 법선 방향만 본다. 스캔 전체가 바닥 하나뿐이면 바닥 위로 미끄러지는 이동 2개와 바닥에 수직인 축 둘레 회전 1개가 잔차를 바꾸지 못한다. 그 방향으로 $J^\top J$가 특이해진다.
+
+`icpPointToPlane`은 이때 예외를 던진다(테스트 "평면 하나뿐이면"). 실제로는 긴 복도와 터널이 이 문제다. 양쪽 벽과 바닥이 모두 진행 방향과 평행해서 앞뒤 이동이 관측되지 않는다.
+
+### 대응이 엉뚱한 면으로 갈 때
+
+`maxDistance`가 크면 방 모서리 근처의 바닥 점이 옆 벽의 점과 짝지어질 수 있다. 그러면 바닥 점에 벽의 법선을 쓰게 되어 점-평면도 틀린다. 같은 예에서 `maxDistance`가 1.0&nbsp;m면 점-평면도 약 4&nbsp;cm 틀렸고, 0.2&nbsp;m로 줄이자 2.5&nbsp;mm가 됐다.
+
+실제 시스템은 짝의 법선이 비슷한지도 같이 본다. 또 반복이 진행될수록 `maxDistance`를 줄여 간다.
+
+<SessionBreak id="s3" />
+
+### 법선은 어디서 오나
+
+테스트 장면은 면마다 법선을 알고 있다. 실제 스캔에서는 점마다 이웃 점 $k$개(보통 5~20개)를 모아 구한다. 이웃 점들의 공분산 행렬을 고유분해하면, 가장 작은 고유값의 고유벡터가 점들이 가장 덜 퍼진 방향, 곧 평면의 법선이다(2주차 고유값).
+
+가장 작은 고유값이 다른 둘에 비해 충분히 작아야 "평면"이다. 셋이 비슷하면 나무나 덤불처럼 평면이 아닌 곳이라 점-평면 잔차에서 뺀다. 이 계산은 이번 주에 구현하지 않는다.
+
+### 최근접 탐색은 k-d 트리로
+
+`nearestNeighbors`는 query 점마다 dst 점을 전부 재 보는 전수 탐색이다. 점이 $N$개, $M$개면 $O(NM)$이다. 테스트처럼 수백 개면 괜찮지만, 라이다 한 스캔은 수만~수십만 점이라 감당이 안 된다.
+
+실제로는 dst를 k-d 트리(k-d tree, 공간을 축마다 반씩 나눠 가는 이진 트리)로 한 번 정리해 두고 점 하나를 대략 $O(\log M)$에 찾는다. FAST-LIO2는 점을 넣고 빼기 쉽게 고친 k-d 트리인 ikd-Tree를 쓴다. KISS-ICP는 공간을 작은 정육면체(복셀)로 나누고 칸 번호로 바로 찾는 복셀 해시(voxel hash)를 쓴다.
+
+### 라이다 SLAM 지형
+
+- **LOAM(Lidar Odometry and Mapping):** 스캔 한 줄에서 곡률이 큰 점(모서리, edge)과 작은 점(평면, planar)을 뽑는다. 모서리 점은 점-선 거리, 평면 점은 점-평면 거리로 정합한다. LeGO-LOAM, LIO-SAM 등이 이 틀을 잇는다.
+- **FAST-LIO:** IMU와 라이다를 반복 오차 상태 칼만 필터(iEKF)로 묶는다. 13주차 ESKF의 갱신 단계에서 측정 잔차로 이번 주의 점-평면 거리를 쓰고, 갱신을 몇 번 반복한다. IMU 예측(14주차)이 ICP의 초기값 역할을 한다.
+- **KISS-ICP:** 특징 추출 없이 점-점 ICP, 적응형 `maxDistance`, 등속 예측만으로 좋은 결과를 내는 단순한 방법이다.
+
+<SessionBreak id="s4" />
+
+<LABox term="최근접 대응과 프로크루스테스 반복">
+  **정의:** 짝을 모르는 두 점군을 맞출 때, "가장 가까운 점이 짝"이라는 추측과 그 짝으로 푼 직교 프로크루스테스 문제(11d 우메야마, 스케일 없이)를 번갈아 반복하는 방법. 이것이 점-점 ICP다.
+
+  **기하학적 의미:** 짝을 고정하면 $T$를 정확히 풀 수 있고, $T$를 고정하면 짝을 정확히 고를 수 있다. 둘을 번갈아 고정하면 비용이 계단처럼 내려간다(좌표 하강, coordinate descent). 계단이 닿는 곳이 시작점에 따라 다른 것이 초기값 의존성이다.
+
+  **SLAM에서:** 라이다 오도메트리, 스캔-지도 정합, 루프 클로저 후보의 기하 검증(9주차를 라이다로)에 쓴다. 매 반복 원래 src 전체로 정렬을 통째로 다시 푸는 것이 핵심이다. 앞 반복 결과에 누적하지 않는다.
+
+  **이전 레슨:** [11d 우메야마 정렬](../w11d-evaluation-tum/), [2주차 SVD](../w02-least-squares-svd/)
+</LABox>
+
+<LABox term="점-평면 가우스-뉴턴">
+  **정의:** 잔차 $r_i = n_i^\top (T s_i - q_i)$의 제곱합을 7a 가우스-뉴턴으로 줄인다. 한 걸음은 $J^\top J \delta = -J^\top r$을 풀고 $T \leftarrow \mathrm{Exp}(\delta) T$로 고친다.
+
+  **기하학적 의미:** 점이 표면 위 어디에 닿든 표면에 닿기만 하면 비용이 0이다. 그래서 표면을 따라 미끄러지는 방향은 벌주지 않는다. 대신 여러 방향을 향한 표면이 있어야 6자유도가 모두 정해진다($J^\top J$가 양의 정부호).
+
+  **SLAM에서:** 야코비안 한 행 $[n^\top, (x \times n)^\top]$은 7b 좌섭동 규약에서 나온다. $x = T s$를 $\phi$만큼 돌리면 $x + \phi \times x = x - x \times \phi$이므로 $\partial x / \partial \phi = -[x]_\times$다.
+
+  회전 부분의 변화량은 $n^\top(-[x]_\times \phi) = -n \cdot (x \times \phi)$다. 스칼라 삼중곱은 순환시켜도 같으므로 $-n \cdot (x \times \phi) = \phi \cdot (x \times n)$이고, 그래서 행은 $(x \times n)^\top$이다. FAST-LIO의 측정 야코비안도 이 모양이다.
+
+  **이전 레슨:** [7a 가우스-뉴턴](../w07a-gauss-newton/), [7b 매니폴드와 섭동](../w07b-manifold-perturbation/)
+</LABox>
+
+<SessionBreak id="s5" />
+
+## 과제
+
+### 손으로 ICP 두 번 반복, 점-평면 야코비안 한 행
+
+태블릿에 직접 쓴다. 2D로 줄여서 계산을 가볍게 한다.
+
+1. src $= \{(0,0), (1,0), (0,1)\}$, dst $= \{(0.5,0), (1.5,0), (0.5,1)\}$이다. dst는 src를 $x$로 0.5 옮긴 것이다. $T$가 단위일 때 src 점마다 가장 가까운 dst 점을 고른다. 거리가 같으면 앞 번호를 고른다.
+2. 1의 짝들로 평행이동만 구한다. 두 무게중심의 차이다. 손 계산을 줄이려고 회전은 0이라 놓는다(실제 우메야마는 이 짝으로 작은 회전도 낸다). 왜 0.5가 아닌가?
+3. 2의 평행이동으로 src를 옮기고 다시 짝을 고른다. 이번 짝으로 구한 평행이동은 얼마인가? 짝이 맞자 답이 나오는 것을 확인한다.
+4. 3D에서 $x = (1, 2, 0)$, $n = (0, 0, 1)$일 때 점-평면 야코비안 한 행 $[n^\top, (x \times n)^\top]$을 구한다.
+5. 4에서 $\phi = (\phi_x, 0, 0)$이면 $r$이 얼마나 변하나? $x$를 $x$축 둘레로 조금 돌리면 $z$가 얼마나 올라가는지 그림으로 확인한다.
+6. 모든 점이 바닥($n = (0,0,1)$)에 있으면 $J$의 어느 열들이 늘 0인가? 그 열이 뜻하는 움직임은?
+
+<SessionBreak id="s6" />
+
+<TaskCard fn="icpPointToPoint">
+  src 점군을 dst 점군에 맞추는 강체 변환 `T`(dst ≈ R·src + t)를 점-점 ICP로 찾는다. 설정은 `maxIterations`, `tolerance`, `maxDistance`, 선택 `init`이다. 결과는 `T`, `rmse`(마지막 history 값), `pairs`(마지막 짝 수), `iterations`(history 길이), `converged`, `history`다. 수렴하기 전에 `maxIterations`를 다 쓰면 `converged`는 `false`다.
+
+  빈 점군, NaN·무한대, 정수가 아니거나 1 미만인 `maxIterations`, 음수 `tolerance`, 0 이하 `maxDistance`, `maxDistance` 안의 짝 3개 미만이면 예외를 던진다.
+
+  <Hint level={1}>
+    반복 한 번 = 대응 + 정렬이다. 최근접 탐색과 우메야마는 이미 있으니 가져다 쓴다.
+
+    ```ts
+    import { nearestNeighbors }
+      from "../reference/w15";
+    import { alignUmeyama }
+      from "@core/prev/w11";
+    ```
+
+    정렬은 "지금 $T$에 덧붙일 작은 변환"이 아니라 원래 src 점과 짝 dst 점으로 $T$를 통째로 다시 푼다. 그래서 변환을 누적해 곱할 필요가 없다.
+  </Hint>
+
+  <Hint level={2}>
+    - 옮긴 점: $x_i = R s_i + t$. 옮긴 점들과 dst를 `nearestNeighbors`에 넘긴다.
+    - 짝: `dist ≤ maxDistance`인 $i$만 남기고, 짝 dst 번호는 `index`다.
+    - 정렬: `alignUmeyama`에 짝 src, 짝 dst, `false`를 넘긴 결과의 `R`, `t`가 새 $T$다(`s`는 1이라 버린다).
+    - RMSE: 새 $T$로 옮긴 짝 src와 짝 dst 거리 $d_i$로 $\sqrt{\tfrac{1}{n}\sum d_i^2}$.
+    - 수렴: 직전 RMSE가 있고 $|\mathrm{prev} - \mathrm{rmse}| < \mathrm{tolerance}$면 멈춘다(같을 때는 멈추지 않는다, 엄격한 $<$). 첫 반복은 비교할 값이 없어 멈추지 않는다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    검사: 점군 비지 않음, NaN 없음,
+      maxIterations 정수 ≥ 1,
+      tolerance ≥ 0, maxDistance > 0
+    T ← init 이 있으면 init, 아니면 단위
+    history ← [], converged ← false
+    maxIterations 번:
+      moved ← src 각 점에 T
+      nn ← nearestNeighbors(moved, dst)
+      짝 ← nn[i].dist ≤ maxDistance 인
+        (src[i], dst[nn[i].index])
+      짝 < 3 이면 예외
+      a ← alignUmeyama(짝 src,
+        짝 dst, false)
+      T ← { R: a.R, t: a.t }
+      pairs ← 짝 수
+      rmse ← 새 T 로 잰 짝 거리 RMSE
+      prev ← history 마지막 (있으면)
+      history 에 rmse 추가
+      prev 있고 |prev − rmse| < tol:
+        converged ← true, 멈춤
+    결과: T, rmse (history 마지막),
+      pairs, iterations (history 길이),
+      converged, history
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s7" />
+
+### icpPointToPoint 테스트가 안 맞을 때
+
+- "같은 점을 강체 변환으로 옮긴 dst" 테스트만 틀리면 정렬을 원래 src가 아니라 옮긴 점(moved)으로 풀었는지 본다. 그렇게 하려면 결과를 지금 $T$에 곱해 누적해야 하는데, 곱하는 순서를 틀리기 쉽다. 원래 src로 통째로 푸는 쪽이 간단하다.
+- "maxDistance 밖의 이상치" 테스트가 틀리면 먼 짝을 버리지 않았거나, `pairs`에 버린 짝까지 셌다. 이 테스트는 `rmse`도 본다. RMSE를 src 전체 점으로 재면 여기서만 틀린다. RMSE는 남은 짝만으로 잰다.
+- "거리가 maxDistance 와 정확히 같은 짝은 남긴다" 테스트가 짝 0개 예외로 틀리면 짝 조건을 `<`로 쓴 것이다. `≤`로 고친다.
+- "같은 점군이면 … 수렴" 테스트에서 `converged`만 거짓이면 첫 반복에서도 비교했거나(직전 값 없음), 차이에 절댓값을 안 씌웠다.
+- "maxIterations 1 이면 … tolerance 0 이면 끝까지 돈다" 테스트가 틀리는 경우는 둘이다. `iterations`가 7보다 작으면 수렴 판정을 `≤`로 썼다(차이가 정확히 0일 때 멈춤). 엄격한 `<`로 고친다. `maxIterations`가 1일 때 `converged`가 참이면 첫 반복에서 비교한 것이다.
+- "RMSE 가 반복마다 줄거나 같다"가 틀리면 RMSE를 정렬 전 $T$로 쟀는지 본다. history에는 새 $T$로 잰 값을 넣는다.
+- "크게 돈 경우 … 가까운 초기값" 테스트가 틀리면 `opts.init`을 무시한 것이다.
+- 예외 테스트가 틀리면 짝 3개 미만 검사를 정렬 전에 했는지 본다. 우메야마가 대신 던지는 예외에 기대지 않는다.
+
+<SessionBreak id="s8" />
+
+### 읽기: nearestNeighbors, icpPointToPlane
+
+<TaskCard fn="nearestNeighbors" readOnly>
+  query 점마다 points 전체를 재 보고 가장 가까운 점의 번호 `index`와 거리 `dist`를 낸다. 거리가 같으면 앞 번호다. 제곱 거리로 비교하고 마지막에만 제곱근을 씌운다.
+
+  읽으며 확인할 것: query가 $N$개, points가 $M$개면 거리 계산이 몇 번인가? 라이다 한 스캔(약 10만 점)끼리라면?
+</TaskCard>
+
+<TaskCard fn="icpPointToPlane" readOnly>
+  대응은 점-점과 같다(최근접, `maxDistance`). 그 뒤 잔차 $r = n^\top(T s - q)$로 $6 \times 6$ 정규방정식 $J^\top J \delta = -J^\top r$을 만들고, 숄레스키로 푼 $\delta$를 $R \leftarrow \mathrm{Exp}(\phi) R$, $t \leftarrow \mathrm{Exp}(\phi) t + \rho$로 넣는다. 반복마다 가우스-뉴턴 한 걸음이고, 짝은 6개 이상 필요하다.
+
+  읽으며 확인할 것: 법선을 왜 단위 벡터로 고쳐 두나(테스트 "법선 길이가 1이 아니어도 같은 답")? $J^\top J$가 양의 정부호가 아닐 때 왜 감쇠(7a LM)로 억지로 풀지 않고 예외를 던지나?
+</TaskCard>
+
+<SessionBreak id="s9" />
+
+### 실험: 점-점 대 점-평면, maxDistance
+
+PC에서 `core/tests/w15.test.ts`의 "따로 샘플링한 방에서 점-평면이 점-점보다 훨씬 정확하다" 테스트를 연다. 장면(`room`)은 바닥, 벽 셋, 기둥 두 면이고 점마다 법선을 안다. 숫자는 테스트가 통과하면 보이지 않으므로, 일부러 실패하는 임시 줄을 넣어 실패 메시지로 읽는다.
+
+```ts
+// 임시: 숫자를 보려고 일부러 틀린다
+expect(p2l.trans).toBe(-1);
+expect(p2p.trans).toBe(-1);
+```
+
+- 두 줄을 그 테스트의 `const p2p = …` 다음에 넣고 `npm run test:ref`로 돌린다. 실패 메시지의 "expected 0.0025… to be -1"에서 앞 숫자가 이동 오차다.
+- 첫 줄이 실패하면 둘째 줄은 실행되지 않으므로, 하나씩 번갈아 넣는다.
+- 실험이 끝나면 임시 줄과 바꾼 값을 모두 되돌린다(`git diff`로 확인).
+
+1. `near`의 `maxDistance`를 0.2, 0.3, 0.5, 1.0으로 바꿔 가며 두 ICP의 이동 오차를 적는다.
+2. 점 개수(`room`의 `perFace`)를 반으로 줄이거나 두 배로 늘리면 점-점의 오차는 어떻게 되나? 점-평면은?
+3. 기둥 두 면을 빼면 무엇이 달라지나? 벽 셋과 바닥만으로도 6자유도가 모두 정해지는지 생각한다.
+
+결과는 표 한 장으로 적는다. 숫자는 합성 장면 한 번의 예라서, 다른 시드에서는 조금 다르게 나온다.
+
+<SessionBreak id="s10" />
+
+### 실데이터로 해 보기 (선택, PC)
+
+사이트에는 라이다 실행기가 없다. 여유가 있을 때 PC Python에서 공개 데이터로 같은 비교를 해 본다. **아래 명령은 이 PC에서 검증하지 않았다.**
+
+**데이터.** KITTI odometry의 velodyne 스캔을 쓴다(비상업 학습용 라이선스). 시퀀스 하나에서 연속한 `.bin` 두 장이면 된다. 파일 하나는 점마다 float32 네 개(x, y, z, 반사 강도)를 이어 붙인 것이다.
+
+```text
+pip install open3d numpy
+```
+
+```python
+import numpy as np
+a = np.fromfile("000000.bin",
+                dtype=np.float32)
+pts = a.reshape(-1, 4)[:, :3]
+```
+
+<SessionBreak id="s11" />
+
+**두 ICP 비교.** Open3D로 점군을 만들고, 복셀 다운샘플링(예: 0.2&nbsp;m)으로 점을 줄인 뒤 법선을 추정한다. 그다음 두 방법으로 정합한다.
+
+```python
+import open3d as o3d
+reg = o3d.pipelines.registration
+pp = (reg.
+  TransformationEstimationPointToPoint())
+pl = (reg.
+  TransformationEstimationPointToPlane())
+r = reg.registration_icp(
+  src, dst, 0.5, np.eye(4), pl)
+```
+
+- 점-평면을 쓰려면 dst에 `estimate_normals`로 법선을 먼저 만든다.
+- 두 방법의 `r.fitness`(짝이 있는 점 비율), `r.inlier_rmse`, `r.transformation`을 비교한다.
+- KITTI `poses/`의 정답 자세 두 개로 상대 변환을 만들어 오차를 잰다. 정답은 카메라 좌표계라, velodyne 좌표로 바꾸려면 `calib.txt`의 `Tr`이 필요하다.
+
+확인할 것: 거리 기준(위의 0.5)을 2.0으로 키우면 어느 쪽이 더 나빠지나? 초기값을 단위가 아니라 정답 근처로 주면?
+
+<SessionBreak id="s12" />
+
+## 체크 질문
+
+<CheckQuestion q="ICP가 실패하는 상황 두 가지를 들고, 각각 왜 실패하는지 설명하라." kind="개념">
+  첫째, 초기값이 멀 때다. ICP는 가장 가까운 점을 짝으로 추측하므로, 처음 위치가 많이 틀리면 엉뚱한 면끼리 짝지어진다. 비용은 줄지만 지역 최솟값에 멈춘다.
+
+  IMU나 등속 모델로 초기값을 주어 막는다.
+
+  둘째, 기하가 퇴화했을 때다. 긴 복도, 터널, 넓은 평지처럼 표면이 어떤 움직임을 막지 못하면 그 방향은 비용이 변하지 않아 정해지지 않는다. 그 밖에 겹치는 부분이 적거나, 움직이는 물체가 많거나, 같은 기둥이 늘어선 주차장 같은 반복 구조라 짝이 틀릴 때도 실패한다.
+</CheckQuestion>
+
+<CheckQuestion q="같은 표면을 다시 샘플링한 두 스캔에서 왜 점-평면 ICP가 점-점보다 정확하고 빠르게 수렴하나?" kind="왜">
+  두 스캔의 점은 같은 자리가 아니라 같은 표면 위의 다른 자리다. 점-점은 표면을 따라 어긋난 거리까지 줄이려 해서, 짝이 근사인 만큼 답이 틀어진다.
+
+  점-평면은 표면까지 거리(법선 방향)만 보므로 표면을 따라 미끄러진 차이를 벌주지 않는다. 짝이 근사여도 표면만 맞으면 비용이 0이다. 또 잔차가 $T$에 대해 매끄러워 가우스-뉴턴 한 걸음이 크게 다가가므로 반복 수가 적다.
+</CheckQuestion>
+
+<CheckQuestion q="긴 복도에서 라이다 오도메트리가 앞뒤로 미끄러진다. 원인과 대처는?" kind="실무">
+  복도의 벽, 바닥, 천장이 모두 진행 방향과 평행이라 점-평면 잔차의 법선에 진행 방향 성분이 없다. 그래서 앞뒤 이동이 관측되지 않고($J^\top J$가 그 방향으로 거의 특이), 잡음과 작은 구조에 끌려 미끄러진다.
+
+  대처: $J^\top J$의 고유값으로 퇴화 방향을 감지해 그 방향은 업데이트하지 않는다. 그 방향은 IMU, 바퀴 오도메트리, 카메라(문, 포스터 같은 질감) 같은 다른 센서에 맡긴다. 문틀이나 소화전처럼 진행 방향 법선을 가진 작은 구조의 점에 가중치를 더 주는 방법도 있다.
+</CheckQuestion>
+
+<SessionBreak id="s13" />

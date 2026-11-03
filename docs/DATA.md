@@ -84,6 +84,25 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
 - 쿼터니언은 이 문서의 다른 파일과 같이 w가 먼저다(TUM 원본은 x, y, z, w 순서).
 - 사이트 상한: 프레임 2000장, 프레임당 특징점 2000개, 파일 30MB.
 
+### cpp-results/{name}.json (12a 결과 쇼케이스)
+`datasets/cpp_result.py`가 evo 결과 zip(`--save_results`의 `stats.json`) 또는 직접 입력한 숫자로 만든다. 저장 위치는 `site/src/data/cpp-results/`이고 저장소에 올린다(작은 숫자 파일). 사이트 12a 레슨이 빌드 때 읽어 표로 보여준다(`site/src/lib/cppResults.ts`, 형식이 틀리면 빌드가 멈춘다).
+```jsonc
+{
+  "format": "slam-guide-result", "version": 1,
+  "sequence": "fr1/xyz",
+  "impl": "cpp",                       // ts-mine | ts-reference | cpp | orbslam3
+  "git_sha": "abc1234",                // 스크립트가 자동으로 (git 밖이면 null)
+  "date": "2026-11-03",
+  "frames": { "tracked": 299, "total": 300 } | null,
+  "ate": { "rmse": 0.046 },             // m
+  "rpe": { "trans_rmse": 0.012, "rot_rmse_deg": 0.5 } | null,
+  "note": ""                            // 200자 이하
+}
+```
+- `A | null`은 "둘 중 하나"라는 표기다(실제 파일은 둘 중 하나만 쓴다).
+- 검사 규칙(틀리면 빌드가 파일 이름과 함께 멈춘다): `sequence`는 비어 있지 않은 200자 이하, `date`는 `YYYY-MM-DD`, `git_sha`는 소문자 16진수 7~40자 또는 null, 숫자는 0 이상의 유한한 수, `frames`는 0 < total, 0 ≤ tracked ≤ total인 정수, `rpe` 객체면 두 값 중 하나는 있어야 한다.
+- 궤적 자체는 넣지 않는다(숫자 비교 표만). 궤적 그림이 필요해지면 TASKS "나중에"를 본다.
+
 ### imu.csv
 ```
 timestamp_ns,gx,gy,gz,ax,ay,az

@@ -1,0 +1,338 @@
+---
+week: 13
+title: 칼만 필터에서 오차 상태 칼만 필터(ESKF)로
+summary: 선형 칼만 필터의 예측·갱신에서 출발해, 회전이 섞인 상태를 매니폴드 위 명목 상태와 작은 오차 벡터로 나눠 다루는 ESKF를 IMU 예측과 위치 갱신으로 구현한다
+prereq: [w07b, w09]
+la_box: [공분산 행렬과 가우시안, 오차 상태의 매니폴드 표현]
+tasks: [eskfPredict, eskfUpdate]
+read_only: []
+deliverables: []
+jetbot: false
+units: 1.5
+sessions:
+  - { id: s1, device: phone, title: "개념: 칼만 필터의 예측과 갱신, EKF" }
+  - { id: s2, device: phone, title: "개념: 왜 오차 상태인가, 명목 적분, F와 Q" }
+  - { id: s10, device: phone, title: "개념: 위치 갱신, 주입, 조셉 형태" }
+  - { id: s3, device: phone, title: "LA 박스: 공분산과 가우시안, 오차 상태" }
+  - { id: s4, device: pad, title: "손으로 1차원 KF, F의 δv행, 이득의 극한" }
+  - { id: s5, device: pc, title: "과제: eskfPredict 구현" }
+  - { id: s6, device: pc, title: "과제: eskfPredict 디버그·테스트 통과" }
+  - { id: s7, device: pc, title: "과제: eskfUpdate 구현" }
+  - { id: s8, device: pc, title: "과제: eskfUpdate 디버그·테스트 통과" }
+  - { id: s9, device: phone, title: "체크 질문" }
+---
+
+## 개념
+
+이번 주를 마치면 IMU로 자세를 빠르게 예측하고, 가끔 들어오는 위치 측정으로 그 예측을 바로잡는 필터를 직접 짤 수 있다. VIO(시각-관성 오도메트리)와 FAST-LIO 같은 라이다-관성 시스템이 쓰는 오차 상태 칼만 필터(ESKF, error-state Kalman filter)가 목표다. 7주차 최적화가 "모든 측정을 한꺼번에" 푼다면, 필터는 "측정이 올 때마다 하나씩" 고친다.
+
+### 칼만 필터: 예측과 갱신
+
+칼만 필터(Kalman filter)는 상태를 평균 $x$와 공분산 $P$인 가우시안으로 들고 다닌다. $P$는 "지금 추정을 얼마나 못 믿나"다(LA 박스). 매 단계는 두 동작의 반복이다.
+
+**예측(predict).** 움직임 모델 $x' = F x + u$로 평균을 옮기고, 불확실성도 같이 옮긴 뒤 과정 잡음 $Q$를 더한다. 움직이는 동안 모르는 것이 늘어나므로 $P$는 커진다.
+
+$$
+\begin{aligned}
+x &\leftarrow F x + u \\
+P &\leftarrow F P F^\top + Q
+\end{aligned}
+$$
+
+**갱신(update).** 측정 $z = Hx + $잡음(공분산 $R_m$)이 오면, 예측한 측정 $Hx$와의 차이 $y = z - Hx$(혁신, innovation)만큼 상태를 당긴다. 얼마나 당길지가 칼만 이득(Kalman gain) $K$다.
+
+$$
+\begin{aligned}
+S &= H P H^\top + R_m \\
+K &= P H^\top S^{-1} \\
+x &\leftarrow x + K y \\
+P &\leftarrow (I - K H) P
+\end{aligned}
+$$
+
+### 칼만 이득의 직관
+
+상태도 측정도 숫자 하나인 경우($H = 1$)를 보자. 이득은 $K = P / (P + R_m)$다. 예측이 불확실할수록($P$가 클수록) 측정을 더 믿고, 측정이 시끄러울수록($R_m$이 클수록) 예측을 더 믿는다.
+
+예: 예측 $x = 0$, $P = 4$에 측정 $z = 2$, $R_m = 1$이 오면 $K = 0.8$이다. 새 추정은 $x = 1.6$, $P = 0.8$이다. 측정 하나로 분산이 4에서 0.8로 줄었다. 이 숫자는 `eskfUpdate`의 첫 테스트와 같다.
+
+갱신 뒤 분산은 $1/P' = 1/P + 1/R_m$으로도 쓸 수 있다. 9주차의 정보(information, 공분산의 역)가 측정마다 더해지는 것이다.
+
+### EKF: 비선형이면 야코비안으로
+
+실제 움직임과 측정은 비선형이다: $x' = f(x, u)$, $z = h(x)$. 확장 칼만 필터(EKF, extended Kalman filter)는 평균은 $f$, $h$로 그대로 옮기고, 공분산을 옮길 때만 지금 추정에서 구한 야코비안 $F = \partial f / \partial x$, $H = \partial h / \partial x$를 쓴다. 7주차 GN이 비용을 1차 테일러로 근사한 것과 같은 생각이다.
+
+<SessionBreak id="s1" />
+
+### 왜 오차 상태인가
+
+IMU로 자세를 추적하려면 상태에 회전 $R$이 들어간다. 그런데 7b에서 봤듯 회전은 매니폴드라 $x + Ky$처럼 벡터로 더할 수 없다. 쿼터니언이나 오일러 각을 상태로 쓰면 크기 제약이나 짐벌 락 문제가 따라온다.
+
+ESKF는 상태를 둘로 나눈다.
+
+- **명목 상태(nominal state)** $\hat{x} = (\hat{R}, \hat{p}, \hat{v})$: 매니폴드 위의 "지금 최선의 추정". 공분산 없이 IMU 측정을 그대로 믿고 적분한다.
+- **오차 상태(error state)** $\delta x = [\delta\theta, \delta p, \delta v] \in \mathbb{R}^9$: 참값과 명목 상태의 작은 차이. 칼만 필터는 이 벡터의 공분산 $P$($9 \times 9$)만 다룬다.
+
+오차 상태가 유리한 이유는 셋이다. 오차는 항상 작아서 1차 근사(선형화)가 잘 맞는다. 회전 오차 $\delta\theta$는 3차원 벡터라 제약도 특이점도 없다.
+
+셋째로, 명목 상태는 IMU 속도(수백&nbsp;Hz)로 단순 적분만 하고, 무거운 행렬 계산은 오차 쪽에서만 한다.
+
+### 이 과정의 규약: 왼쪽 오차
+
+회전 오차는 7주차와 같은 좌섭동(left perturbation)으로 정의한다. 회전은 몸체에서 월드로 가는 $R = R_{wb}$다.
+
+$$
+R_{\text{참}} = \mathrm{Exp}(\delta\theta)\, \hat{R}
+$$
+
+위치·속도는 그냥 $p_{\text{참}} = \hat{p} + \delta p$, $v_{\text{참}} = \hat{v} + \delta v$다. Solà의 ESKF 노트처럼 많은 문헌은 $\hat{R}\,\mathrm{Exp}(\delta\theta)$(우섭동, 몸체 좌표의 국소 오차)를 쓴다. 그러면 아래 $F$의 블록이 달라지므로, 코드를 옮겨 올 때 규약부터 확인한다.
+
+### 명목 상태 적분
+
+자이로 측정 $\omega$(몸체 좌표 각속도)와 가속도계 측정 $f$(비력, specific force)를 받는다. 비력은 중력을 뺀 가속도를 몸체 좌표로 잰 값이라, 가만히 있으면 위쪽으로 $9.81$이 나온다. 월드 가속도는 $a = \hat{R} f + g$다($g = [0, 0, -9.81]$).
+
+$$
+\begin{aligned}
+\hat{R} &\leftarrow \hat{R}\, \mathrm{Exp}(\omega\, \Delta t) \\
+\hat{p} &\leftarrow \hat{p} + \hat{v}\,\Delta t + \tfrac{1}{2} a\, \Delta t^2 \\
+\hat{v} &\leftarrow \hat{v} + a\, \Delta t
+\end{aligned}
+$$
+
+각속도는 몸체 좌표라 오른쪽에 곱한다. 오차의 규약(왼쪽)과 적분의 곱셈 방향(오른쪽)은 별개다.
+
+### 오차 전이 F
+
+참 상태와 명목 상태를 같은 식으로 한 걸음 적분하고, 둘의 차이를 1차까지 보면 $\delta x' = F\,\delta x$가 나온다. 결과는 $9 \times 9$ 단위 행렬에 세 블록을 더한 것이다($W = [\hat{R} f]_\times$, $\hat{R}$은 적분 전 값).
+
+| 행 (바뀌는 오차) | 더하는 항 |
+| --- | --- |
+| $\delta p$ | $-\tfrac{1}{2} W \Delta t^2 \delta\theta + \Delta t\, \delta v$ |
+| $\delta v$ | $-W \Delta t\, \delta\theta$ |
+| $\delta\theta$ | 없음 ($F_{\theta\theta} = I$) |
+
+**$\delta v$행.** 회전이 $\delta\theta$만큼 틀리면 비력을 월드로 돌린 방향도 틀린다.
+
+$$
+\begin{aligned}
+\mathrm{Exp}(\delta\theta)\hat{R}f &\approx \hat{R}f + \delta\theta \times \hat{R}f \\
+&= \hat{R}f - W\delta\theta
+\end{aligned}
+$$
+
+그래서 속도 오차에 $-W\delta\theta\,\Delta t$가 샌다. 위치는 같은 가속도 오차를 $\tfrac{1}{2}\Delta t^2$만큼 받는다.
+
+**$\delta\theta$행이 그대로인 이유.** 참 회전을 적분하면 $\mathrm{Exp}(\delta\theta)\hat{R}\,\mathrm{Exp}(\omega\Delta t) = \mathrm{Exp}(\delta\theta)\hat{R}'$다. 왼쪽 오차가 그대로 남으므로 $\delta\theta' = \delta\theta$이고, 각속도가 식에서 빠진다. 우섭동을 쓰면 여기에 $\mathrm{Exp}(-\omega\Delta t)$가 붙는다.
+
+### 과정 잡음 Q
+
+자이로 잡음(표준편차 $\sigma_g$)은 한 걸음 동안 회전 오차를 $\sigma_g \Delta t$만큼 흔들고, 가속도계 잡음 $\sigma_a$는 속도 오차를 $\sigma_a \Delta t$만큼 흔든다. 잡음은 몸체 좌표에서 생기므로, 월드 좌표의 오차로 옮기려면 $\hat{R}$을 곱한다. 잡음이 모든 방향으로 같으면(등방) $\hat{R}\,\sigma^2 I\,\hat{R}^\top = \sigma^2 I$라 공분산이 그대로이므로 이렇게 둔다.
+
+$$
+Q = \mathrm{diag}\big((\sigma_g \Delta t)^2 I,\ 0,\ (\sigma_a \Delta t)^2 I\big)
+$$
+
+위치에 직접 들어가는 잡음은 이 과정에서는 0으로 둔다. 실제 시스템은 자이로·가속도계 바이어스도 오차 상태에 넣어 15차원으로 쓴다(14주차).
+
+<SessionBreak id="s2" />
+
+### 위치 측정으로 갱신
+
+여기서는 위치를 직접 재는 센서(모션 캡처, GPS 같은)를 가정한다. 측정 $z = p + $잡음이고, 오차 상태에 대한 야코비안은 위치 칸만 단위 행렬이다.
+
+$$
+H = [\,0 \;\; I \;\; 0\,] \quad (3 \times 9)
+$$
+
+칼만 갱신으로 $\delta x = K(z - \hat{p})$를 구하면, 이것을 명목 상태에 **주입(inject)** 한다. 회전은 규약대로 왼쪽에 곱한다.
+
+$$
+\begin{aligned}
+\hat{R} &\leftarrow \mathrm{Exp}(\delta\theta)\, \hat{R} \\
+\hat{p} &\leftarrow \hat{p} + \delta p \\
+\hat{v} &\leftarrow \hat{v} + \delta v
+\end{aligned}
+$$
+
+주입했으니 오차의 평균은 다시 0이다. 엄밀히는 오차를 0으로 되돌리면서 공분산에 리셋 야코비안 $G \approx I - \tfrac{1}{2}[\delta\theta]_\times$를 곱해야 한다. $\delta\theta$가 작아 $G \approx I$로 두는 구현이 많고, 이 과정도 그렇게 한다.
+
+공분산은 조셉 형태(Joseph form)로 갱신한다. 짧은 형태 $(I - KH)P$와 수학적으로 같지만, 반올림 오차가 쌓여도 대칭·양의 정부호가 유지된다. 극단적으로 $P$가 측정 잡음 $R_m$보다 아주 크면($P \gg R_m$), 한 번 갱신만으로도 짧은 형태는 $1 - K$가 반올림으로 0이 되어 분산이 0으로 나온다. 조셉 형태는 $K R_m K^\top$ 항 덕에 분산이 $R_m$ 근처로 남는다.
+
+$$
+P \leftarrow (I - KH) P (I - KH)^\top + K R_m K^\top
+$$
+
+### 더 나아가면
+
+회전과 위치가 $P$에서 상관을 가지면(예측 중에 $F$가 섞어 둔다), 위치 측정만으로도 회전이 고쳐진다. 위치만 재는데 기울기까지 바로잡히는 것이 필터의 힘이다.
+
+VIO는 측정이 위치가 아니라 특징점의 재투영 오차(8a)다. FAST-LIO는 라이다 점-평면 오차(15주차)를 측정으로 쓰고, 갱신을 GN처럼 여러 번 반복하는 반복 ESKF(iEKF, iterated EKF)를 쓴다. 두 경우 모두 예측은 이번 주의 IMU 명목 적분과 $F$, $Q$ 전파 그대로다.
+
+(ROS 선택 트랙) JetBot에 휠 엔코더와 IMU가 있으면, 휠 속도를 측정으로 하는 같은 구조의 퓨전을 해 볼 수 있다. 기본 일정에는 넣지 않는다.
+
+<SessionBreak id="s10" />
+
+<LABox term="공분산 행렬과 가우시안">
+  **정의:** 확률 벡터 $x$의 공분산은 $P = \mathbb{E}[(x - \mu)(x - \mu)^\top]$다. 대각은 성분마다의 분산, 비대각은 두 성분이 함께 틀리는 정도(상관)다. 대칭이고 양의 준정부호다.
+
+  **기하학적 의미:** 가우시안 $\mathcal{N}(\mu, P)$의 등확률선은 타원(체)이고, $P$의 고유벡터가 축 방향, 고유값의 제곱근이 축 길이다. 선형 변환 $y = Fx$를 하면 공분산은 $F P F^\top$이 된다. 타원이 같이 늘고 돌아가는 것이다.
+
+  **SLAM에서:** 칼만 필터의 $P$, BA·포즈 그래프 뒤 $J^\top \Omega J$의 역(9주차)이 모두 이것이다. 필터에서는 비대각 항이 중요하다. 위치와 회전의 상관이 있어야 위치 측정이 회전을 고친다.
+
+  **이전 레슨:** [7a 최소제곱 = 가우시안 최대 우도](../w07a-gauss-newton/), [9 정보 행렬](../w09-pose-graph-loop-closure/)
+</LABox>
+
+<LABox term="오차 상태의 매니폴드 표현">
+  **정의:** 매니폴드 위의 값(회전)을 "기준점 $\hat{R}$ + 그 근처의 작은 벡터 $\delta\theta$"로 나타내는 것. 이 과정은 $R = \mathrm{Exp}(\delta\theta)\hat{R}$(왼쪽)을 쓴다.
+
+  **기하학적 의미:** 휘어 있는 회전 공간을 $\hat{R}$ 근처에서 평평한 $\mathbb{R}^3$으로 펼쳐 본다. 가우시안과 공분산은 이 평평한 공간에서 정의되므로, 회전의 불확실성도 $3 \times 3$ 공분산으로 말할 수 있다.
+
+  **SLAM에서:** 7b의 $\boxplus$와 같은 생각이다. 최적화는 $\delta$를 풀어 $x \boxplus \delta$로 옮기고, ESKF는 $\delta x$의 평균을 구해 명목 상태에 주입한다. 주입 뒤 오차의 평균은 0으로 돌아간다.
+
+  **이전 레슨:** [7b 매니폴드 업데이트와 섭동 모델](../w07b-manifold-perturbation/)
+</LABox>
+
+<SessionBreak id="s3" />
+
+## 과제
+
+### 손으로 1차원 KF, F의 δv행, 이득의 극한
+
+태블릿에 직접 쓴다. 4번에는 회전을 지나 섭동을 옮기는 항등식이 필요하다: 회전 $R$과 벡터 $\psi$에 대해 $\mathrm{Exp}(\psi)\,R = R\,\mathrm{Exp}(R^\top \psi)$다(같은 회전축을 $R$의 앞에서 보느냐 뒤에서 보느냐의 차이).
+
+1. 1차원 칼만 필터. $x = 0$, $P = 1$에서 시작한다. 예측은 $x \leftarrow x + 1$, $P \leftarrow P + 0.5$다. 측정 $z = 1.2$, $R_m = 0.5$로 갱신하면 $K$, $x$, $P$는? 같은 측정을 (예측 없이) 한 번 더 넣으면?
+2. 이득의 극한. $R_m \to 0$이면 $K$와 갱신 뒤 $x$는? $R_m \to \infty$이면? 각각 무엇을 믿는 것인지 한 줄로 쓴다.
+3. $F$의 $\delta v$행. $\mathrm{Exp}(\delta\theta) \approx I + [\delta\theta]_\times$를 써서, 참 속도와 명목 속도를 한 걸음 적분한 차이가 $\delta v - [\hat{R}f]_\times \delta\theta\,\Delta t$임을 보인다.
+4. $F_{\theta\theta} = I$. 왼쪽 오차로 쓰면 각속도가 사라지는 것을 한 줄로 보이고, 오른쪽 오차($\hat{R}\,\mathrm{Exp}(\delta\theta)$)였다면 무엇이 붙는지 쓴다.
+5. 가만히 있는 IMU($\hat{R} = I$, $f = [0, 0, 9.81]$)에서 $W = [f]_\times$를 적고, 회전 오차 중 어느 성분이 속도 오차로 새는지 본다. $z$축 회전(요, yaw) 오차는 왜 새지 않나?
+
+<SessionBreak id="s4" />
+
+<TaskCard fn="eskfPredict">
+  상태 `s`(명목 `R`, `p`, `v`와 9×9 공분산 `P`), IMU 한 번 `imu`(`gyro`, `accel`, `dt`), 잡음 설정 `noise`(`gyro`, `accel` 표준편차와 `gravity`)를 받아 새 상태를 돌려준다. 명목 상태는 개념 절의 적분식, 공분산은 $F P F^\top + Q$이고 끝에 대칭을 맞춘다. `dt` ≤ 0, NaN·무한대(잡음 표준편차 포함), 9×9가 아닌 `P`, 음수 잡음이면 예외를 던진다. 입력은 바꾸지 않는다.
+
+  <Hint level={1}>
+    명목 상태와 공분산은 따로 계산한다. $F$에 쓰는 $\hat{R}$은 **적분 전** 값이다. 9×9 행렬 곱은 ml-matrix로 한다.
+
+    ```ts
+    import { skew } from "@core/prev/w01";
+    import { expSO3 } from "@core/prev/w03";
+    import { Matrix } from "ml-matrix";
+    ```
+  </Hint>
+
+  <Hint level={2}>
+    오차 순서는 $[\delta\theta, \delta p, \delta v]$라 행·열 시작 번호가 0, 3, 6이다. $F$는 `Matrix.eye(9, 9)`에서 시작해 세 블록을 **더한다**: (3, 0)에 $-\tfrac{1}{2}W\Delta t^2$, (3, 6)에 $\Delta t\, I$, (6, 0)에 $-W\Delta t$. $W$는 `skew`($\hat{R}f$)다.
+
+    $Q$는 대각만 있다: 0–2번에 $(\sigma_g\Delta t)^2$, 6–8번에 $(\sigma_a\Delta t)^2$. 마지막에 $(P + P^\top)/2$로 대칭을 맞춰 2차원 배열로 돌려준다.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    검사: dt > 0, 상태·측정 유한,
+      P 9×9, 잡음은 유한하고 ≥ 0
+    Rf ← R·accel
+    a ← Rf + gravity
+    R' ← R·expSO3(gyro·dt)
+    p' ← p + v·dt + ½·a·dt²
+    v' ← v + a·dt
+    W ← skew(Rf)
+    F ← I(9)
+    F[3..5][0..2] += −½·W·dt²
+    F[3..5][6..8] += I·dt
+    F[6..8][0..2] += −W·dt
+    Q ← 0(9)
+    Q 대각 0..2 ← (σg·dt)²
+    Q 대각 6..8 ← (σa·dt)²
+    P' ← F·P·Fᵀ + Q
+    P' ← (P' + P'ᵀ)/2
+    반환 { R', p', v', P' }
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s5" />
+
+### eskfPredict 테스트가 안 맞을 때
+
+- "유한 차분 F" 테스트만 실패하면 $F$의 블록 위치·부호를 본다. 이 테스트는 명목 상태를 오차만큼 흔들어(회전은 **왼쪽**에 $\mathrm{Exp}(\delta\theta)$를 곱한다) 두 번 적분하고, 그 차이로 $F$를 따로 만든다. $W$에 적분 **뒤** $\hat{R}$을 썼거나 $\tfrac{1}{2}\Delta t^2$ 블록을 빠뜨리면 여기서 걸린다. 명목 적분에서 각속도를 왼쪽에 곱해도($\mathrm{Exp}(\omega\Delta t)\hat{R}$) 흔든 회전 오차가 그대로 남지 않아 여기서 걸린다.
+- "가만히 있으면" 테스트에서 명목 상태가 움직이면 중력 부호를 본다. 비력 $+9.81$과 $g = -9.81$이 상쇄되어야 한다.
+- "기울어 있으면" 테스트만 실패하면 비력을 월드로 돌리지 않은 것이다($\hat{R}f$ 대신 $f$). 이 테스트는 각속도가 0이라 회전 곱셈 방향은 잡지 못한다.
+- "비스듬한 비력과 각속도를 함께 주면" 테스트가 실패하면 둘 중 하나다. 비력을 적분 **뒤** 자세로 돌렸거나($\hat{R}'f$), 각속도를 왼쪽에 곱했다($\mathrm{Exp}(\omega\Delta t)\hat{R}$). 이 테스트는 시작 자세가 단위 행렬이 아니라 두 실수가 다 드러난다.
+- "일정한 가속도와 각속도" 테스트만 실패하면 $\hat{p}$ 적분의 $\tfrac{1}{2}a\Delta t^2$ 항이나, $\hat{v}$보다 $\hat{p}$를 먼저(갱신 전 $\hat{v}$로) 계산했는지 본다.
+- "입력을 바꾸지 않는다"가 실패하면 `s.P`를 제자리에서 바꾼 것이다. 복사해서 쓴다.
+
+<SessionBreak id="s6" />
+
+<TaskCard fn="eskfUpdate">
+  상태 `s`, 위치 측정 `z`, 측정 공분산 `Rm`(3×3)을 받아 갱신한 상태를 돌려준다. $H = [0\ I\ 0]$, 칼만 이득으로 구한 $\delta x$를 명목 상태에 주입하고(회전은 왼쪽), 공분산은 조셉 형태로 갱신한 뒤 대칭을 맞춘다. `z`나 상태에 NaN이 있거나, `Rm`이 3×3 대칭(허용 오차 $10^{-9}$) 양의 정부호가 아니면 예외를 던진다.
+
+  <Hint level={1}>
+    혁신은 $y = z - \hat{p}$(3개)다. $K$는 9×3이고 $\delta x = Ky$는 9개다. 회전 주입은 `expSO3`($\delta\theta$)를 $\hat{R}$의 **왼쪽**에 곱한다.
+
+    ```ts
+    import { expSO3 } from "@core/prev/w03";
+    import { CholeskyDecomposition, Matrix,
+      inverse } from "ml-matrix";
+    ```
+  </Hint>
+
+  <Hint level={2}>
+    `Rm`의 양의 정부호 검사는 `CholeskyDecomposition`을 만들어 `isPositiveDefinite()`로 한다. 대칭 검사를 통과하면 $(R_m + R_m^\top)/2$로 맞춰 넣는다.
+
+    조셉 형태는 $A = I - KH$를 만들고 $A P A^\top + K R_m K^\top$을 계산한다. 보통 크기의 $P$에서는 최적 이득일 때 $(I - KH)P$와 같아야 하므로, 두 값을 비교해 보면 디버깅에 좋다($P \gg R_m$이면 개념 절처럼 짧은 형태 쪽이 반올림으로 무너진다).
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    검사: 상태·z 유한, Rm 3×3,
+      대칭(1e-9), 양의 정부호
+    H ← 0(3×9); H[i][3+i] ← 1
+    S ← H·P·Hᵀ + Rm
+    K ← P·Hᵀ·S⁻¹
+    y ← z − p
+    dx ← K·y   (9개)
+    R' ← expSO3(dx[0..2])·R
+    p' ← p + dx[3..5]
+    v' ← v + dx[6..8]
+    A ← I(9) − K·H
+    P' ← A·P·Aᵀ + K·Rm·Kᵀ
+    P' ← (P' + P'ᵀ)/2
+    반환 { R', p', v', P' }
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s7" />
+
+### eskfUpdate 테스트가 안 맞을 때
+
+- "회전 오차는 왼쪽에서 주입한다" 테스트만 실패하면 $\hat{R}\,\mathrm{Exp}(\delta\theta)$로 오른쪽에 곱한 것이다. 이 테스트는 일부러 $\hat{R} \neq I$로 두어 두 곱셈 순서가 갈리게 했다.
+- "무작위 P에서 (I − KH)·P와 같다" 테스트가 실패하면 $K R_m K^\top$ 항을 빠뜨렸거나 $A^\top$ 대신 $A$를 곱한 것이다. 이 테스트의 보통 크기 $P$에서는 두 형태가 $10^{-10}$ 안에서 같아야 한다.
+- "P가 아주 크고 측정 잡음이 아주 작아도" 테스트만 실패하면 짧은 형태 $(I - KH)P$를 쓴 것이다. $K$가 반올림으로 정확히 1이 되어 $1 - K = 0$, 분산이 0으로 나온다. 조셉 형태로 바꾸면 $K R_m K^\top$ 항이 $R_m$을 남긴다.
+- "같은 측정을 반복하면" 테스트가 실패하면 갱신 뒤 공분산이 제대로 줄지 않는 것이다. 위치 분산이 $1/P = 1/P_0 + n/r$로 줄어야 한다. 9주차의 정보 누적과 같은 식이다.
+- "위치–속도 상관" 테스트만 실패하면 $K$를 위치 칸(3~5)에만 계산한 것이다. $K = PH^\top S^{-1}$은 9×3 전체를 쓴다.
+
+<SessionBreak id="s8" />
+
+## 체크 질문
+
+<CheckQuestion q="칼만 필터의 예측과 갱신에서 공분산 P는 각각 어떻게 바뀌나? 칼만 이득은 무엇을 저울질하나?" kind="개념">
+  예측은 $P \leftarrow FPF^\top + Q$로, 움직임이 불확실성을 옮기고 과정 잡음이 더해져 $P$가 커진다. 갱신은 $P \leftarrow (I - KH)P$로, 측정이 정보를 더해 $P$가 작아진다.
+
+  칼만 이득 $K = PH^\top(HPH^\top + R_m)^{-1}$은 예측의 불확실성 $P$와 측정의 불확실성 $R_m$을 저울질한다. 예측이 불확실하면 측정 쪽으로, 측정이 시끄러우면 예측 쪽으로 기운다.
+</CheckQuestion>
+
+<CheckQuestion q="IMU 기반 필터는 왜 회전을 상태에 그대로 넣는 EKF 대신 오차 상태(ESKF)로 푸나?" kind="왜">
+  회전은 매니폴드라 상태 벡터에 그대로 더할 수 없다. 쿼터니언은 크기 제약이 생겨 공분산이 특이해지고, 오일러 각은 짐벌 락이 있다. ESKF는 회전을 명목 상태에 두고, 칼만 필터는 작은 회전 오차 $\delta\theta \in \mathbb{R}^3$만 다룬다.
+
+  오차는 항상 0 근처라 선형화가 잘 맞고, 제약·특이점이 없다. 명목 상태는 IMU 속도로 단순 적분만 하고, 무거운 공분산 계산은 오차 쪽에서 한다. 갱신 뒤에는 오차를 주입하고 0으로 되돌린다.
+</CheckQuestion>
+
+<CheckQuestion q="VIO 필터를 돌렸더니 몇 분 뒤 공분산 P가 대칭이 아니게 되고 음수 고유값이 나와 발산했다. 원인과 대처는?" kind="실무">
+  짧은 형태 $(I - KH)P$를 쓰면 반올림 오차가 쌓여 대칭과 양의 정부호가 깨질 수 있다. 측정이 정확해 $P$가 아주 작아질 때나 float32를 쓸 때 특히 잘 생긴다.
+
+  대처: 조셉 형태 $(I - KH)P(I - KH)^\top + KR_mK^\top$로 바꾸고, 매 단계 $(P + P^\top)/2$로 대칭을 맞춘다. 필요하면 대각에 아주 작은 값을 더한다. 측정 잡음 $R_m$을 너무 작게(과신) 잡지 않았는지, $F$·$Q$의 규약(왼쪽/오른쪽 오차)이 코드와 맞는지도 확인한다.
+</CheckQuestion>
+
+<SessionBreak id="s9" />

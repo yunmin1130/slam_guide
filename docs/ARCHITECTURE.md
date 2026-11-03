@@ -51,7 +51,8 @@ slam_guide/
 │   │   │   └── ui/           # 슬라이더, 토글 등 공용 UI
 │   │   ├── data/
 │   │   │   ├── test-results.json  # CI가 생성 (mine 테스트 결과)
-│   │   │   └── mine-syntax.json   # CI가 생성 (mine 구문·import 검사 결과)
+│   │   │   ├── mine-syntax.json   # CI가 생성 (mine 구문·import 검사 결과)
+│   │   │   └── cpp-results/       # 12a 결과 쇼케이스 JSON (datasets/cpp_result.py, DATA §2)
 │   │   ├── lib/
 │   │   │   ├── storage.ts    # 저장 계층 (유일한 저장 진입점)
 │   │   │   ├── impl.ts       # mine/reference 선택 로직 (유일한 분기점)
@@ -63,7 +64,7 @@ slam_guide/
 │   ├── mine/                 # ✍️ 내가 직접 구현 (AI는 시그니처·힌트·TODO만)
 │   ├── reference/            # 정답 구현 (AI 작성, 테스트로 검증)
 │   └── tests/                # 테스트 (mine, reference 모두 대상)
-├── cpp/                      # C++ 미니 VO (12주차~, 별도 CMake 프로젝트, 아직 없음)
+├── cpp/                      # C++ 미니 VO (12주차~, 사용자가 만드는 별도 CMake 프로젝트, CI는 cpp.yml, 아직 없음)
 ├── datasets/                 # 변환·캘리브레이션·매칭·트랙 스크립트 (PC Python 전용)
 ├── scripts/                  # check-mine-syntax.mjs, qa.mjs (자동 QA)
 ├── .claude/agents/           # 레슨 검토 에이전트 정의 (lesson-learner, lesson-visual-qa)

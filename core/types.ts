@@ -333,3 +333,118 @@ export interface RpeResult {
   /** 비교한 쌍의 수 */
   readonly count: number;
 }
+
+// ---- 13주차: 오차 상태 칼만 필터 ----
+
+/**
+ * ESKF 상태 (13주차). 명목 상태(R, p, v)와 오차 상태 공분산 P.
+ * R = R_wb (몸체 → 월드), p·v 는 월드 좌표.
+ * 오차 상태 δx = [δθ, δp, δv] (9개, 이 순서). 회전 오차는 좌섭동: 참 R = Exp(δθ)·R.
+ */
+export interface EskfState {
+  readonly R: Mat3;
+  readonly p: Vec3;
+  readonly v: Vec3;
+  /** 9×9 공분산 */
+  readonly P: MatN;
+}
+
+/** IMU 한 번의 측정과 그 측정을 쓸 시간 간격 (13주차) */
+export interface ImuStep {
+  /** 자이로 (rad/s, 몸체 좌표) */
+  readonly gyro: Vec3;
+  /** 가속도계 비력 (m/s², 몸체 좌표, 정지 상태면 중력 반대 방향 +9.81) */
+  readonly accel: Vec3;
+  /** 시간 간격 (초, > 0) */
+  readonly dt: number;
+}
+
+/** ESKF 예측 설정 (13주차) */
+export interface EskfNoise {
+  /** 자이로 잡음 표준편차 (rad/s) */
+  readonly gyro: number;
+  /** 가속도계 잡음 표준편차 (m/s²) */
+  readonly accel: number;
+  /** 월드 좌표 중력 (예: [0, 0, −9.81]) */
+  readonly gravity: Vec3;
+}
+
+// ---- 14주차: IMU 적분과 사전적분 ----
+
+/** 항법 상태 (14주차): R_wb, 월드 위치·속도 */
+export interface NavState {
+  readonly R: Mat3;
+  readonly p: Vec3;
+  readonly v: Vec3;
+}
+
+/** 시각이 붙은 IMU 측정 (14주차) */
+export interface ImuSample {
+  /** 시각 (초) */
+  readonly t: number;
+  readonly gyro: Vec3;
+  readonly accel: Vec3;
+}
+
+export interface IntegrateOptions {
+  readonly gravity: Vec3;
+  /** euler: 구간 시작 측정만 / midpoint: 구간 양 끝 측정의 평균 */
+  readonly method: "euler" | "midpoint";
+}
+
+/** IMU 바이어스 (14주차): 측정 = 참값 + 바이어스 */
+export interface ImuBias {
+  readonly gyro: Vec3;
+  readonly accel: Vec3;
+}
+
+/** 사전적분 결과 (14주차): 시각 i → j 사이 몸체 i 좌표의 상대 움직임 */
+export interface Preintegrated {
+  readonly dR: Mat3;
+  readonly dv: Vec3;
+  readonly dp: Vec3;
+  /** 전체 시간 t_j − t_i */
+  readonly dt: number;
+}
+
+/** 바이어스 1차 보정 야코비안 (14주차, 3×3 각각). dR 은 우섭동: dR(b̄+δb) ≈ dR(b̄)·Exp(dR_dbg·δbg) */
+export interface PreintJacobians {
+  readonly dR_dbg: MatN;
+  readonly dv_dbg: MatN;
+  readonly dv_dba: MatN;
+  readonly dp_dbg: MatN;
+  readonly dp_dba: MatN;
+}
+
+// ---- 15주차: 라이다 ICP ----
+
+/** 최근접 이웃 하나 (15주차) */
+export interface Neighbor {
+  /** dst 안의 번호 */
+  readonly index: number;
+  /** 유클리드 거리 */
+  readonly dist: number;
+}
+
+export interface IcpOptions {
+  readonly maxIterations: number;
+  /** RMSE 변화가 이보다 작으면 수렴 */
+  readonly tolerance: number;
+  /** 이보다 먼 대응은 버린다 (이상치·겹치지 않는 부분) */
+  readonly maxDistance: number;
+  /** 시작 변환 (없으면 단위) */
+  readonly init?: SE3;
+}
+
+export interface IcpResult {
+  /** src → dst 변환: dst ≈ R·src + t */
+  readonly T: SE3;
+  /** 마지막 대응들의 거리 RMSE (변환 적용 뒤) */
+  readonly rmse: number;
+  /** 마지막 반복에서 쓴 대응 수 */
+  readonly pairs: number;
+  readonly iterations: number;
+  readonly converged: boolean;
+  /** 반복마다 RMSE */
+  readonly history: readonly number[];
+}

@@ -1,0 +1,302 @@
+---
+week: 12
+part: b
+title: "(선택) Ceres로 local BA: C++ VO에 번들 조정 붙이기"
+summary: (선택 레슨) 12a C++ VO가 BA 없이 끊긴 지점을 Ceres local BA로 끝까지 잇고, 자동 미분 재투영 잔차·쿼터니언 매니폴드·Huber 손실·게이지 고정·Schur 솔버가 7~8주차의 어떤 개념인지 연결하고 BA 켬/끔의 ATE를 비교한다
+prereq: [w12a, w08b]
+la_box: [자동 미분]
+tasks: []
+read_only: []
+deliverables:
+  - "Ceres local BA를 붙인 C++ VO와 BA 켬/끔 ATE 비교 (fr1/xyz, fr3/long_office)"
+  - "솔버 비교 메모 (DENSE_SCHUR / SPARSE_SCHUR, 키프레임당 시간)"
+jetbot: false
+units: 2
+sessions:
+  - { id: s1, device: phone, title: "개념: Ceres 문제의 구성 요소" }
+  - { id: s2, device: phone, title: "개념: 매니폴드와 7b 섭동, 게이지 + LA 박스" }
+  - { id: s3, device: pc, title: "실습: Ceres 설치 확인, 곡선 맞추기 예제" }
+  - { id: s4, device: pc, title: "구현: 재투영 잔차 펑터" }
+  - { id: s5, device: pc, title: "디버그: 잔차·야코비안을 8a와 대조" }
+  - { id: s6, device: pc, title: "구현: 창 안 키프레임과 점으로 문제 만들기" }
+  - { id: s7, device: pc, title: "구현: 고정, 로버스트 손실, 솔버 옵션" }
+  - { id: s8, device: pc, title: "구현: VO에 붙이고 결과 되돌려 쓰기" }
+  - { id: s9, device: pc, title: "디버그: 비용 감소, 자세 반영 확인" }
+  - { id: s10, device: pc, title: "평가: BA 켬/끔 evo 비교" }
+  - { id: s11, device: pc, title: "평가: 솔버 비교, 시간 측정" }
+  - { id: s12, device: pc, title: "정리: 쇼케이스 JSON 갱신, 메모" }
+  - { id: s13, device: phone, title: "체크 질문" }
+---
+
+## 개념
+
+이 레슨은 12a에서 BA 없이 끊긴 지점을 끝까지 잇는 레슨이다. 커리큘럼상 **선택**이지만, 12a의 "TUM 시퀀스 끝까지 추적"은 여기서(또는 12a의 선택 접기인 Eigen local BA로) 완성된다. 마치면 내 C++ VO에 Ceres(구글의 비선형 최소제곱 라이브러리) local BA가 붙고, 7~8주차에 손으로 짠 최적화의 각 부품이 실무 라이브러리에서 무엇으로 불리는지 말할 수 있다.
+
+### Ceres 문제의 구성 요소
+
+Ceres 문제(`ceres::Problem`)는 세 가지로 만든다.
+
+- **파라미터 블록(parameter block):** 고칠 변수 묶음. 이 레슨에서는 키프레임 자세 하나를 회전 블록 `q`(쿼터니언 4개)와 이동 블록 `t`(3개) 둘로 나누고, 맵 포인트 하나(3개)를 블록 하나로 둔다. 8b `smallBA`의 `cameras`, `points`다.
+- **잔차 블록(residual block):** 관측 하나의 오차. 키프레임 $k$가 점 $j$를 본 재투영 오차(2개)이고, 어느 파라미터 블록에 기대는지 함께 등록한다(`AddResidualBlock`). 8a의 재투영 잔차다.
+- **손실 함수(loss function):** 잔차를 그대로 제곱하지 않고 큰 오차를 눌러 주는 것. `ceres::HuberLoss`가 7a의 Huber 커널이다.
+
+`ceres::Solve`는 이것들로 7a의 LM을 돈다. 다른 점은 야코비안을 직접 쓰지 않아도 된다는 것(자동 미분, LA 박스)과, 희소 구조를 알아서 쓴다는 것이다.
+
+### 솔버와 Schur
+
+`Solver::Options`의 `linear_solver_type`이 8b의 정규방정식을 푸는 방법이다.
+
+| 값 | 8b와의 관계 |
+| --- | --- |
+| `DENSE_QR` | 정규방정식 없이 통째로 (작을 때) |
+| `DENSE_SCHUR` | 점을 먼저 소거(Schur 보수, Schur complement), 남은 카메라 블록은 밀집 |
+| `SPARSE_SCHUR` | 점 소거 + 카메라 블록도 희소 |
+
+local BA는 카메라가 몇 개뿐이라 `DENSE_SCHUR`로도 충분하다. `SPARSE_SCHUR`는 희소 행렬 라이브러리(SuiteSparse 등)가 함께 빌드되어 있어야 쓸 수 있으니, 고르기 전에 확인한다(s11).
+
+<SessionBreak id="s1" />
+
+### 매니폴드: 7b 섭동이 Ceres에서는
+
+회전을 쿼터니언 4개로 두면 변수가 4개인데 자유도는 3개다. 그냥 더하면 단위 길이가 깨진다. 7b에서는 $T \leftarrow \mathrm{Exp}(\delta)\,T$처럼 3차원 $\delta$로 고치고 결과를 다시 회전으로 돌려놓았다.
+
+Ceres는 이것을 매니폴드(`ceres::Manifold`)로 받는다. 블록마다 `Plus`(작은 $\delta$를 더하는 법)를 정해 두면, 최적화는 $\delta$ 공간에서 하고 결과는 매니폴드 위에 남는다. Ceres 2.2에서 쓸 것은 이렇다(이름과 템플릿 인자는 설치한 버전의 헤더 `ceres/manifold.h`에서 확인한다).
+
+- `ceres::EigenQuaternionManifold`: Eigen 메모리 순서(`x, y, z, w`)의 쿼터니언 4개용. Eigen `Quaterniond`의 `coeffs().data()`를 그대로 넘길 때 쓴다. **이 레슨은 이것으로 통일한다.**
+- `ceres::QuaternionManifold`: `w, x, y, z` 순서용. 배열을 w 먼저로 둘 때만 쓴다(12a LA 박스).
+- (참고) `ceres::ProductManifold`: 회전과 이동을 한 블록(7개)으로 묶을 때 쓴다. 이 레슨은 `q`, `t`를 따로 두므로 쓰지 않는다.
+
+이 레슨에서 섭동 방향(왼쪽에 곱하나 오른쪽에 곱하나)은 결과에 영향을 주지 않는다. 자동 미분이 매니폴드와 맞춰 야코비안을 계산하기 때문이다.
+
+다만 개념을 연결해 두자면, Ceres 문서의 쿼터니언 `Plus`는 $\delta$로 만든 작은 쿼터니언을 **왼쪽에** 곱하는 것으로 알고 있고, 이는 우리 좌섭동 규약(7b)과 같은 방향이다. 설치한 버전 문서의 식으로 직접 확인한다(검증 안 됨).
+
+### 게이지 고정
+
+단안 BA는 전체를 옮기고 돌리고 키워도 비용이 같다(8b 게이지, 7자유도). 11c `localBA`는 창에서 가장 오래된 키프레임 둘과 창 밖 키프레임을 고정했다. Ceres에서는 그 블록에 `SetParameterBlockConstant`를 부른다.
+
+창 밖 키프레임이 본 관측도 넣되 그 자세는 고정하는 것까지 11c와 같게 한다. 이걸 빼면 점이 창 안의 짧은 기준선만으로 다시 맞춰져 깊이 정보를 잃는다(11c 개념).
+
+<LABox term="자동 미분">
+  **정의:** 함수를 계산하는 코드를 그대로 따라가며, 값과 함께 미분값도 연쇄 법칙으로 같이 계산하는 방법. 수치 미분(7b `numericJacobian`)처럼 근사가 아니고, 손으로 유도한 해석 야코비안(8a)처럼 정확하다.
+
+  **어떻게 하나:** Ceres는 잔차를 펑터(functor: `operator()`를 가진 구조체, 함수처럼 부를 수 있는 객체)로 받고, 그 `operator()`를 템플릿 `T`로 쓰게 한다. 평소에는 `T = double`이고, 미분할 때는 `T = ceres::Jet`(값 $a$와 미분 $b$를 함께 들고 $a + b\varepsilon$, $\varepsilon^2 = 0$으로 계산하는 이원수, dual number)로 다시 실행한다. 곱셈 $(a + b\varepsilon)(c + d\varepsilon) = ac + (ad + bc)\varepsilon$에서 $\varepsilon$ 계수가 곱의 미분 규칙 그대로다.
+
+  **SLAM에서:** 재투영 잔차를 템플릿으로 한 번만 쓰면 8a에서 손으로 유도한 2×6, 2×3 야코비안을 Ceres가 대신 만든다. 그래서 펑터 안에서는 `double` 전용 함수(예: `cv::` 함수)를 쓰면 안 되고, 수학 함수는 `ceres::sqrt`처럼 `Jet`을 받는 것을 쓴다.
+
+  **이전 레슨:** [7b 수치 야코비안](../w07b-manifold-perturbation/), [8a 재투영 야코비안](../w08a-reprojection-jacobian/)
+</LABox>
+
+<SessionBreak id="s2" />
+
+## 실습: Ceres local BA
+
+### 설치 확인과 첫 예제
+
+12a에서 `libceres-dev`를 깔았다. 버전부터 본다. 2.2가 기대값이다.
+
+```bash
+dpkg -s libceres-dev | grep Version
+```
+
+CMake에는 두 줄을 더한다.
+
+```text
+find_package(Ceres REQUIRED)
+target_link_libraries(vo PUBLIC
+  Ceres::ceres)
+```
+
+Ceres 공식 튜토리얼(ceres-solver.org, "Non-linear Least Squares" 장의 Curve Fitting)의 곡선 맞추기 예제($y = e^{mx + c}$)를 `cpp/tools/curve_fit.cpp`로 옮겨 빌드해 돌려 본다. CMakeLists에는 실행 파일 하나를 더한다.
+
+```text
+add_executable(curve_fit
+  tools/curve_fit.cpp)
+target_link_libraries(curve_fit
+  PRIVATE Ceres::ceres)
+```
+
+`summary.BriefReport()`에 비용이 줄었다는 줄이 나오면 연결이 된 것이다.
+
+<SessionBreak id="s3" />
+
+### 재투영 잔차 펑터
+
+관측 하나($k$번 키프레임이 점 $j$를 픽셀 $u$로 봄)의 잔차를 펑터로 만든다.
+
+```text
+struct Reproj {
+  double u, v;   // 관측 (왜곡 편 픽셀)
+  double fx, fy, cx, cy;
+  template <typename T>
+  bool operator()(
+    const T* q,   // 회전 4
+    const T* t,   // 이동 3
+    const T* X,   // 점 3
+    T* r) const;  // 잔차 2
+};
+```
+
+<Hint level={1}>
+  `operator()` 안에서 할 일은 8a의 투영 그대로다. 점을 카메라 좌표로 옮기고($p = R X + t$), 나누고, 내부 파라미터를 곱한 뒤 관측을 뺀다. 자세는 12a와 같이 $T_{cw}$로 둔다.
+</Hint>
+
+<Hint level={2}>
+  이 레슨은 `EigenQuaternionManifold`로 통일했으니 `q`를 `Eigen::Map`(형식 `const Eigen::Quaternion<T>`)으로 감싸 `q * X` 꼴로 돌린다. `ceres::QuaternionRotatePoint`는 `w, x, y, z` 순서를 가정하므로 Eigen 순서 배열에 쓰면 틀린다.
+</Hint>
+
+<Hint level={3}>
+  ```text
+  비용 함수 만들기:
+    new ceres::AutoDiffCostFunction
+      <Reproj, 2, 4, 3, 3>(
+        new Reproj{…})
+  템플릿 숫자 = 잔차 수,
+    블록마다 크기 (q, t, X 순서)
+  operator()는 true를 돌려준다
+  z ≤ 0 이면? 잔차를 큰 값으로
+    두거나 관측을 미리 뺀다 (11c)
+  ```
+</Hint>
+
+<SessionBreak id="s4" />
+
+### 잔차·야코비안 대조
+
+펑터가 맞는지 문제에 넣기 전에 따로 확인한다. 12a의 GTest에 케이스를 하나 더한다.
+
+- 알려진 자세에서 점을 투영해 관측을 만들면 잔차가 0이다.
+- `cost->Evaluate(…)`에 파라미터, 잔차, 야코비안 배열을 넘겨 야코비안을 받아, 같은 자리에서 중앙 차분(7b 방식)으로 잰 값과 견준다. 회전 블록은 쿼터니언 4성분에 대한 야코비안이라 8a의 2×6과 모양이 다르다는 점에 주의한다(매니폴드가 그 뒤에 $4 \times 3$을 곱한다).
+
+<Hint level={1}>
+  ```text
+  블록 값: double q[4], t[3], X[3]
+  params = { q, t, X }
+    (형식 double const* const*)
+  r[2]
+  Jq[2*4], Jt[2*3], JX[2*3]
+    행 우선: J[i*열수 + j]
+  jac = { Jq, Jt, JX }  (double**)
+  cost->Evaluate(params, r, jac)
+  Jq[i*4+j] 와
+    (r(q+ε e_j) − r(q−ε e_j))/2ε 비교
+  ```
+</Hint>
+
+<SessionBreak id="s5" />
+
+### 문제 만들기
+
+11c `localBA` 순서를 그대로 옮긴다.
+
+1. 창 안 키프레임(최근 `window`개, TS 실행기의 TUM 설정과 같게 기본 4)이 본 관측을 점별로 모은다. 카메라 앞에 있는 관측만 쓴다.
+2. 창 안에서 두 번 이상 보인 점만 고른다.
+3. 고른 점을 본 창 밖 키프레임의 관측도 더한다.
+4. 관측마다 `AddResidualBlock`에 비용, 손실, `q`, `t`, `X`를 넘긴다.
+5. 회전 블록 `q`마다 `SetManifold`로 `EigenQuaternionManifold`를 붙인다.
+
+블록 값은 12a의 자세에서 채운다. 회전 행렬 `R`(`rvec`이면 `cv::Rodrigues`로 먼저 바꾼다)로 `Eigen::Quaterniond(R)`을 만들고, 그 `coeffs()` 네 값(`x, y, z, w` 순서)을 `q[4]`에 복사한다. `t[3]`은 `tvec`을 그대로 쓴다.
+
+파라미터 블록은 **포인터로** 등록되므로, 최적화 동안 주소가 바뀌지 않는 배열에 담는다. 문제를 만들기 전에 블록 배열의 크기를 다 잡아 둔다. 문제를 만든 뒤 벡터에 원소를 더하면 주소가 바뀌어 엉뚱한 메모리를 고친다.
+
+<SessionBreak id="s6" />
+
+### 고정, 로버스트 손실, 솔버 옵션
+
+<Hint level={1}>
+  창에서 가장 오래된 두 키프레임과 창 밖 키프레임의 `q`, `t`에 `SetParameterBlockConstant`를 부른다. 손실은 `new ceres::HuberLoss(2.0)`처럼 픽셀 단위 임계값을 준다(11d TUM 설정의 Huber k = 2와 같게).
+</Hint>
+
+<Hint level={2}>
+  ```text
+  옵션 객체를 만든다
+    선형 솔버: DENSE_SCHUR
+    최대 반복: 10 정도
+  요약 객체를 만든다
+  Solve(옵션, 문제, 요약)
+  ```
+  이름은 `ceres::Solver::Options`의 `linear_solver_type`, `max_num_iterations`와 `ceres::Solver::Summary`, `ceres::Solve`다. local BA는 키프레임마다 도니 반복 수를 작게 둔다. 수렴 정밀도보다 끊기지 않는 것이 중요하다.
+</Hint>
+
+<SessionBreak id="s7" />
+
+### VO에 붙이기
+
+12a VO의 "새 키프레임 → 새 점 추가" 다음에 local BA를 부른다(11주차 `makeVo`와 같은 자리). 끝나면 블록 배열의 값을 키프레임 자세와 맵 포인트에 되돌려 쓴다.
+
+- 쿼터니언을 되돌릴 때 `normalized()`를 한 번 한다. 매니폴드가 단위 길이를 지키지만 반올림이 쌓인다.
+- BA 뒤에 재투영 오차가 큰 관측이나 카메라 뒤로 간 점은 맵에서 뺀다(11c 맵 정리).
+- 실행 인자에 `--no-ba`를 두어 BA 켬/끔을 같은 실행 파일로 비교할 수 있게 한다.
+
+<SessionBreak id="s8" />
+
+### 비용 감소, 자세 반영 확인
+
+- `summary.initial_cost`와 `summary.final_cost`를 키프레임마다 찍는다. 대부분 줄어야 한다. 늘거나 그대로면 고정 블록이 잘못됐거나, 되돌려 쓰기가 빠졌다.
+- `summary.termination_type`이 `CONVERGENCE` 또는 `NO_CONVERGENCE`(반복 수 상한)면 정상이다. `FAILURE`면 잔차에 NaN이 섞였다(카메라 뒤 점, 0으로 나누기).
+- 고정한 두 키프레임의 자세가 BA 전후로 그대로인지 본다. 바뀌었으면 게이지가 풀려 궤적 전체가 떠다닌다.
+
+<SessionBreak id="s9" />
+
+### BA 켬/끔 비교
+
+12a evo 명령으로 두 시퀀스를 BA 켬/끔으로 잰다. 11d 소거 실험의 첫 줄과 같은 표를 C++로 다시 만드는 것이다.
+
+| 설정 | fr1/xyz | fr3/long_office |
+| --- | --- | --- |
+| BA 끔 | ___ 프레임, ATE ___ | ___ 프레임, ATE ___ |
+| BA 켬 | ___ 프레임, ATE ___ | ___ 프레임, ATE ___ |
+
+TS 정답 구현 기준으로는 BA를 끄면 fr1/xyz 151, fr3 92프레임에서 끊겼고, 켜면 끝까지 갔다(11d). C++에서도 같은 경향이 나오는지 본다.
+
+<SessionBreak id="s10" />
+
+### 솔버 비교와 시간
+
+`linear_solver_type`을 `DENSE_SCHUR`와 `SPARSE_SCHUR`로 바꿔 키프레임당 BA 시간을 잰다(`summary.total_time_in_seconds`). `SPARSE_SCHUR`가 "지원 안 함" 오류를 내면 설치한 Ceres에 희소 라이브러리가 없는 것이니 그 사실만 메모한다.
+
+- 창 크기(`window`)를 기본 4에서 5, 10으로 바꿔 시간과 ATE가 어떻게 바뀌는지도 본다.
+- 결론은 숫자로 한 줄씩: "창 10은 ATE가 ___ 줄고 시간은 ___배".
+
+<SessionBreak id="s11" />
+
+### 정리
+
+BA 켠 결과를 쇼케이스에 **추가**한다. 12a에서 올린 BA 끔 결과는 비교용으로 남겨 둔다. 같은 시퀀스·구현이라 파일 이름이 겹치니 `--out`으로 이름을 바꾸고, 표에서 구분되게 `--note`를 단다. 12a의 BA 끔 파일도 `--force`로 다시 만들며 `--note "BA 끔"`을 달아 두면 표가 읽기 쉽다.
+
+```bash
+python3 datasets/cpp_result.py \
+  --sequence fr1/xyz --impl cpp \
+  --ape ape.zip --rpe rpe.zip \
+  --rpe-rot rpe_rot.zip \
+  --tracked 300 --total 300 \
+  --note "Ceres local BA" \
+  --out site/src/data/cpp-results/x.json
+```
+
+`x.json`은 `fr1-xyz-cpp-ba.json`처럼 알아보기 쉬운 이름으로 바꿔 쓴다. README의 C++ 결과 줄에 "Ceres local BA"를 적는다.
+
+메모에 남길 것: 손으로 짠 8b `smallBA`와 Ceres 버전에서 가장 달랐던 점 셋(예: 야코비안을 안 쓴다, 매니폴드, 솔버 선택). 17주차 코드 리딩에서 ORB-SLAM3의 g2o BA와 견줄 때 다시 쓴다.
+
+<SessionBreak id="s12" />
+
+## 체크 질문
+
+<CheckQuestion q="Ceres에서 회전을 쿼터니언 4개로 두면서도 최적화가 3자유도로 움직이게 하는 장치는 무엇이고, 7b의 무엇과 같은가?" kind="개념">
+  매니폴드(`ceres::Manifold`, 예: `EigenQuaternionManifold`)다. 블록마다 3차원 $\delta$를 쿼터니언에 더하는 `Plus`와 그 야코비안을 정해 두면, 솔버는 $\delta$ 공간(접공간)에서 풀고 결과는 단위 쿼터니언으로 남는다.
+
+  7b의 $x \boxplus \delta$, 곧 $R \leftarrow \mathrm{Exp}(\delta) R$ 업데이트와 같다. 그냥 4성분에 더하면 단위 길이가 깨지고, 정규방정식에 비용을 바꾸지 않는 방향(길이 방향)이 생겨 특이해진다.
+</CheckQuestion>
+
+<CheckQuestion q="단안 local BA에서 가장 오래된 키프레임을 하나가 아니라 둘 고정하는 이유는?" kind="왜">
+  단안 BA는 전체를 옮기고(3) 돌리고(3) 크기를 바꿔도(1) 비용이 같다. 7자유도의 게이지다. 키프레임 하나를 고정하면 위치와 방향(6)은 묶이지만 크기는 남는다.
+
+  둘째 키프레임까지 고정하면 두 카메라 사이 거리가 정해져 크기도 묶인다. 창 밖 키프레임을 고정해 넣는 것도 같은 역할을 하면서, 오래 쌓은 관측을 버리지 않게 한다.
+</CheckQuestion>
+
+<CheckQuestion q="Ceres BA를 붙였더니 가끔 FAILURE로 끝나고 궤적이 튄다. 무엇부터 보나?" kind="실무">
+  잔차에 NaN·무한대가 섞였는지부터 본다. 흔한 원인은 카메라 뒤($z \le 0$) 또는 $z \approx 0$인 점으로 나누는 것, 쿼터니언 순서를 잘못 읽은 것, 파라미터 블록 포인터가 벡터 재할당으로 무효가 된 것이다.
+
+  BA 전에 카메라 앞 관측만 넣고, 펑터에서 $z$가 작으면 큰 상수 잔차를 돌려주며, 블록 배열은 문제를 만들기 전에 크기를 고정한다. 그다음 `FAILURE`가 난 키프레임의 BA는 결과를 버리고 이전 값을 유지하게 한다.
+</CheckQuestion>
+
+<SessionBreak id="s13" />

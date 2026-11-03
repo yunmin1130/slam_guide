@@ -1,0 +1,119 @@
+---
+/**
+ * 12a 결과 쇼케이스: site/src/data/cpp-results/*.json 을 빌드 때 읽어 시퀀스별 표로 보여준다.
+ * 파일은 datasets/cpp_result.py 가 만든다 (형식: docs/DATA.md §2). 형식이 틀리면 빌드가 멈춘다.
+ */
+import { formatMeters, groupBySequence, IMPL_LABEL, parseResult } from "../../lib/cppResults";
+
+const files = import.meta.glob<{ default: unknown }>("../../data/cpp-results/*.json", { eager: true });
+const entries = Object.entries(files).map(([path, mod]) => parseResult(path.split("/").pop() ?? path, mod.default));
+const groups = groupBySequence(entries);
+const deg = (d: number) => `${d.toFixed(2)}°`;
+---
+
+<section class="cpp-results" aria-label="구현별 결과 비교">
+  {
+    groups.length === 0 ? (
+      <p class="empty">
+        아직 결과 파일이 없다. 실습에서 만든 JSON을 <code>site/src/data/cpp-results/</code>에 넣고 다시 빌드하면 여기에 표가 생긴다.
+      </p>
+    ) : (
+      groups.map((g) => (
+        <figure>
+          <figcaption>{g.sequence}</figcaption>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">구현</th>
+                <th scope="col">ATE</th>
+                <th scope="col">RPE</th>
+              </tr>
+            </thead>
+            <tbody>
+              {g.rows.map((r) => (
+                <tr>
+                  <th scope="row">
+                    {IMPL_LABEL[r.impl]}
+                    {r.total !== null && (
+                      <span class="sub">
+                        {r.tracked}/{r.total} 프레임
+                      </span>
+                    )}
+                    {r.gitSha && <span class="sub mono">{r.gitSha.slice(0, 7)}</span>}
+                  </th>
+                  <td>{formatMeters(r.ateRmse)}</td>
+                  <td>
+                    {r.rpeTrans === null ? "—" : formatMeters(r.rpeTrans)}
+                    {r.rpeRotDeg !== null && <span class="sub">{deg(r.rpeRotDeg)}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {g.rows.some((r) => r.note) && (
+            <ul class="notes">
+              {g.rows
+                .filter((r) => r.note)
+                .map((r) => (
+                  <li>
+                    {IMPL_LABEL[r.impl]}: {r.note}
+                  </li>
+                ))}
+            </ul>
+          )}
+        </figure>
+      ))
+    )
+  }
+</section>
+
+<style>
+  .cpp-results {
+    margin: 1rem 0;
+  }
+  .empty {
+    padding: 0.75rem 1rem;
+    background: var(--paper-sunken);
+    border-radius: var(--radius-md);
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+  figure {
+    margin: 0 0 1.25rem;
+  }
+  figcaption {
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  thead th {
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .sub {
+    display: block;
+    color: var(--ink-faint);
+    font-size: 0.85em;
+    font-weight: 400;
+  }
+  .mono {
+    font-family: var(--font-mono);
+  }
+  .notes {
+    margin: 0.4rem 0 0;
+    padding-left: 1.1rem;
+    color: var(--ink-soft);
+    font-size: var(--text-sm);
+  }
+</style>

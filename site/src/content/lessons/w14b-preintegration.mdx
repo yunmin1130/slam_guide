@@ -1,0 +1,318 @@
+---
+week: 14
+part: b
+title: IMU 사전적분과 VIO 구조
+summary: 두 키프레임 사이 IMU 측정을 시작 상태와 무관한 상대 움직임(ΔR, Δv, Δp)으로 묶는 사전적분을 구현하고, 바이어스가 바뀔 때의 1차 보정과 VIO가 이것을 어떻게 쓰는지 이해한다
+prereq: [w14a, w07b]
+la_box: [바이어스 1차 보정(야코비안)]
+tasks: [preintegrate]
+read_only: [biasJacobians]
+deliverables: []
+jetbot: false
+units: 1.25
+sessions:
+  - { id: s1, device: phone, title: "개념: 왜 사전적분인가" }
+  - { id: s2, device: phone, title: "개념: 사전적분 식, 쓰는 법, 합치기" }
+  - { id: s3, device: phone, title: "개념: 바이어스 1차 보정 + LA 박스" }
+  - { id: s4, device: pad, title: "손 유도: 바이어스 야코비안 반복식" }
+  - { id: s5, device: pc, title: "과제: preintegrate 구현" }
+  - { id: s6, device: pc, title: "과제: preintegrate 디버그·테스트 통과" }
+  - { id: s7, device: pc, title: "읽기: biasJacobians" }
+  - { id: s8, device: phone, title: "개념: IMU 팩터, VIO 구조" }
+  - { id: s9, device: phone, title: "체크 질문" }
+---
+
+## 개념
+
+이번 파트를 마치면 두 키프레임 사이의 IMU 측정 수백 개를 숫자 몇 개로 묶어, 최적화 안에서 IMU를 카메라 측정처럼 하나의 잔차로 쓸 수 있다. VINS-Mono, ORB-SLAM3 같은 최적화형 VIO의 핵심 부품이고, VIO 면접에서 가장 자주 나오는 주제다.
+
+### 왜 사전적분인가
+
+VIO는 키프레임 자세 $R_i, p_i$와 속도 $v_i$를 8주차 BA처럼 최적화 변수로 둔다. 키프레임 $i$와 $j$ 사이에는 IMU 측정이 수십~수백 개 있다(카메라 10Hz, IMU 200Hz).
+
+14a처럼 $i$의 상태에서 출발해 적분하면 $j$의 예측이 나온다. 그런데 최적화가 $R_i$, $v_i$를 한 번 고칠 때마다 이 적분을 처음부터 다시 해야 한다. 반복이 수십 번이고 키프레임이 여러 개면 감당하기 어렵다.
+
+사전적분(preintegration)은 측정을 **몸체 $i$ 좌표**로 미리 묶어, $R_i$, $v_i$, 중력과 무관한 상대 움직임 $\Delta R$, $\Delta v$, $\Delta p$를 한 번만 계산한다. 그러면 상태가 바뀌어도 간단한 식 몇 개로 예측을 다시 얻는다.
+
+<SessionBreak id="s1" />
+
+### 사전적분 식
+
+14a의 오일러 적분을 $i$부터 펼치면 $R_k = R_i \Delta R_k$이고, 속도·위치에서 $R_i$와 중력 항을 따로 뺄 수 있다. 남는 부분이 측정만으로 정해지는 $\Delta$들이다.
+
+<Details summary="두 구간을 직접 펼쳐 보기">
+  간격이 모두 $\tau$인 측정 세 개(구간 둘)를 생각한다. 시작은 $R_0, v_0, p_0$이고 $\Delta R_1 = \mathrm{Exp}(\omega_0 \tau)$다. 14a 오일러를 두 번 적용하면 속도는 이렇다.
+
+  $$
+  \begin{aligned}
+  v_1 &= v_0 + (R_0 f_0 + g)\tau \\
+  v_2 &= v_1 + (R_0 \Delta R_1 f_1 + g)\tau \\
+  &= v_0 + 2g\tau \\
+  &\quad + R_0\,(f_0\tau + \Delta R_1 f_1 \tau)
+  \end{aligned}
+  $$
+
+  괄호 안이 $\Delta v$이고, $2\tau = \Delta t_{ij}$이므로 $v_j = v_i + g\,\Delta t_{ij} + R_i \Delta v$다.
+
+  위치도 같은 방법으로 펼친다. 중력 항을 모으면 $\tfrac{1}{2}g\tau^2 + g\tau^2 + \tfrac{1}{2}g\tau^2 = \tfrac{1}{2}g(2\tau)^2$이고, $v_0$ 항은 $v_0 \cdot 2\tau$다. 남는 $R_0(\ldots)$의 괄호가 $\Delta p$다.
+
+  $$
+  \begin{aligned}
+  \Delta p &= \tfrac{1}{2} f_0 \tau^2 + (f_0 \tau)\,\tau \\
+  &\quad + \tfrac{1}{2}\Delta R_1 f_1 \tau^2
+  \end{aligned}
+  $$
+
+  가운데 항 $(f_0\tau)\tau$가 "갱신 전 $\Delta v$ 곱하기 $\tau$"다. 아래 갱신 순서가 여기서 나온다.
+</Details>
+
+$\Delta R = I$, $\Delta v = 0$, $\Delta p = 0$에서 시작한다. 구간 $k$마다 $\omega = \tilde{\omega}_k - b_g$, $f = \tilde{f}_k - b_a$로 바이어스를 빼고 이 순서로 갱신한다.
+
+$$
+\begin{aligned}
+\Delta p &\leftarrow \Delta p + \Delta v\,\Delta t + \tfrac{1}{2}\,\Delta R\, f\,\Delta t^2 \\
+\Delta v &\leftarrow \Delta v + \Delta R\, f\,\Delta t \\
+\Delta R &\leftarrow \Delta R\,\mathrm{Exp}(\omega\,\Delta t)
+\end{aligned}
+$$
+
+순서가 중요하다. $\Delta p$는 갱신 전 $\Delta v$, $\Delta R$을 쓰고, $\Delta v$는 갱신 전 $\Delta R$을 쓴다. 14a 오일러에서 $p$가 갱신 전 $v$와 구간 시작의 자세를 쓴 것과 같다.
+
+### 쓰는 법
+
+전체 시간 $\Delta t_{ij} = t_j - t_i$에 대해 $j$의 상태는 이렇게 나온다.
+
+$$
+\begin{aligned}
+R_j &= R_i\,\Delta R \\
+v_j &= v_i + g\,\Delta t_{ij} + R_i\,\Delta v \\
+p_j &= p_i + v_i\,\Delta t_{ij} + \tfrac{1}{2} g\,\Delta t_{ij}^2 + R_i\,\Delta p
+\end{aligned}
+$$
+
+중력과 시작 속도는 바깥으로 빠졌고, $\Delta$들은 몸체 $i$ 좌표의 "비력이 만든 움직임"만 담는다. 그래서 정지한 IMU는 $\Delta v = [0, 0, 9.81]\,\Delta t_{ij}$, 곧 $-g\,\Delta t_{ij}$를 쌓고, 바깥의 $g\,\Delta t_{ij}$와 상쇄되어 $v_j = v_i$가 된다.
+
+이 식은 14a 오일러 적분과 반올림 오차 안에서 같은 결과를 낸다. 근사가 아니라 같은 계산을 재배열한 것이다. 테스트도 그것을 확인한다.
+
+### 합치기
+
+$i \to k$와 $k \to j$를 따로 사전적분한 결과 $a$, $b$를 합치면 $i \to j$가 된다.
+
+$$
+\begin{aligned}
+\Delta R &= \Delta R_a\,\Delta R_b \\
+\Delta v &= \Delta v_a + \Delta R_a\,\Delta v_b \\
+\Delta p &= \Delta p_a + \Delta v_a\,\Delta t_b + \Delta R_a\,\Delta p_b
+\end{aligned}
+$$
+
+$b$의 값은 몸체 $k$ 좌표라 $\Delta R_a$로 몸체 $i$ 좌표로 돌린다. 키프레임을 지우거나 합칠 때 이 성질을 쓴다.
+
+<SessionBreak id="s2" />
+
+### 바이어스가 바뀌면
+
+사전적분은 바이어스 $\bar{b}$를 정해 놓고 계산한다. 그런데 VIO는 바이어스도 최적화 변수라서, 최적화 중에 $\bar{b} + \delta b$로 조금씩 바뀐다. 그때마다 다시 적분하면 사전적분을 한 이유가 사라진다.
+
+그래서 $\Delta$를 바이어스에 대해 1차 테일러 전개해 두고, 작은 변화는 곱셈 하나로 보정한다(Forster 등 2017, "On-Manifold Preintegration for Real-Time Visual-Inertial Odometry").
+
+$$
+\begin{aligned}
+\Delta R(\bar{b} + \delta b) &\approx \Delta R(\bar{b})\,\mathrm{Exp}(J^{R}_{g}\,\delta b_g) \\
+\Delta v(\bar{b} + \delta b) &\approx \Delta v(\bar{b}) + J^{v}_{g}\,\delta b_g + J^{v}_{a}\,\delta b_a \\
+\Delta p(\bar{b} + \delta b) &\approx \Delta p(\bar{b}) + J^{p}_{g}\,\delta b_g + J^{p}_{a}\,\delta b_a
+\end{aligned}
+$$
+
+코드의 `dR_dbg`, `dv_dbg`, `dv_dba`, `dp_dbg`, `dp_dba`가 이 다섯 행렬($3 \times 3$)이다. 변화가 크면(예: 바이어스가 처음 추정에서 많이 움직이면) 그때만 다시 적분한다.
+
+### 주의: 여기서 ΔR은 우섭동이다
+
+7주차부터 우리는 **좌섭동** $T \leftarrow \mathrm{Exp}(\delta)\,T$를 써 왔다. 그런데 위 $\Delta R$ 보정은 $\mathrm{Exp}(\cdot)$를 **오른쪽**에 곱한다.
+
+$\Delta R$은 몸체 증분 $\mathrm{Exp}(\omega\,\Delta t)$를 오른쪽에 계속 곱해 만든 것이라, 바이어스가 바꾸는 것도 오른쪽 끝의 증분들이다. 그래서 오른쪽 섭동으로 쓰면 식이 깔끔해지고, Forster 논문과 GTSAM·ORB-SLAM3 코드도 이 규약을 쓴다.
+
+섞으면 테스트는 맞는데 실제 시스템에서 바이어스 보정이 엉뚱한 방향으로 가는 버그가 된다. $\Delta R$ 관련 식을 볼 때는 "오른쪽"이라는 것을 먼저 확인한다.
+
+<LABox term="바이어스 1차 보정(야코비안)">
+  **정의:** 사전적분 결과를 바이어스의 함수로 보고, 기준 바이어스 $\bar{b}$ 근처에서 1차 테일러 전개한 계수 행렬. 예: $J^{v}_{a} = \partial \Delta v / \partial b_a$.
+
+  **기하학적 의미:** "바이어스를 조금 바꾸면 사전적분 값이 어느 방향으로 얼마나 움직이나"다. 가속도 바이어스는 $\Delta v$를 대략 $-\Delta t_{ij}$배만큼 바꾸고, 자이로 바이어스는 $\Delta R$을 틀어 $\Delta v$, $\Delta p$까지 바꾼다. 회전 쪽은 매니폴드라 더하기 대신 $\mathrm{Exp}$로 곱한다(7b).
+
+  **SLAM에서:** VIO 최적화가 바이어스를 고칠 때마다 다시 적분하지 않고 이 행렬로 보정한다. IMU 팩터 잔차의 바이어스 야코비안에도 그대로 들어간다. 오른쪽 야코비안 $J_r$(아래 손 유도)이 회전 부분에 나온다.
+
+  **이전 레슨:** [7b 매니폴드와 섭동](../w07b-manifold-perturbation/)
+</LABox>
+
+<SessionBreak id="s3" />
+
+## 과제
+
+### 손 유도: 바이어스 야코비안 반복식
+
+태블릿에 직접 쓴다. 도구는 세 가지다. 첫째, SO(3) 오른쪽 야코비안(right Jacobian) $J_r$은 아래를 만족하는 행렬이다($\theta = \lVert \phi \rVert$).
+
+$$
+\mathrm{Exp}(\phi + \delta) \approx \mathrm{Exp}(\phi)\,\mathrm{Exp}(J_r(\phi)\,\delta)
+$$
+
+$J_r$ 자체는 이렇게 계산한다.
+
+$$
+\begin{aligned}
+J_r(\phi) = I &- \frac{1 - \cos\theta}{\theta^2}[\phi]_\times \\
+&+ \frac{\theta - \sin\theta}{\theta^3}[\phi]_\times^2
+\end{aligned}
+$$
+
+둘째, 회전 $R$을 지나 섭동을 옮기는 항등식이다.
+
+$$
+\mathrm{Exp}(\psi)\,R = R\,\mathrm{Exp}(R^\top \psi)
+$$
+
+셋째, 작은 회전의 근사 두 개다. $\mathrm{Exp}(\psi)$는 $I + [\psi]_\times$로 근사하고, 작은 $a$, $b$에 대해서는 두 곱을 합칠 수 있다.
+
+$$
+\mathrm{Exp}(a)\,\mathrm{Exp}(b) \approx \mathrm{Exp}(a + b)
+$$
+
+아래 $J_k$는 단계 $k$까지 쌓인 $J^{R}_{g}$(바이어스가 바뀔 때 절의 첫 행렬)다. 마찬가지로 $J^{v}_{g,k}$는 단계 $k$까지의 $J^{v}_{g}$다.
+
+**1.** 측정이 둘(구간 하나, $\Delta t = 0.1$, $\omega = 0$)이면 $J^{v}_{a} = -0.1\,I$, $J^{p}_{a} = -0.005\,I$, $J^{R}_{g} = -0.1\,I$임을 보인다. 이때 $J^{v}_{g} = 0$인 이유는?
+
+**2.** $\Delta R_{k+1} = \Delta R_k\,\mathrm{Exp}(\phi_k)$, $\phi_k = (\tilde\omega_k - b_g)\Delta t$에 $b_g \to b_g + \delta$를 넣는다. 아래 첫 식처럼 두고, 위 두 도구로 둘째 식을 유도한다.
+
+$$
+\Delta R_k(\bar b + \delta) \approx \Delta R_k\,\mathrm{Exp}(J_k \delta)
+$$
+
+$$
+J_{k+1} = \mathrm{Exp}(\phi_k)^\top J_k - J_r(\phi_k)\,\Delta t
+$$
+
+**3.** $\Delta v_{k+1} = \Delta v_k + \Delta R_k f\,\Delta t$에서 아래 근사를 써서 $J^{v}_{g,k+1}$을 $J^{v}_{g,k}$와 $J_k$로 쓰는 반복식을 구한다. $J^{v}_{a}$는?
+
+$$
+\begin{aligned}
+&\Delta R_k\,\mathrm{Exp}(J_k\delta)\,f \\
+&\quad\approx \Delta R_k f - \Delta R_k [f]_\times J_k \delta
+\end{aligned}
+$$
+
+**4.** 같은 방법으로 $J^{p}_{g}$, $J^{p}_{a}$의 반복식을 구한다. $\tfrac{1}{2}\Delta t^2$ 항과, 갱신 전 $J^{v}_{g,k}$를 쓴다는 점에 주의한다.
+
+**5.** "합치기" 절의 $\Delta v = \Delta v_a + \Delta R_a \Delta v_b$를 사전적분 식을 펼쳐 확인한다.
+
+<SessionBreak id="s4" />
+
+<TaskCard fn="preintegrate">
+  시각이 붙은 측정 `samples`와 바이어스 `bias`(`gyro`, `accel`)를 받아 `samples[0].t`부터 마지막 시각까지의 사전적분 `{ dR, dv, dp, dt }`를 낸다. 측정마다 바이어스를 빼고, 구간 $k$는 측정 $k$의 값만 쓴다(오일러). `dt`는 마지막 시각 − 첫 시각이다. 측정 2개 미만, 시각이 늘지 않음, NaN·무한대(바이어스 포함)면 예외를 던진다.
+
+  <Hint level={1}>
+    14a 오일러 적분에서 중력과 시작 상태를 뺀 것이다. 자세 대신 $\Delta R$, 속도 대신 $\Delta v$, 위치 대신 $\Delta p$를 들고 다닌다.
+
+    ```ts
+    import { expSO3 } from "@core/prev/w03";
+    ```
+  </Hint>
+
+  <Hint level={2}>
+    비력은 $\Delta R$로 돌린다(월드가 아니라 몸체 $i$ 좌표). 갱신 순서는 $\Delta p \to \Delta v \to \Delta R$이고, 앞의 식들은 갱신 전 값을 쓴다. 순서를 바꾸면 "오일러 적분과 같다" 테스트가 맞지 않는다.
+
+    바이어스는 측정에서 **빼서** 쓴다: $\omega = \tilde\omega - b_g$, $f = \tilde f - b_a$.
+  </Hint>
+
+  <Hint level={3}>
+    ```text
+    검사: 측정 ≥ 2, 시각 증가,
+      NaN·무한대 없음 (바이어스 포함)
+    dR ← I, dv ← 0, dp ← 0
+    k = 0 … n−2 마다:
+      dt ← t[k+1] − t[k]
+      w ← gyro[k] − bg
+      f ← dR · (accel[k] − ba)
+      dp ← dp + dv·dt + ½·f·dt²
+      dv ← dv + f·dt
+      dR ← dR · Exp(w·dt)
+    반환 { dR, dv, dp,
+      dt: t[n−1] − t[0] }
+    ```
+  </Hint>
+</TaskCard>
+
+<SessionBreak id="s5" />
+
+### preintegrate 테스트가 안 맞을 때
+
+- "가만히 있으면 ΔR = I, Δv = −g·Δt" 테스트가 실패하면 중력을 더했는지 본다. 사전적분에는 중력이 들어가지 않는다(바깥의 "쓰는 법" 식에서 더한다). $\Delta v_z$가 $+9.81$에 가까워야 한다.
+- "주어진 바이어스를 빼고 적분한다" 테스트가 실패하면 바이어스를 더했거나, 자이로·가속도 바이어스를 바꿔 쓴 것이다.
+- "오일러 적분과 같다" 테스트가 실패하면 갱신 순서($\Delta p \to \Delta v \to \Delta R$)와 비력을 $\Delta R$로 돌렸는지 본다. 회전을 $\mathrm{Exp}(\cdot)\,\Delta R$처럼 왼쪽에 곱해도 여기서 틀린다.
+- "둘로 나눠 사전적분한 뒤 합치면" 테스트가 실패하면 `dt`를 마지막 시각 − 첫 시각이 아닌 다른 값으로 냈는지 본다. 이때는 "가만히 있으면"과 "오일러 적분과 같다" 테스트도 함께 실패한다. 이 테스트만 혼자 실패하면 입력 배열을 제자리에서 바꿨는지(정렬, 바이어스 빼기를 입력에 덮어쓰기) 본다.
+
+<SessionBreak id="s6" />
+
+### 읽기: biasJacobians
+
+<TaskCard fn="biasJacobians" readOnly>
+  측정과 기준 바이어스를 받아 다섯 야코비안(`dR_dbg`, `dv_dbg`, `dv_dba`, `dp_dbg`, `dp_dba`, 각 $3 \times 3$)을 낸다. 손 유도의 반복식을 측정 하나씩 진행하며 계산하고, 각 식은 갱신 전 값을 쓴다($J^{p} \to J^{v} \to J^{R}$, 마지막에 $\Delta R$ 순서).
+
+  읽으며 확인할 것: 손 유도 2번의 $\mathrm{Exp}(\phi_k)^\top J_k - J_r(\phi_k)\Delta t$가 코드의 어느 줄인가? $J^{p}_{g}$ 줄이 쓰는 $J^{v}_{g}$는 갱신 전인가 후인가?
+
+  더 볼 것: $\theta$가 작을 때 $J_r$의 두 계수를 테일러 전개로 바꾸는 이유는? 테스트는 이 행렬들을 무엇과 비교하나(바이어스를 $10^{-6}$ 바꿔 정답 `preintegrate`를 다시 돌린 유한 차분)? 회전 부분은 왜 $\mathrm{Log}(\Delta R^\top \Delta R')$, 곧 오른쪽 차이로 재나?
+</TaskCard>
+
+다 읽었으면 카드의 테스트 상태가 통과인지 확인하고, 손 유도 1번의 숫자가 "측정이 둘이면" 테스트의 기대값과 같은지 본다.
+
+<SessionBreak id="s7" />
+
+### IMU 팩터: 사전적분을 잔차로
+
+최적화에서 IMU는 키프레임 $i$, $j$의 상태를 잇는 팩터(factor, 잔차 하나) 하나가 된다. 상태로 예측한 상대 움직임과, 바이어스 보정한 사전적분 값의 차이다.
+
+$$
+\begin{aligned}
+r_{\Delta R} &= \mathrm{Log}\big(\Delta\hat{R}^\top R_i^\top R_j\big) \\
+r_{\Delta v} &= R_i^\top (v_j - v_i - g\,\Delta t_{ij}) - \Delta\hat{v} \\
+r_{\Delta p} &= R_i^\top \big(p_j - p_i - v_i \Delta t_{ij} \\
+&\qquad - \tfrac{1}{2} g \Delta t_{ij}^2\big) - \Delta\hat{p}
+\end{aligned}
+$$
+
+$\Delta\hat{R}$, $\Delta\hat{v}$, $\Delta\hat{p}$는 위의 1차 보정을 거친 값이다. 바이어스 자체에도 "이웃 키프레임 사이에서 천천히만 바뀐다"는 랜덤워크 팩터를 건다.
+
+이 잔차의 가중치(정보 행렬, 9주차)는 사전적분 공분산의 역이다. 공분산은 측정 잡음을 13주차 ESKF처럼 구간마다 $A\Sigma A^\top + BQB^\top$ 꼴로 전파해 구한다. 이번 주에는 개념만 둔다.
+
+### VIO 구조
+
+- **필터형:** MSCKF(Multi-State Constraint Kalman Filter)는 IMU로 예측하고, 여러 카메라 자세에 걸친 특징점 관측으로 13주차처럼 갱신한다. 점을 상태에 넣지 않아 가볍다.
+- **최적화형:** VINS-Mono, ORB-SLAM3는 최근 키프레임 몇 개의 슬라이딩 윈도우(sliding window)에서 재투영 잔차(8주차)와 IMU 팩터를 함께 최적화한다. 창에서 빠지는 키프레임은 주변화(marginalization, 16주차)로 정보만 남긴다.
+- **초기화:** 처음 몇 초 동안 카메라만으로 궤적을 만들고(11주차 단안 VO), 그 궤적과 사전적분을 맞춰 중력 방향, 단안 스케일, 자이로 바이어스, 속도를 추정한다. 단안 VIO가 스케일을 아는 이유가 이것이다(가속도계는 m/s² 단위다).
+
+### 메모: 롤링셔터와 시간 오프셋
+
+14a의 메모처럼 카메라-IMU 시간 오프셋은 Kalibr로 보정하거나 상태에 넣어 추정한다. 롤링셔터 카메라는 사진 안 줄마다 시각이 달라, 정밀한 VIO는 줄마다 자세를 IMU로 보간한다. 18주차 캡스톤에서 이 효과를 직접 잰다.
+
+<SessionBreak id="s8" />
+
+## 체크 질문
+
+<CheckQuestion q="IMU 사전적분이란 무엇이고, 왜 VIO 최적화에서 필요한가?" kind="개념">
+  두 키프레임 사이의 IMU 측정을 몸체 $i$ 좌표로 미리 적분해 상대 움직임 $\Delta R$, $\Delta v$, $\Delta p$로 묶는 것이다. 이 값은 시작 자세·속도와 중력에 의존하지 않는다.
+
+  최적화는 키프레임 상태를 반복해서 고친다. 매번 수백 개 측정을 다시 적분하는 대신, 사전적분 값과 $R_j = R_i \Delta R$ 같은 간단한 식으로 예측을 다시 계산한다. 그래서 IMU를 키프레임 쌍 사이의 잔차 하나(IMU 팩터)로 쓸 수 있다.
+</CheckQuestion>
+
+<CheckQuestion q="최적화 중 바이어스 추정이 바뀌면 사전적분을 다시 해야 하나? 왜 1차 보정으로 충분한가?" kind="왜">
+  바이어스 변화가 작으면 다시 하지 않는다. 사전적분 값을 기준 바이어스 근처에서 1차 테일러 전개한 야코비안을 미리 계산해 두고, $\Delta v + J^{v}_{a}\delta b_a$, $\Delta R\,\mathrm{Exp}(J^{R}_{g}\delta b_g)$처럼 보정한다.
+
+  바이어스는 천천히 변하고 최적화 한 번에서 바뀌는 양도 작아서 2차 항이 무시할 만하다. 변화가 커지면 그때 새 기준 바이어스로 다시 적분한다. 회전 보정은 $\Delta R$이 몸체 증분을 오른쪽에 곱해 만든 것이라 오른쪽 섭동으로 쓴다.
+</CheckQuestion>
+
+<CheckQuestion q="단안 VIO를 켰는데 시작하자마자 궤적의 크기(스케일)가 계속 틀린다. 무엇을 확인하나?" kind="실무">
+  초기화를 먼저 본다. 단안 VIO는 처음에 카메라 궤적과 사전적분을 맞춰 중력·스케일·바이어스를 추정하는데, 가속도 변화가 거의 없이 등속으로만 움직이면 스케일이 관측되지 않는다. 초기화 구간에 충분히 흔들어(가속) 준다.
+
+  그다음 IMU 쪽 설정을 본다. 가속도계 단위(g인지 m/s²인지)와 중력 크기, 카메라-IMU 외부 파라미터, 시간 오프셋, IMU 잡음 파라미터가 데이터시트와 맞는지 확인한다. 어긋나면 스케일과 중력 방향이 같이 틀어진다.
+</CheckQuestion>
+
+<SessionBreak id="s9" />

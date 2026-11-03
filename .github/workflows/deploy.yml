@@ -5,6 +5,9 @@ name: Deploy
 on:
   push:
     branches: [main]
+    # C++ 포팅(12주차, 사용자가 만들 cpp.yml이 따로 검사)만 바뀐 main 푸시는 사이트를 다시 만들 필요가 없다.
+    # pull_request에는 걸지 않는다: 필수 체크로 걸어 두면 경로가 안 맞는 PR이 "대기 중"에 멈춘다
+    paths-ignore: ["cpp/**"]
   pull_request:
   workflow_dispatch:
 
