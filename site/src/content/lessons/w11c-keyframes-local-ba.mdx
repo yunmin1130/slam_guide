@@ -2,22 +2,22 @@
 week: 11
 part: c
 title: 미니 VO (3) 키프레임, 새 점, local BA
-summary: 키프레임을 고르고 새 맵 포인트를 넣으며, 최근 키프레임 몇 개를 8주차 번들 조정으로 다듬는 local BA를 구현한다. 세 함수를 조립한 VO 전체를 합성 장면에서 돌려 본다
+summary: 키프레임을 고르고 새 맵 포인트를 넣으며, 최근 키프레임 몇 개를 8주차 번들 조정으로 다듬는 local BA를 읽어 이해한다(직접 구현은 선택). 세 함수를 조립한 VO 전체를 합성 장면에서 돌려 본다
 prereq: [w11b, w08b]
 la_box: [소거 순서와 채움]
-tasks: [localBA]
-read_only: [selectKeyframe, vo]
+tasks: []
+read_only: [localBA, selectKeyframe, vo]
 deliverables: []
 demo: VoDemo
 jetbot: false
-units: 1.25
+units: 1
 sessions:
   - { id: s1, device: phone, title: "개념: 키프레임, 새 점, 맵 정리" }
   - { id: s2, device: phone, title: "개념: local BA의 창과 고정 카메라" }
   - { id: s3, device: phone, title: "LA 박스 + 데모 조작" }
   - { id: s4, device: pad, title: "손 유도: 창 크기, 채움, 게이지" }
-  - { id: s5, device: pc, title: "과제: localBA 구현" }
-  - { id: s6, device: pc, title: "과제: localBA 디버그·테스트 통과" }
+  - { id: s5, device: pc, title: "읽기: localBA (선택: 직접 구현)" }
+  - { id: s6, device: pc, title: "선택: localBA 디버그·테스트 통과" }
   - { id: s7, device: pc, title: "읽기: vo 조립 코드" }
   - { id: s8, device: phone, title: "체크 질문" }
 ---
@@ -45,13 +45,15 @@ ORB-SLAM은 여기에 "맵 관리 스레드가 쉬고 있는가" 같은 조건�
 
 처음에는 지난 키프레임과만 짝지었다. 그런데 TUM 영상에서 빨리 움직이면 키프레임 사이에 생겼다 사라지는 트랙이 많아 맵이 굶었다(새 점이 모자라 추적이 끊김). 짝을 트랙 시작으로 바꾸니 해결됐다.
 
-새 점도 11a와 같은 검사를 거친다. 두 카메라 앞, 두 재투영 오차가 기준 이하, 그리고 **점마다** 시차가 `minParallaxDeg` 이상이어야 한다. 11a의 중앙값은 "움직임이 충분한가"를 판정했지만, 여기서는 두 자세가 이미 있으니 점 하나하나를 믿을 수 있는지를 따로 본다.
+새 점도 11a와 같은 검사를 거친다. 점이 두 카메라 앞에 있고, 두 재투영 오차가 기준보다 작고, **점마다** 시차가 `minParallaxDeg` 이상이어야 한다. 11a의 중앙값은 "움직임이 충분한가"를 판정했지만, 여기서는 두 자세가 이미 있으니 점 하나하나를 믿을 수 있는지를 따로 본다.
 
 그래서 카메라가 제자리에서 도는 동안에는 새 점이 생기지 않고, 기존 맵으로 추적만 이어간다.
 
 ### 맵 정리: 아웃라이어 맵 포인트 지우기
 
-추적에서 PnP 아웃라이어로 판정된 맵 포인트는 맵에서 지운다. KLT 트랙이 다른 곳으로 미끄러진 점은 다시 맞는 일이 드물고, 남겨 두면 다음 프레임들의 inlier 비율을 깎는다. TUM fr3 시퀀스(11d)에서 이 정리 하나로 추적 길이가 183프레임에서 끝(800)까지 늘었다. 지운 트랙은 나중에 새 점 후보로도 다시 넣지 않는다(같은 트랙이 다시 미끄러진 깊이로 들어오지 않게).
+추적에서 PnP 아웃라이어로 판정된 맵 포인트는 맵에서 지운다. KLT 트랙이 다른 곳으로 미끄러진 점은 다시 맞는 일이 드물고, 남겨 두면 다음 프레임들의 inlier 비율을 깎는다. TUM fr3 시퀀스(11d)에서 이 정리 하나로 추적 길이가 183프레임에서 끝(800)까지 늘었다.
+
+지운 트랙은 나중에 새 점 후보로도 다시 넣지 않는다(같은 트랙이 다시 미끄러진 깊이로 들어오지 않게).
 
 키프레임의 특징점 목록에서도 PnP 아웃라이어를 뺀다. 맵 포인트의 아웃라이어 관측이 BA를 끌어당기지 않게 하려는 것이다. 그래서 `localBA`는 아웃라이어 관측을 따로 거르지 않는다.
 
@@ -122,67 +124,75 @@ TUM fr3 시퀀스 800프레임에서 키프레임 하나당(새 점 + BA) 0.2초
 
 <SessionBreak id="s4" />
 
-<TaskCard fn="localBA">
-  키프레임 목록과 맵으로 최근 `window`개 키프레임의 자세와 그 안에서 두 번 이상 보인 맵 포인트를 8b `smallBA`로 함께 고친다. 창에서 가장 오래된 두 키프레임과, 창 밖에서 그 점을 본 키프레임은 고정 카메라로 넣는다. 결과는 `{ keyframes, map, costs }`이고, 창 안 키프레임의 `T`와 쓴 점의 `X`만 바뀐다(순서·`frame`·`features`는 그대로). 시작값에서 카메라 뒤에 있는 관측은 뺀다. 쓸 점이 없으면 아무것도 바꾸지 않고 `costs`는 빈 배열이다. Huber 커널은 `opts.solver.robust`에 들어 있으니 `opts.solver`를 `smallBA`에 그대로 넘긴다. `K`가 이상하거나(fx·fy ≤ 0), `window`가 2 이상의 정수가 아니거나, 키프레임이 2개 미만이면 예외를 던진다.
+### 읽기: localBA
 
-  <Hint level={1}>
-    점마다 관측(카메라 번호, 픽셀) 목록을 모은 뒤 `smallBA`에 넘길 문제(`BAProblem`)를 만든다. 카메라 순서를 [창 안 키프레임…, 창 밖 키프레임…]으로 두면 고정 목록이 간단해진다.
+<TaskCard fn="localBA" readOnly>
+  최근 `window`개 키프레임의 자세와 그 안에서 두 번 이상 보인 맵 포인트를 8b `smallBA`로 함께 고친다. 창에서 가장 오래된 두 키프레임과, 창 밖에서 그 점을 본 키프레임은 고정 카메라로 넣는다. Huber 커널은 `opts.solver.robust`에 들어 있어 `opts.solver`를 그대로 넘긴다.
 
-    ```ts
-    import { smallBA }
-      from "@core/prev/w08";
-    ```
-  </Hint>
-
-  <Hint level={2}>
-    1) `first`는 0과 (키프레임 수 − `window`) 중 큰 값이고, 창은 `keyframes.slice(first)`다.
-
-    2) 창 안 키프레임의 특징점 중 맵에 있는 id의 관측을 점별로 모은다(깊이 ≤ 0이면 뺀다). 관측이 2개 이상인 점만 id 오름차순으로 번호를 매긴다.
-
-    3) 창 밖 키프레임마다 고른 점이 보이는지 본다(역시 깊이 > 0). 하나라도 보이면 카메라로 추가하고 그 관측들도 넣는다.
-
-    4) `fixed`에는 0, 1과 창 밖 카메라 번호들을 넣는다. 결과의 `cameras` 앞쪽(창 안 개수만큼)이 새 자세다.
-  </Hint>
-
-  <Hint level={3}>
-    ```text
-    검사 (K, window ≥ 2 정수,
-      키프레임 ≥ 2)
-    first ← max(0, n − window)
-    active ← keyframes[first..]
-    obs ← 점 id → [{ cam, uv }]
-      (active의 특징점 중
-       맵에 있고 깊이 > 0)
-    ids ← obs가 2개 이상인 id
-      (오름차순)
-    ids 없음 이면
-      { 그대로, costs: [] }
-    points ← ids 순서의 맵 X
-    outside ← keyframes[..first)
-      중 ids의 점을
-      (깊이 > 0으로) 본 것
-    cameras ← [active의 T…,
-      outside의 T…]
-    observations ←
-      active 관측
-      + outside 관측
-        (cam = active 수 + j)
-    fixed ← [0, 1,
-      active 수 + j …]
-    r ← smallBA({ K, cameras,
-      points, observations,
-      fixed }, opts.solver)
-    keyframes: 창 안만
-      r.cameras로
-    map: ids의 점만 r.points로
-    costs ← r.costs
-    ```
-  </Hint>
+  읽으며 확인할 것: `fixed`에 창 밖 카메라 번호가 왜 들어가나? 시작값에서 카메라 뒤인 관측을 왜 미리 빼나? (8b `smallBA`는 이때 예외를 던진다.)
 </TaskCard>
+
+### 선택 과제: localBA 직접 구현
+
+시간이 남거나 BA를 손으로 조립해 보고 싶을 때만 한다. 11d로 바로 가도 된다. 선택 과제를 하지 않으면 위 `localBA` 카드만 읽고 이 세션을 완료 표시한 뒤 넘어간다.
+
+시작하는 법: `core/mine/w11.ts`의 `export { … } from "../reference/w11"` 줄과 맨 위 `import { localBA, makeVo }` 줄에서 `localBA`를 지운다. 같은 파일의 `import type { … } from "../types"` 줄에는 `Keyframe`, `LocalBAOptions`, `LocalBAResult`, `BAObservation`을 더한다. 그리고 `import { smallBA } from "@core/prev/w08"` 줄을 새로 넣는다.
+
+그다음 같은 시그니처로 `export function localBA(…)`를 새로 쓴다. 그때부터 내 `vo`도 내 `localBA`를 쓴다.
+
+채점: `localBA` 카드는 읽기만 카드라 코드 연습장이 없다. PC의 저장소 루트에서 `npx vitest run --project mine -t localBA`로 채점한다.
+
+지켜야 할 것: 결과는 `{ keyframes, map, costs }`이고, 창 안 키프레임의 `T`와 쓴 점의 `X`만 바뀐다(순서·`frame`·`features`는 그대로). 쓸 점이 없으면 아무것도 바꾸지 않고 `costs`는 빈 배열이다.
+
+예외: `K`가 이상하거나(fx 또는 fy가 0 이하, cx·cy가 NaN·무한대), `window`가 2 이상의 정수가 아니거나, 키프레임이 2개 미만이면 예외를 던진다.
+
+순서는 다음과 같다.
+
+1. `first`는 0과 (키프레임 수 − `window`) 중 큰 값이고, 창은 `keyframes.slice(first)`다.
+2. 창 안 키프레임의 특징점 중 맵에 있는 id의 관측을 점별로 모은다(깊이 ≤ 0이면 뺀다). 관측이 2개 이상인 점만 id 오름차순으로 번호를 매긴다.
+3. 창 밖 키프레임마다 고른 점이 보이는지 본다(역시 깊이 > 0). 하나라도 보이면 카메라로 추가하고 그 관측들도 넣는다.
+4. 카메라 순서를 [창 안…, 창 밖…]으로 두고, `fixed`에는 0, 1과 창 밖 카메라 번호들을 넣는다. 결과의 `cameras` 앞쪽(창 안 개수만큼)이 새 자세다.
+
+<Details summary="의사코드">
+  ```text
+  검사 (K, window ≥ 2 정수,
+    키프레임 ≥ 2)
+  first ← max(0, n − window)
+  active ← keyframes[first..]
+  obs ← 점 id → [{ cam, uv }]
+    (active의 특징점 중
+     맵에 있고 깊이 > 0)
+  ids ← obs가 2개 이상인 id
+    (오름차순)
+  ids 없음 이면
+    { 그대로, costs: [] }
+  points ← ids 순서의 맵 X
+  outside ← keyframes[..first)
+    중 ids의 점을
+    (깊이 > 0으로) 본 것
+  cameras ← [active의 T…,
+    outside의 T…]
+  observations ←
+    active 관측
+    + outside 관측
+      (cam = active 수 + j)
+  fixed ← [0, 1,
+    active 수 + j …]
+  r ← smallBA({ K, cameras,
+    points, observations,
+    fixed }, opts.solver)
+  keyframes: 창 안만
+    r.cameras로
+  map: ids의 점만 r.points로
+  costs ← r.costs
+  ```
+</Details>
 
 <SessionBreak id="s5" />
 
-### localBA 테스트가 안 맞을 때
+#### 선택 과제 테스트가 안 맞을 때
+
+선택 과제를 하지 않으면 이 세션은 완료 표시만 하고 넘어간다.
 
 - "창 밖 키프레임의 관측도 비용에 들어간다" 테스트만 실패하면 창 밖 관측을 빠뜨린 것이다. 시작 비용(`costs[0]`)이 테스트가 직접 계산한 값과 다르다.
 - "가장 오래된 두 키프레임은 그대로" 테스트가 실패하면 `fixed`에 창 안의 번호(0, 1)를 빠뜨렸거나, 창 밖 카메라를 앞에 두고 번호를 그대로 0, 1로 썼다.
@@ -200,14 +210,20 @@ TUM fr3 시퀀스 800프레임에서 키프레임 하나당(새 점 + BA) 0.2초
 </TaskCard>
 
 <TaskCard fn="vo" readOnly>
-  `core/reference/w11.ts`의 `makeVo`가 세 함수를 조립한다. mine의 `vo`도 같은 조립에 내 `initMap`, `trackPnP`, `localBA`를 넘겨 만든다. 순서대로 읽는다.
+  이 카드에는 `makeVo`를 부르는 세 줄만 보인다. 에디터에서 [`core/reference/w11.ts`](https://github.com/yunmin1130/slam_guide/blob/main/core/reference/w11.ts)를 열고 `makeVo`와 도우미 `findInit`, `refineInit`, `cullOutliers`, `newPoints`, `addKeyframe`을 읽는다.
+
+  `makeVo`가 세 함수를 조립한다. mine의 `vo`도 같은 조립에 내 `initMap`, `trackPnP`와 `localBA`(기본은 정답, 선택 과제를 했으면 내 것)를 넘겨 만든다. 그래서 mine의 `vo`는 내 `initMap`·`trackPnP`를 끝내야 이 카드의 테스트 상태가 통과로 바뀐다.
+
+  순서대로 읽는다.
 
   1. **초기화 (`findInit`, `refineInit`):** 기준 프레임과 다음 프레임들로 `initMap`을 시도한다. 공통 점이 모자라면 기준을 옮긴다. 성공하면 두 프레임 BA로 둘째 자세를 다듬고 점을 다시 삼각측량한다.
   2. **사이 프레임:** 초기화 두 프레임 사이 프레임도 이제 맵이 있으니 `trackPnP`로 자세를 채운다.
   3. **추적 루프:** 프레임마다 `trackPnP`를 부른다. 실패하면 `lostAt`에 적고 멈춘다. 성공하면 아웃라이어 맵 포인트를 정리하고(`cullOutliers`), `selectKeyframe`이 참이면 새 점(`newPoints`)을 넣고 `localBA`를 돌린다.
   4. **결과:** 프레임마다 자세(없으면 `null`), 키프레임, 맵, 초기화 프레임, 끊긴 프레임.
 
-  읽으며 확인할 것: 키프레임을 넣은 뒤 `poses`의 키프레임 자세를 BA 결과로 바꾼다. 키프레임이 아닌 프레임의 자세는 왜 다시 고치지 않을까? 11d의 ATE에 어떤 영향이 있을까? 추적이 끊기면 그 뒤는 모두 `null`이다. ORB-SLAM은 이때 키프레임 데이터베이스에서 비슷한 사진을 찾아 PnP로 다시 잇는다. 이를 재위치 인식(relocalization)이라 한다.
+  읽으며 확인할 것: 키프레임을 넣은 뒤 `poses`의 키프레임 자세를 BA 결과로 바꾼다. 키프레임이 아닌 프레임의 자세는 왜 다시 고치지 않을까? 11d의 ATE에 어떤 영향이 있을까?
+
+  추적이 끊기면 그 뒤는 모두 `null`이다. ORB-SLAM은 이때 키프레임 데이터베이스에서 비슷한 사진을 찾아 PnP로 다시 잇는다. 이를 재위치 인식(relocalization)이라 한다.
 </TaskCard>
 
 <SessionBreak id="s7" />

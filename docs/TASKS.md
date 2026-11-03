@@ -25,7 +25,7 @@ B단계(0주차 플랫폼 뼈대)는 2026-11-01 완료, G1 통과. 그 체크리
 | 11b | 완료 (2026-11-03) | 없음 (데모 없음) | 아직 |
 | 11c | 완료 (2026-11-03) | 대기 (VO 데모, 모아서 확인) | 아직 |
 | 11d | 완료 (2026-11-03) | 대기 (TUM 실행기, 모아서 확인) | 아직 · M1 리포트 아직 |
-| 12 | 다음 (M1 관문 뒤) | | |
+| 12 | 다음 (M1 관문 완료 2026-11-03) | | |
 
 ### 플랫폼 추가 (C단계 중)
 - [x] 코드 연습장: 폰에서 편집·브라우저 채점·GitHub 제출 (2026-11-02, ARCHITECTURE §6.1)
@@ -41,31 +41,51 @@ B단계(0주차 플랫폼 뼈대)는 2026-11-01 완료, G1 통과. 그 체크리
 - [x] VO 워커(`lib/vo.worker.ts`, `voClient.ts`): 몇 초 걸리는 VO를 화면 밖에서, 취소·시간 제한. 11c 합성 VO 데모, 11d TUM 실행기(트랙 JSON 열기 → 내 VO → ATE·RPE, TUM 형식 궤적 저장)
 - [x] `datasets/tum_tracks.py`: TUM RGB-D → KLT 트랙 JSON(DATA §2 tracks), `--selftest` (11주차)
 - [x] 6주차 "3D 복원" 도구: 합성 장면(정답 비교) 또는 내 대응점 파일로 E → decomposeE → triangulate → pnpDLT, 위에서 본 점 구름 (`lib/reconstruct.ts`, `lib/matchPrep.ts`)
+- [x] CSP meta: `astro.config.mjs`의 `security.csp` (인라인 스크립트는 빌드 해시, ARCHITECTURE §7) (2026-11-03)
+- [x] 코드 연습장 채점 시간 제한 주차별 (기본 8초, w11 30초, 시간 초과 시 PC `npm run test:mine` 안내) (2026-11-03)
+- [x] VO 워커 함수별 대체: mine의 initMap·trackPnP·localBA 중 TODO인 것만 정답으로 바꿔 조립, 화면에 이름 표시 (`lib/voFallback.ts`) (2026-11-03)
+- [x] 세션 소요 시간 기록: "완료 표시" 뒤 5~240분 입력 (`storage.ts`의 `sessionMinutes`) (2026-11-03)
+- [x] iPhone 7일 저장소 삭제 대응: `navigator.storage.persist()` 요청 + 대시보드(폰·패드)·제출 설정·코드 연습장 안내 (2026-11-03)
+- [x] G4 리뷰 반영: 세션 해제 시 걸린 시간 기록도 삭제, `minutes`는 항상 계산값(예전 값은 `legacyMinutes`), 기록 "지우기" 버튼, 대시보드 안내는 홈 화면 앱이면 숨김, QA가 폰 UA로 대시보드 안내까지 찍음, QA 대기 시간은 `playground/timeouts.ts`에서 읽음 (2026-11-03)
 
-### M1 관문 (11주차 다음, WORKFLOW §1)
-- 커리큘럼 재검토(G0)와 포트폴리오 관점 리뷰. 커리큘럼을 바꿀지는 사용자가 정한다.
-- M1 리포트 페이지 틀: 사용자가 TUM 결과를 낸 뒤 사이트에 붙인다 (11d "M1 리포트 쓰기").
-- 11주차에서 바뀐 공용 코드: 7주차 LM(읽기만)의 정규방정식을 0 건너뛰기로, 변수 64개 초과면 뒤에서부터 소거하는 희소 숄레스키로 (BA = Schur 보수와 같은 계산).
-- 정답 구현 TUM 기준 숫자(2026-11-03, 리뷰 수정 뒤): fr1/xyz 299/300 ATE 4.6cm(6.5m), fr3/long_office 799/800 ATE 17cm(20.8m, 0.83%), fr1/desk 15Hz는 77에 초기화·99에서 끊김(30Hz는 155/600). local BA를 끄면 fr1/xyz 151, fr3 92에서 끊김. 11d 표.
-- G3(폰 확인)는 모아서 한다: 대기 중인 데모는 7a GN 데모, 8b BA 데모, 11c VO 데모, 11d TUM 실행기.
+### M1 관문 (2026-11-03, G0 재검토 3개 완료)
+- 사용자 결정:
+  - 11주차 최소 경로: 손코딩은 `initMap`, `trackPnP`, `alignUmeyama`, `ate`. 도우미(`checkFrame`, `matchById`, `normalizePixel`, `reprojectionError`)와 `refinePose`는 읽기만, `localBA`는 읽기만(선택 과제).
+  - M1 리포트 보강: evo로 다시 재기, 소거 실험표, ORB-SLAM 기준선(논문 표 III 인용, 선택: ORB-SLAM3 Docker 실행). 숫자는 내 구현(mine)으로.
+  - 12a: TUM + WSL2 Ubuntu 24.04. KITTI는 선택 확장.
+  - 13주차 ESKF, 14주차 IMU 사전적분 손코딩, 15주차 라이다 ICP 신설 (뒤 주차 하나씩 밀림).
+  - iPhone 7일 저장소 삭제: 안내 + 저장소 보존 요청만 (Gist 동기화는 그대로 나중에).
+  - 적용 안 함 (사용자가 고르지 않음): poseGraph2D 읽기만, JetBot 실습 선택 트랙, M1/M1.5 분리, ROS2 필수, GTSAM 루프 클로저, 캡스톤 축소, 영어 README·GIF는 최소 README만.
+- 일정: CURRICULUM 일정 절을 레슨 내용 기준 추정(M1까지 약 29~31단위, 공부주당 1단위면 남은 약 9개월)으로 고쳤다.
+- 정답 구현 TUM 기준 숫자(2026-11-03): fr1/xyz 299/300 ATE 4.6cm(6.5m), fr3/long_office 799/800 ATE 17cm(20.8m, 0.83%), fr1/desk 15Hz는 77에 초기화·99에서 끊김(30Hz는 155/600). local BA를 끄면 fr1/xyz 151, fr3 92에서 끊김. 11d 표.
+- G3(폰 확인)는 모아서 한다: 7a GN 데모, 8b BA 데모, 11c VO 데모, 11d TUM 실행기. 그때 w11 코드 연습장 "테스트 실행"도 iPhone에서 시간을 재 본다.
 
 ### 다음 레슨(12주차) 준비 메모
-- C++ 포팅 (지원과 병행). 12a 필수: 환경(WSL2/Docker) → C++17 + Eigen + OpenCV 단안 VO → evo로 ATE/RPE → CMake, GTest, CI. 11d 실행기의 "내 궤적 저장"(TUM 형식)을 evo로 다시 재서 숫자가 같은지 확인하는 단계를 넣는다.
+- C++ 포팅 (지원과 병행). 12a 필수: WSL2 Ubuntu 24.04 → C++17 + Eigen + OpenCV 단안 VO, **TUM** `fr1/xyz`·`fr3/long_office` → evo → CMake, GTest, CI.
+- WSL2 규칙을 레슨에 넣는다: 코드·데이터는 `~/`(ext4)에 (`/mnt/c`는 몇 배 느림), `.wslconfig` 메모리 8GB 이상 + swap, VS Code Remote-WSL, Docker는 하나만(Desktop WSL2 백엔드 또는 WSL 안 엔진), 세팅이 1단위를 넘으면 devcontainer로.
+- CI는 `cpp.yml`로 분리: `paths: cpp/**`, `ubuntu-24.04`, apt로 OpenCV·Eigen·GTest·Ceres + ccache, 데이터셋은 CI에서 받지 않는다(합성 데이터 GTest). `deploy.yml`에는 `paths-ignore: [cpp/**, datasets/**]`.
+- C++ 결과 쇼케이스: TUM 형식 궤적 → evo → `site/src/data/cpp-results/*.json`(git sha, 데이터셋, 파라미터, ATE/RPE, 2000포즈 이하 궤적), 스키마 검사 후 `trajPlot`·`voEval` 재사용해 TS·C++·evo 비교.
+- evo 주의: `evo_rpe`에는 초 단위가 없어 `-d 15 -u f`(15Hz). evo는 타임스탬프로 짝지어서 사이트와 쌍 수가 다를 수 있다. evo는 Python 3.10+ 환경(WSL2 venv/pipx)에.
+- ORB-SLAM3 Docker 절차(11d 선택 경로)를 이때 실제로 검증한다: viewer 끄기, `-j2~4`, ORBvoc.txt는 커밋하지 않기.
 - 산출물은 함수가 아니라 `deliverables`로.
 
 ## 나중에 (붙이는 시점)
 
 | 항목 | 시점 |
 | --- | --- |
-| CSP meta (ARCHITECTURE §7 정책) | 첫 배포 안정 후 |
 | 코드 연습장 1.5단계: 코드 색칠 편집기(CodeMirror 6), 기호 버튼 개선 | 폰 손코딩이 불편하다고 느낄 때 |
 | 코드 연습장: 초안을 Gist 별도 파일로 동기화 (기기 간 이어 쓰기) | Gist 동기화와 함께 |
 | 파트별 레슨 페이지 분리 지원 (LESSON_TEMPLATE §1: glob, `part` 스키마, 진도 키, prereq) | 7주차 레슨 준비 때 |
 | Gist 동기화 + 동기화 버튼 | 기기 간 불편이 생길 때 |
 | 사이트에서 `calib.json` 결과 보기 (핀홀·어안 재투영 오차 비교 표) | 사용자가 JetBot 캘리브레이션을 마친 뒤 |
 | 내 구현과 정답을 한 화면에 겹쳐 그리는 비교 모드 | 데모에서 둘을 나란히 보고 싶어질 때 |
-| WSL2 / Docker 세팅 | 12주차 (M1 이후) |
+| WSL2 Ubuntu 24.04 / Docker 세팅 | 12주차 (M1 이후) |
 | VO 재초기화(relocalization): 추적이 끊기면 키프레임 사진과 다시 맞춰 잇기 | 캡스톤에서 JetBot 주행이 자주 끊길 때 |
 | 초기화의 호모그래피 경로 (평면·순수 회전 판별, ORB-SLAM의 H/F 점수 비율) | JetBot 바닥 장면에서 E 초기화가 실패할 때 |
 | `tum_tracks.py`를 표준 시퀀스 폴더(JetBot, DATA §2)에도 쓰게 넓히기 (M1 보너스: 출발점 복귀 오차) | M1 보너스를 할 때 |
+| 큰 함수 단계별 체크포인트 (smallBA·initMap·trackPnP: "1단계 → 이 테스트", 예외 테스트는 "마무리") | 사용자가 손코딩하다 한 세션에 안 끝나는 함수를 만날 때 (G0 ② P7) |
+| 과밀 세션 나누기: w06 s4·s8, w07a s5, w08a s3 / w02 짧은 개념 세션 합치기 + 강의 시청 세션 | 해당 레슨을 공부하기 전 (G0 ② P8·P10) |
+| M1 리포트 페이지 틀 (표·그림 자리를 미리 채운 페이지) | 사용자가 TUM 결과를 낼 때 (G0 ② P9) |
+| 제출 토큰 만료일 알림 (저장할 때 만료일 입력 → 2주 전 배지) | 토큰을 처음 갱신할 때쯤 (G0 ③ L7) |
+| ORB-SLAM3용 calib.json → yaml 변환기 (KannalaBrandt8), `rgb.txt` 생성, 드롭 프레임 검사(`jetbot_to_std.py`) | 17주차 코드 리딩·캡스톤 전 |
 | 체크 질문 풀이 저장 (`checked`에 `q:` 접두사 id로 넣어 세션 id와 충돌 방지) | 2주 복귀 복습 기능 만들 때 |

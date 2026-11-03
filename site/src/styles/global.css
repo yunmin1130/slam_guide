@@ -187,6 +187,18 @@ pre code {
     font-size: 0.82em;
   }
 }
+/* Shiki 코드의 줄 하나가 폰에서 여러 줄로 감기면, 감긴 줄을 안쪽으로 들여 써서 새 줄과 구분한다 (매달린 들여쓰기) */
+.astro-code .line {
+  display: inline-block;
+  width: 100%;
+  padding-left: 4ch;
+  text-indent: -4ch;
+}
+/* 매달린 들여쓰기에서 한국어 주석 줄 끝이 1~4px 밖으로 나가는 경우가 있다 (Chromium, 393px).
+   다른 줄바꿈 자리가 없을 때만 글자 사이에서 끊으므로 평소 줄바꿈은 그대로다 */
+.astro-code .line {
+  overflow-wrap: anywhere;
+}
 /* 인라인 코드(`Math.floor(rng() * n)` 등)는 한 덩어리로 둔다. 넘치면 npm run qa가 잡는다 */
 :not(pre) > code {
   white-space: nowrap;
@@ -194,6 +206,10 @@ pre code {
 
 /* Shiki 코드 블록: 기기 다크 모드면 dark 테마 색으로 바꾼다 (Astro 공식 방식) */
 @media (prefers-color-scheme: dark) {
+  /* github-dark의 주석 색(#6A737D)은 어두운 바탕에서 흐리다. 한국어 설명이 주석에 많아서 밝게 */
+  .astro-code span[style*="--shiki-dark:#6A737D"] {
+    color: #9da7b3 !important;
+  }
   .astro-code,
   .astro-code span {
     color: var(--shiki-dark) !important;

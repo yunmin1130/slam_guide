@@ -8,8 +8,9 @@ import type { AteResult, RpeResult, SE3, Vec3 } from "@core/types";
 import { type ImplKind } from "../../lib/impl";
 import { parseTracks, type TracksFile } from "../../lib/tracksFile";
 import { useImplFns } from "../../lib/useImplFns";
-import { runVoInWorker, type VoOutcome, type VoRun } from "../../lib/voClient";
+import { runVoInWorker, VO_TIMEOUT_MS, type VoOutcome, type VoRun } from "../../lib/voClient";
 import { evaluateVo, toTumTrajectory } from "../../lib/voEval";
+import { fallbackNote } from "../../lib/voFallback";
 import { TUM_SETTINGS } from "../../lib/voJob";
 import ImplToggle, { defaultKind, type FnStatusEntry } from "../ui/ImplToggle";
 import Slider from "../ui/Slider";
@@ -55,7 +56,7 @@ function download(name: string, text: string): void {
 
 function runErrorText(run: RunState): string | null {
   if (run.kind === "error") return run.message;
-  if (run.kind === "timeout") return "5분 안에 끝나지 않아 멈췄다 (PC에서 열거나 --max-frames를 줄여)";
+  if (run.kind === "timeout") return `${Math.round(VO_TIMEOUT_MS / 60_000)}분 안에 끝나지 않아 멈췄다 (PC에서 열거나 --max-frames를 줄여)`;
   return null;
 }
 
@@ -141,6 +142,7 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
   const ev = evaluation?.ev ?? null;
   const who = kind === "mine" ? "내 구현" : "정답";
   const runError = runErrorText(run);
+  const fallbackText = kind === "mine" ? fallbackNote(result?.fallbacks) : null;
   const failed = !!runError || !!evaluation?.error;
   const fmt = (v: number, d = 3) => (Number.isFinite(v) ? v.toFixed(d) : "–");
   const tracked = result ? result.poses.filter(Boolean).length : 0;
@@ -158,6 +160,7 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
             void onFile(input.files?.[0]).finally(() => (input.value = "")); // 같은 파일을 다시 골라도 다시 읽게
           }} />
       </label>
+      <p className={`${styles.muted} ${styles.coarseOnly}`}>폰에서는 몇 배 느리다. 긴 시퀀스는 PC에서 여는 걸 권한다</p>
 
       <div className={styles.controls}>
         <Slider id="vo-track-th" label="추적 inlier 기준" value={threshold} min={3} max={8} step={1} unit=" px" onChange={setThreshold} />
@@ -204,6 +207,7 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
             </p>
           )}
           {run.kind === "cancelled" && <p className={styles.muted}>취소했다</p>}
+          {fallbackText && <p className={styles.muted}>{fallbackText}</p>}
           {!fns && !loadError && <p className={styles.muted}>구현 불러오는 중…</p>}
         </div>
         {(fileError || loadError || failed) && (

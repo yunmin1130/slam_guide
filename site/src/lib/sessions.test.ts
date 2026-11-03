@@ -119,6 +119,14 @@ describe("applySessionToggle", () => {
     expect(done.checked).toEqual(["s1", "s2"]);
   });
 
+  it("해제하면 기록도 사라진다", () => {
+    const state = { status: "done" as const, checked: ["s1", "s2"], sessionMinutes: { s1: 30, s2: 45 }, minutes: 75 };
+    const r = applySessionToggle(state, "s2", false, ids);
+    expect(r).toEqual({ status: "in-progress", checked: ["s1"], sessionMinutes: { s1: 30 }, minutes: 30 });
+    const r2 = applySessionToggle(r, "s1", false, ids);
+    expect(r2).toEqual({ status: "in-progress", checked: [] });
+  });
+
   it("같은 id를 두 번 체크해도 중복되지 않는다", () => {
     const a = applySessionToggle(undefined, "s1", true, ids);
     expect(applySessionToggle(a, "s1", true, ids).checked).toEqual(["s1"]);

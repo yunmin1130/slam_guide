@@ -17,7 +17,10 @@ function headline(outcome: RunOutcome | null, cases: CaseResult[], running: bool
     case "no-tests":
       return { text: outcome.message, tone: "fail" };
     case "timeout":
-      return { text: "8초 안에 안 끝났어. 무한 루프가 있는지 봐줘 (처음 실행이면 한 번 더 눌러봐)", tone: "fail" };
+      return {
+        text: `${Math.round(outcome.timeoutMs / 1000)}초 안에 안 끝났어. 무한 루프가 있는지 봐줘 (처음 실행이면 한 번 더 눌러봐). 폰에서 느린 거면 PC에서 npm run test:mine으로 돌려봐`,
+        tone: "fail",
+      };
     case "crash":
       // 새로고침 안내는 그 자체로 문장이라 접두어를 붙이지 않는다
       return { text: RELOAD_MESSAGES.has(outcome.message) ? outcome.message : `채점기 오류: ${outcome.message}`, tone: "fail" };

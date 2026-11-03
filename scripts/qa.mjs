@@ -17,6 +17,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+// 코드 연습장 제한 시간을 앱과 같은 파일에서 읽는다 (Node 24 타입 제거로 .ts를 바로 import)
+import { RUN_TIMEOUT_MS, WEEK_TIMEOUT_MS } from "../site/src/lib/playground/timeouts.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const OUT = join(ROOT, "qa-output");
@@ -24,8 +26,13 @@ const LESSONS = join(ROOT, "site/src/content/lessons");
 const BASE_PATH = "/slam_guide/";
 const PORT = 4391;
 const VIEWPORT = { width: 393, height: 852 };
+// 앱은 UA로 기기를 고른다 (sessions.ts detectDevice). 폰 UA를 줘야 대시보드의 폰 전용 안내까지 화면에 나온다
+const IPHONE_UA =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 const MAX_FIGURE_HEIGHT = 400; // LESSON_TEMPLATE §3 ③
-const RUN_WAIT_MS = 12_000; // 코드 연습장 시간 제한(8초) + 워커 시작
+const WORKER_START_MS = 4_000;
+// 가장 긴 주차 제한 시간 + 워커 시작. 제한 시간이 바뀌면 같이 따라간다
+const RUN_WAIT_MS = Math.max(RUN_TIMEOUT_MS, ...Object.values(WEEK_TIMEOUT_MS)) + WORKER_START_MS;
 const ACTION_TIMEOUT_MS = 10_000; // 클릭·대기 한 번의 상한 (기본 30초는 너무 길다)
 const SHOT_CHUNK = 1600; // 스크린샷 한 장의 높이 (시각 검사 에이전트가 읽기 좋은 크기)
 const CASE_STATUSES = new Set(["pass", "fail", "todo"]);
@@ -283,7 +290,14 @@ async function demoChecks(page, fail) {
 }
 
 async function checkPage(browser, origin, target, scheme) {
-  const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1, isMobile: true, hasTouch: true, colorScheme: scheme });
+  const ctx = await browser.newContext({
+    viewport: VIEWPORT,
+    userAgent: IPHONE_UA,
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+    colorScheme: scheme,
+  });
   ctx.setDefaultTimeout(ACTION_TIMEOUT_MS);
   const page = await ctx.newPage();
   const failures = [];
@@ -298,6 +312,10 @@ async function checkPage(browser, origin, target, scheme) {
     await hydrateAll(page, fail);
     // 접힌 힌트·LA 박스 안의 수식·코드도 검사하고 스크린샷에 담는다
     await page.evaluate(() => document.querySelectorAll("main details").forEach((d) => (d.open = true)));
+    if (target.name === "dashboard") {
+      // 폰에서만 보이는 저장소 안내가 실제로 그려졌는지 (스크린샷에도 담긴다)
+      await page.getByText(/홈 화면에 추가/).waitFor({ timeout: ACTION_TIMEOUT_MS }).catch(() => fail("대시보드 저장소 안내가 폰 화면에 보이지 않는다"));
+    }
     const layout = await layoutChecks(page);
     if (layout.katexErrors.length) fail(`수식 렌더 오류 ${layout.katexErrors.length}개: ${layout.katexErrors.join(" | ")}`);
     if (layout.overflow > 1 || layout.wide.length) fail(`가로 넘침 ${layout.overflow}px: ${layout.wide.join(", ")}`);

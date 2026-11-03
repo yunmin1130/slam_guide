@@ -3,7 +3,7 @@ import { runVoInWorker, VO_LOAD_FAILED_MESSAGE, type VoWorkerOut, type WorkerLik
 import { SYNTHETIC_SETTINGS, type VoJobResult } from "./voJob";
 
 const job = { kind: "reference" as const, K: { fx: 1, fy: 1, cx: 0, cy: 0 }, frames: [], settings: SYNTHETIC_SETTINGS };
-const result: VoJobResult = { poses: [], keyframeFrames: [], mapPoints: [], initFrames: null, lostAt: null, ms: 1 };
+const result: VoJobResult = { poses: [], keyframeFrames: [], mapPoints: [], initFrames: null, lostAt: null, ms: 1, fallbacks: [] };
 
 function fakeWorker(script: (w: WorkerLike) => void): { make: () => WorkerLike; terminated: () => boolean } {
   let terminated = false;

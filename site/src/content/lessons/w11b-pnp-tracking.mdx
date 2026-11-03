@@ -6,15 +6,16 @@ summary: 초기화한 맵의 3D 점과 새 프레임의 특징점을 이어 RANS
 prereq: [w11a, w07a, w07b, w08a, w08b]
 la_box: [조건수와 데이터 정규화]
 tasks: [trackPnP]
-read_only: []
+read_only: [refinePose]
 deliverables: []
 jetbot: false
-units: 1
+units: 1.25
 sessions:
   - { id: s1, device: phone, title: "개념: 3D-2D 추적, RANSAC PnP" }
   - { id: s2, device: phone, title: "개념: 3D 점 정규화, LA 박스" }
   - { id: s3, device: phone, title: "개념: 자세만 다듬기, 실무 PnP" }
   - { id: s4, device: pad, title: "손 유도: 정규화 되돌리기, 반복 수" }
+  - { id: s8, device: pc, title: "읽기: refinePose" }
   - { id: s5, device: pc, title: "과제: trackPnP 구현" }
   - { id: s6, device: pc, title: "과제: trackPnP 디버그·테스트 통과" }
   - { id: s7, device: phone, title: "체크 질문" }
@@ -45,7 +46,7 @@ inlier가 `minInliers`보다 적으면 추적 실패(`null`)다. 11c의 VO는 �
 
 `pnpDLT`는 점 하나마다 $P$(12개 원소)에 대한 식 두 줄을 쌓고 $Ap = 0$을 푼다. 픽셀을 정규화 좌표 $(x, y)$로 바꿔 넣으므로, 식의 계수에는 $X, Y, Z, 1$과 $xX, xY, \ldots$가 섞여 있다.
 
-맵 좌표가 원점에서 멀면 문제가 된다. 예를 들어 점들이 $z \approx 10$ 근처에 모여 있으면 $X, Y, Z$ 열은 10 안팎, 동차 성분 열은 1, $xZ$ 같은 곱 열은 5 안팎($x \approx 0.5$)이라 열 크기가 1과 10 정도로 벌어진다. 그러면 $A$의 조건수가 커져서(LA 박스) 작은 픽셀 잡음이 해를 크게 흔들고, 점이 6개뿐인 RANSAC 표본에서는 특히 심하다.
+맵 좌표가 원점에서 멀면 문제가 된다. 예를 들어 점들이 $z \approx 10$ 근처에 모여 있으면 $X, Y, Z$ 열은 10 안팎, 동차 성분 열은 1, $xZ$ 같은 곱 열은 5 안팎($x \approx 0.5$)이라 열 크기가 1과 10 정도로 벌어진다. 그러면 $A$의 조건수(condition number)가 커져서(LA 박스) 작은 픽셀 잡음이 해를 크게 흔들고, 점이 6개뿐인 RANSAC 표본에서는 특히 심하다.
 
 해결은 5주차 8점 알고리즘의 하틀리 정규화와 같은 생각이다. 3D 점을 무게중심 $\mu$로 옮기고 평균 거리 $d$로 나눈다. 5주차는 평균 거리를 $\sqrt 2$로 맞췄지만, 여기서는 1로 맞춘다.
 
@@ -60,7 +61,7 @@ $X'$로 DLT를 풀어 $(R, t')$를 얻으면 원래 좌표의 자세는 $(R,\ d\
 <LABox term="조건수와 데이터 정규화">
   **정의:** 행렬 $A$의 조건수 $\kappa(A) = \sigma_{\max} / \sigma_{\min}$(가장 큰 특이값 / 가장 작은 것). $Ax = b$에서 $b$의 상대 오차가 $x$에서 최대 $\kappa$배까지 커질 수 있다.
 
-  **기하학적 의미:** $A$가 어떤 방향은 크게, 어떤 방향은 아주 작게 늘린다는 뜻이다. 작게 늘리는 방향의 정보는 잡음에 묻힌다. $Ap = 0$처럼 가장 작은 특이값 방향을 해로 찾을 때는, 가장 큰 특이값에 비해 둘째로 작은 특이값이 작을수록(가장 작은 것과의 간격이 좁을수록) $\kappa$가 클 때처럼 해가 잡음에 흔들린다.
+  **기하학적 의미:** $A$가 어떤 방향은 크게, 어떤 방향은 아주 작게 늘린다는 뜻이다. 작게 늘리는 방향의 정보는 잡음에 묻힌다. $Ap = 0$처럼 가장 작은 특이값 방향을 해로 찾을 때는 둘째로 작은 특이값을 본다. 그 값이 가장 큰 특이값에 비해 작을수록(가장 작은 것과의 간격이 좁을수록) $\kappa$가 클 때처럼 해가 잡음에 흔들린다.
 
   **SLAM에서:** 8점 알고리즘(5주차), PnP·삼각측량 DLT(6주차)는 모두 입력 좌표를 원점 근처, 크기 1 정도로 옮긴 뒤 풀고 결과를 되돌린다. 변수의 단위를 맞추는 것(픽셀 대신 정규화 좌표, 미터 대신 평균 거리)도 같은 목적이다.
 
@@ -79,13 +80,15 @@ DLT는 $|Ap|$, 즉 대수적 오차를 최소화한다. 우리가 원하는 것�
 - **야코비안:** 8a `projectionJacobian`의 `pose` 블록 (2×6)
 - **업데이트:** $\delta = [\rho;\ \phi]$(이동 먼저, 8a 야코비안의 열 순서와 같다)로 좌섭동 $R \leftarrow \mathrm{Exp}(\phi)R$, $t \leftarrow \mathrm{Exp}(\phi)t + \rho$ (7b)
 
-다듬은 자세로 inlier를 다시 센다. 처음에 경계에 걸려 빠졌던 점이 들어오기도 한다. 이 (다듬기 → 다시 세기)를 두 번 한다. ORB-SLAM의 `PoseOptimization`이 같은 일을 하는데, 거기서는 다듬을 때마다 아웃라이어를 다시 판정하며 네 번 돈다.
+다듬기는 읽기만 함수 `refinePose`로 준다(과제 절). 다듬은 자세로 inlier를 다시 센다. 처음에 경계에 걸려 빠졌던 점이 들어오기도 해서, 이 (다듬기 → 다시 세기)를 두 번 한다.
+
+ORB-SLAM의 `PoseOptimization`이 같은 일을 하는데, 거기서는 다듬을 때마다 아웃라이어를 다시 판정하며 네 번 돈다.
 
 ### 실무 PnP
 
 OpenCV `solvePnPRansac`은 DLT 대신 최소 3~4점으로 푸는 방법을 표본에 쓴다. P3P(원근 3점 문제)는 점 3개로 자세 후보를 구하고, EPnP(효율적 PnP)는 점들을 제어점 4개의 가중합으로 나타내 한 번에 푼다. 표본이 작을수록 RANSAC 반복이 적게 필요하고, 평면 장면에서도 잘 된다(DLT는 점들이 한 평면 위면 퇴화한다).
 
-그 뒤 LM으로 다듬는 순서는 같다. 12주차 C++ 포팅에서 이 함수를 쓴다.
+그 뒤 LM으로 다듬는 순서는 같다. 12주차 C++ 포팅에서 `solvePnPRansac`을 쓴다.
 
 <SessionBreak id="s3" />
 
@@ -102,36 +105,53 @@ OpenCV `solvePnPRansac`은 DLT 대신 최소 3~4점으로 푸는 방법을 표�
 
 <SessionBreak id="s4" />
 
+### 읽기: refinePose
+
+<TaskCard fn="refinePose" readOnly>
+  점을 고정하고 자세 $T_{cw}$만 LM으로 다듬는다(자세만 다듬기, motion-only BA). 대응 `{ X, uv }`의 재투영 오차를 줄이고, 좌섭동 $R \leftarrow \mathrm{Exp}(\phi)R$, $t \leftarrow \mathrm{Exp}(\phi)t + \rho$를 쓴다.
+
+  읽으며 확인할 것: 8a `projectionJacobian`의 `pose` 블록(2×6)은 어디서 쓰이나? 시도한 자세에서 점이 카메라 뒤로 가면 왜 잔차를 크게 두나? (0으로 두면 LM이 무엇을 "좋은 자세"로 착각하는가.)
+
+  더 볼 것: 반복 횟수 상한과 수렴 기준(`tolerance`)은 어디에 정해져 있나? `plus`가 개념 절의 좌섭동 식과 같은지 한 줄씩 맞춰 본다.
+</TaskCard>
+
+다 읽었으면 카드의 테스트 상태가 통과인지 확인한다. 그리고 손 유도 3번의 $J^\top J$ 크기가 이 코드의 변수 수와 맞는지 본다.
+
+<SessionBreak id="s8" />
+
 <TaskCard fn="trackPnP">
-  맵 포인트(`map`, id와 월드 좌표)와 현재 프레임 특징점(`features`)을 id로 이어 현재 자세 $T_{cw}$를 구한다. 결과는 `{ T, inliers }`이고 `inliers`는 특징점 id 오름차순이다. 맵과 겹치는 특징점이나 최종 inlier가 `minInliers`보다 적으면 `null`이다. `K`가 이상하거나, 같은 id가 두 번 있거나, 좌표가 NaN·무한대이거나, `threshold ≤ 0`이거나 `minInliers < 6`이면 예외를 던진다.
+  맵 포인트(`map`, id와 월드 좌표)와 현재 프레임 특징점(`features`)을 id로 이어 현재 자세 $T_{cw}$를 구한다. 결과는 `{ T, inliers }`이고 `inliers`는 특징점 id 오름차순이다.
+
+  맵과 겹치는 특징점이나 최종 inlier가 `minInliers`보다 적으면 `null`이다. 입력이 이상하면 `checkFrame`이 예외를 던지고, `threshold ≤ 0`이거나 `minInliers < 6`이어도 예외다. 핵심은 3D 정규화를 넣은 RANSAC 6점 DLT이고, 다듬기는 `refinePose`를 두 번 부른다.
 
   <Hint level={1}>
-    RANSAC 표본은 6개, 모델은 `pnpDLT`, 오차는 재투영 오차다. `pnpDLT`에 넣기 전에 3D 점을 정규화하고, 나온 자세를 되돌린다. 마지막에 자세만 LM으로 다듬는다.
+    RANSAC 표본은 6개, 모델은 `pnpDLT`, 오차는 `reprojectionError`다. `pnpDLT`에 넣기 전에 3D 점을 정규화하고, 나온 자세를 되돌린다. 마지막에 inlier로 `refinePose`를 부른다.
 
     ```ts
-    import { expSO3 }
-      from "@core/prev/w03";
     import { ransac }
       from "@core/prev/w05";
     import { pnpDLT }
       from "@core/prev/w06";
-    import { levenbergMarquardt }
-      from "@core/prev/w07";
-    import { projectionJacobian }
-      from "@core/prev/w08";
+    import {
+      checkFrame, normalizePixel,
+      refinePose,
+      reprojectionError,
+    } from "../reference/w11";
     ```
   </Hint>
 
   <Hint level={2}>
-    `fit(표본)`: $\mu$ = 표본 3D 점의 평균, $d$ = $\mu$까지의 평균 거리. $d = 0$이면 `null`. `pnpDLT`에 $(X - \mu)/d$와 정규화 좌표를 넣고, 예외면 `null`. 되돌린 자세는 $(R,\ d\,t' - R\mu)$.
+    `fit(표본)`: $\mu$ = 표본 3D 점의 평균, $d$ = $\mu$까지의 평균 거리. $d = 0$이면 `null`. `pnpDLT`에 $(X - \mu)/d$와 `normalizePixel`로 바꾼 좌표를 넣고, 예외면 `null`. 되돌린 자세는 $(R,\ d\,t' - R\mu)$.
 
-    자세 다듬기는 7a `levenbergMarquardt<SE3>`에 `{ residual, jacobian, plus }`를 넘긴다. 8b `smallBA`에서 카메라 하나만 남기고 점을 뺀 모양이다. 카메라 뒤로 간 점은 잔차를 크게(예: $10^6$) 두고 야코비안은 0으로 둔다. 설정은 반복 10번, 허용 오차 $10^{-10}$이다.
+    `error(T, c)`는 `reprojectionError(K, T, c.X, c.uv)`다. 카메라 뒤 점은 `Infinity`라 저절로 아웃라이어가 된다. `refinePose`에는 RANSAC inlier의 `{ X, uv }`만 넘긴다.
   </Hint>
 
   <Hint level={3}>
     ```text
-    검사 (K, 같은 id, NaN,
-      threshold, minInliers ≥ 6)
+    checkFrame(K, features,
+      "trackPnP")
+    threshold > 0,
+      minInliers ≥ 6 검사
     corr ← features 중 map에
       있는 id의 { id, X, uv }
     corr 수 < minInliers
@@ -139,12 +159,16 @@ OpenCV `solvePnPRansac`은 DLT 대신 최소 3~4점으로 푸는 방법을 표�
     fit(표본):
       μ ← 표본 X의 평균
       d ← μ까지 평균 거리
+      d = 0 이면 null
       (R, t') ← pnpDLT(
-        (X − μ)/d, 정규화 uv)
+        (X − μ)/d,
+        normalizePixel(K, uv))
         (예외면 null)
       { R, t: d·t' − Rμ }
-    err(T, c) ← 재투영 오차
-      (카메라 뒤면 ∞)
+    err(T, c) ←
+      reprojectionError(
+        K, T, c.X, c.uv)
+      (카메라 뒤면 Infinity)
     found ← ransac(corr, {
       sampleSize: 6, fit,
       error: err, threshold,
@@ -153,8 +177,8 @@ OpenCV `solvePnPRansac`은 DLT 대신 최소 3~4점으로 푸는 방법을 표�
     T ← found.model
     inl ← found.inliers
     두 번 반복:
-      T ← 자세 다듬기(T,
-        inl의 대응)
+      T ← refinePose(K, T,
+        inl의 { X, uv })
       inl ← err(T, c)
         < threshold 인 c
     inl 수 < minInliers
@@ -170,7 +194,9 @@ OpenCV `solvePnPRansac`은 DLT 대신 최소 3~4점으로 푸는 방법을 표�
 ### trackPnP 테스트가 안 맞을 때
 
 - 기본 테스트(30%가 엉터리)에서 inlier가 50개보다 적게 나오면 3D 점 정규화를 빼먹었을 가능성이 크다. 시험 장면의 점은 $z = 6 \sim 14$에 모여 있어서 정규화 없이는 좋은 표본이 드물다.
-- 자세 오차만 조금 넘으면 자세 다듬기를 빠뜨렸거나, `plus`의 섭동이 8a 야코비안과 다르다(우섭동으로 썼거나 $t$에 $\mathrm{Exp}(\phi)$를 곱하지 않음).
+- 월드를 (20, −10, 20)만큼 옮긴 테스트만 실패하면 정규화를 빠뜨렸거나 되돌리기($d\,t' - R\mu$)를 틀렸다.
+- 자세 오차만 조금 넘으면 `refinePose`를 빠뜨렸거나 한 번만 불렀는지 본다.
+- `refinePose`에 inlier만 넘겼는지 본다. 대응 전부를 넘기면 엉터리 30%가 자세를 끌어당긴다(제곱 비용이라 아웃라이어에 약하다).
 - "맵에 없는 id는 무시" 테스트가 실패하면 대응을 만들 때 `map`에 없는 특징점을 걸렀는지 본다.
 - `inliers`에 대응 번호(0, 1, 2, …)가 들어가면 안 된다. 특징점 id로 바꿔서 돌려준다.
 
@@ -193,7 +219,7 @@ OpenCV `solvePnPRansac`은 DLT 대신 최소 3~4점으로 푸는 방법을 표�
 <CheckQuestion q="실제 영상에서 VO가 몇 프레임마다 자세가 툭툭 튄다. trackPnP에서 무엇을 확인하나?" kind="실무">
   inlier 수와 비율을 프레임마다 찍어 본다. 비율이 갑자기 떨어지는 프레임이 튀는 곳이면, 맵에 잘못된 점(미끄러진 트랙)이 쌓였거나 모션 블러로 트랙이 흔들린 것이다. 11c에서 아웃라이어로 판정된 맵 포인트를 지우는 정리를 넣는다.
 
-  자세 다듬기가 실제로 비용을 줄이는지(LM의 cost), 재투영 기준(픽셀)이 데이터에 맞는지도 본다. TUM 같은 실제 데이터는 롤링 셔터와 보정 오차 때문에 합성 데이터보다 넉넉한 기준(5~6px)이 필요했다(11d).
+  `refinePose` 전후로 inlier 재투영 오차의 평균이 실제로 주는지, 재투영 기준(픽셀)이 데이터에 맞는지도 본다. TUM 같은 실제 데이터는 롤링 셔터와 보정 오차 때문에 합성 데이터보다 넉넉한 기준(6px)이 필요했다(11d).
 </CheckQuestion>
 
 <SessionBreak id="s7" />

@@ -6,15 +6,16 @@ summary: 미니 VO 전체 그림을 잡고, 두 프레임만으로 첫 지도를
 prereq: [w05, w06, w10]
 la_box: [호모그래피]
 tasks: [initMap]
-read_only: []
+read_only: [checkFrame, matchById, normalizePixel, reprojectionError]
 deliverables: []
 jetbot: false
-units: 1
+units: 1.25
 sessions:
   - { id: s1, device: phone, title: "개념: 미니 VO 전체 그림, 2D-2D 초기화" }
   - { id: s2, device: phone, title: "개념: 시차 검사, 순수 회전" }
   - { id: s3, device: phone, title: "개념: H vs E, LA 박스: 호모그래피" }
   - { id: s4, device: pad, title: "손 유도: 시차각, 깊이 오차, 순수 회전" }
+  - { id: s8, device: pc, title: "읽기: 도우미 함수 4개" }
   - { id: s5, device: pc, title: "과제: initMap 구현" }
   - { id: s6, device: pc, title: "과제: initMap 디버그·테스트 통과" }
   - { id: s7, device: phone, title: "체크 질문" }
@@ -39,7 +40,7 @@ sessions:
 
 - 픽셀을 정규화 좌표로 바꾼다: $\hat x = (x, y)$, $x = (u - c_x)/f_x$, $y = (v - c_y)/f_y$. $E$, $H$와 곱하거나 직선과 내적할 때는 동차좌표 $(x, y, 1)$로 쓴다.
 - RANSAC(5주차)으로 필수 행렬 $E$를 맞춘다. 표본마다 8점 알고리즘을 쓰고, 오차는 점과 에피폴라 직선 사이 거리다.
-- inlier 전부로 $E$를 다시 맞춘 뒤 분해한다(6주차 `decomposeE`). 키랄리티로 네 후보 중 하나를 고른다.
+- inlier 전부로 $E$를 다시 맞춘 뒤 분해한다(6주차 `decomposeE`). 키랄리티(cheirality, 점이 두 카메라 앞에 있어야 한다는 조건)로 네 후보 중 하나를 고른다.
 - inlier마다 삼각측량하고(6주차 `triangulate`), 두 카메라 앞에 있고 재투영 오차가 작은 점만 맵에 넣는다.
 
 첫 프레임을 월드로 두므로 첫 자세는 단위 변환이고, 둘째 자세는 $T_{21} = (R, t)$다. $T_{21}$은 프레임 2의 $T_{cw}$(월드 = 프레임 1)이고, 11b부터 쓰는 자세 표기와 같다.
@@ -122,37 +123,79 @@ ORB-SLAM은 초기화할 때 $H$와 $F$를 둘 다 RANSAC으로 맞추고, inlie
 
 <SessionBreak id="s4" />
 
+### 읽기: 도우미 함수
+
+입력 검사, id 짝짓기, 좌표 변환, 재투영 오차는 11a·11b·11c가 모두 쓰는 잡일이다. 이것들은 읽기만 함수로 주고, 손코딩은 기하(RANSAC, 분해, 삼각측량, 시차)에 집중한다. 내 `core/mine/w11.ts`는 네 함수를 정답에서 그대로 내보낸다.
+
+<TaskCard fn="checkFrame" readOnly>
+  입력 검사(input validation)다. `K`가 이상하거나(fx 또는 fy가 0 이하, cx·cy가 NaN·무한대), 한 프레임에 같은 id가 두 번 있거나, 좌표가 NaN·무한대이면 예외를 던진다. 메시지 앞에 `who`(부른 함수 이름)를 붙인다.
+
+  읽으며 확인할 것: 같은 id 검사에 왜 `Set`을 쓰나? 같은 파일의 `checkK`는 `NaN > 0`이 거짓이라는 성질을 어떻게 쓰나? (`fx`가 NaN이면 어떻게 되는지 따라가 본다.)
+</TaskCard>
+
+<TaskCard fn="matchById" readOnly>
+  두 프레임에 모두 있는 id만 골라 `{ id, a, b }` 짝 목록을 만든다. `a`는 프레임 1 픽셀, `b`는 프레임 2 픽셀이고, 순서는 프레임 1을 따른다.
+
+  읽으며 확인할 것: 프레임 2를 `Map`으로 먼저 바꾸는 이유는? (두 겹 반복과 비교한다.) 공통 id가 하나도 없으면 무엇을 돌려주나?
+</TaskCard>
+
+<TaskCard fn="normalizePixel" readOnly>
+  픽셀 $(u, v)$를 정규화 좌표 $((u - c_x)/f_x,\ (v - c_y)/f_y)$로 바꾼다. 5·6주차 함수는 모두 이 좌표를 받는다.
+
+  읽으며 확인할 것: 렌즈 왜곡은 여기서 다루나? (TUM 데이터는 변환 스크립트가 미리 편다.) 거꾸로 정규화 좌표를 픽셀로 되돌리는 식을 써 보고, 한 점으로 왕복해 본다.
+</TaskCard>
+
+<TaskCard fn="reprojectionError" readOnly>
+  월드 점 $X$를 $T_{cw}$로 카메라 좌표로 옮겨 투영하고, 관측 픽셀과의 거리(픽셀)를 돌려준다. 점이 카메라 뒤(깊이 ≤ 0)면 `Infinity`다.
+
+  읽으며 확인할 것: 뒤쪽 점에 `Infinity`를 주면 "깊이 > 0" 검사를 따로 할 필요가 있나? 깊이가 0에 아주 가까운 점은 어떻게 처리하나?
+</TaskCard>
+
+네 카드를 다 읽었으면 각 카드의 테스트 상태가 통과인지 확인한다. 읽기만 함수는 정답을 그대로 내보내므로 처음부터 통과여야 한다. 아니면 `core/mine/w11.ts`의 `export { … } from "../reference/w11"` 줄에서 이름이 빠졌는지 본다.
+
+<SessionBreak id="s8" />
+
 <TaskCard fn="initMap">
-  두 프레임의 특징점(`f1`, `f2`, 같은 id가 같은 점)과 `K`로 상대 자세 $T_{21}$($|t| = 1$)과 첫 맵 포인트를 만든다. 프레임 1이 월드다. 결과는 `{ T, points, parallaxDeg }`이고 `points`는 id 오름차순이다. 공통 점이 max(8, `minPoints`)보다 적거나, 남은 점이 `minPoints`보다 적거나, 시차각 중앙값이 `minParallaxDeg`보다 작으면 `null`이다. `K`가 이상하거나(fx·fy ≤ 0), 한 프레임에 같은 id가 두 번 있거나, 좌표가 NaN·무한대이거나, `threshold ≤ 0`, `minParallaxDeg < 0`, `minPoints < 1`이면 예외를 던진다.
+  두 프레임의 특징점(`f1`, `f2`, 같은 id가 같은 점)과 `K`로 상대 자세 $T_{21}$($|t| = 1$)과 첫 맵 포인트를 만든다. 프레임 1이 월드다. 결과는 `{ T, points, parallaxDeg }`이고 `points`는 id 오름차순이다.
+
+  공통 점이 max(8, `minPoints`)보다 적거나, 남은 점이 `minPoints`보다 적거나, 시차각 중앙값이 `minParallaxDeg`보다 작으면 `null`이다. 입력이 이상하면 `checkFrame`이 예외를 던지고, `threshold ≤ 0`, `minParallaxDeg < 0`, `minPoints < 1`도 예외다.
 
   <Hint level={1}>
-    5주차 `eightPoint`·`ransac`, 6주차 `decomposeE`·`triangulate`를 가져와 차례로 부른다. 모두 정규화 좌표를 받는다는 것을 잊지 않는다.
+    도우미로 검사·짝짓기·정규화를 끝내고, 5주차 `eightPoint`·`ransac`, 6주차 `decomposeE`·`triangulate`를 차례로 부른다. 5·6주차 함수는 모두 정규화 좌표를 받는다.
 
     ```ts
     import { eightPoint, ransac }
       from "@core/prev/w05";
     import { decomposeE, triangulate }
       from "@core/prev/w06";
+    import {
+      checkFrame, matchById,
+      normalizePixel,
+      reprojectionError,
+    } from "../reference/w11";
     ```
   </Hint>
 
   <Hint level={2}>
     RANSAC에는 대응점 번호 배열을 넘기고, `fit`에서 번호로 정규화 좌표를 꺼낸다. `eightPoint`가 예외를 던지면(퇴화 표본) `null`을 돌려준다.
 
-    `error`는 $\hat x = (x, y, 1)$로 두고 $l = E\hat x_1$로 직선을 만들고 $|l \cdot \hat x_2| / \sqrt{l_0^2 + l_1^2}$를 구한 뒤 $(f_x + f_y)/2$를 곱해 픽셀로 바꾼다. 그래야 `threshold`(픽셀)와 비교할 수 있다.
+    `error`는 $\hat x = (x, y, 1)$로 두고 $l = E\hat x_1$로 직선을 만들고 $|l \cdot \hat x_2| / \sqrt{l_{0}^{2} + l_{1}^{2}}$를 구한 뒤 $(f_x + f_y)/2$를 곱해 픽셀로 바꾼다. 그래야 `threshold`(픽셀)와 비교할 수 있다.
 
-    삼각측량한 점은 두 카메라에서 깊이가 양수이고, 두 재투영 오차가 `threshold`보다 작을 때만 남긴다. 시차각은 점마다 라디안으로 구해 도로 바꿔 두고, 마지막에 중앙값으로 판정한다.
+    삼각측량한 점은 `reprojectionError`를 두 자세(단위, $T$)에서 재서 둘 다 `threshold`보다 작을 때만 남긴다. 시차각은 점마다 도로 구해 두고, 마지막에 중앙값으로 판정한다.
   </Hint>
 
   <Hint level={3}>
     ```text
-    검사 (K, 같은 id, NaN,
-      설정)
-    pairs ← f1에서 f2에도 있는
-      id의 (id, uv1, uv2)
+    checkFrame(K, f1, "initMap")
+    checkFrame(K, f2, "initMap")
+    설정 검사 (threshold 등)
+    pairs ← matchById(f1, f2)
     pairs 수 < max(8, minPoints)
       이면 null
-    n1, n2 ← 정규화 좌표
+    n1 ← pairs마다
+      normalizePixel(K, a)
+    n2 ← pairs마다
+      normalizePixel(K, b)
     found ← ransac(번호들, {
       sampleSize: 8,
       fit: 번호들 → eightPoint
@@ -172,9 +215,14 @@ ORB-SLAM은 초기화할 때 $H$와 $F$를 둘 다 RANSAC으로 맞추고, inlie
     good ← inlier마다:
       X ← triangulate(I, T,
         n1, n2) (예외면 건너뜀)
-      두 깊이 > 0 이고
-      두 재투영 < threshold 이면
-      시차각 ← ∠(X, X − C2)
+      e1 ← reprojectionError(
+        K, I, X, a)
+      e2 ← reprojectionError(
+        K, T, X, b)
+      e1, e2 < threshold 이면
+      (뒤쪽 점은 Infinity)
+      시차각 ← ∠(X − C1,
+        X − C2), C1 = 0
         (rad → 도, × 180/π)
       → { id, X, 시차각 }
     good 수 < minPoints
@@ -193,9 +241,10 @@ ORB-SLAM은 초기화할 때 $H$와 $F$를 둘 다 RANSAC으로 맞추고, inlie
 ### initMap 테스트가 안 맞을 때
 
 - "옆으로 0.5 m" 기본 테스트에서 점 오차만 크면 픽셀 좌표를 그대로 `triangulate`에 넣었을 가능성이 크다. 6주차 함수는 정규화 좌표를 받는다.
-- 회전이나 이동 방향이 틀리면 정규화 좌표 변환(특히 $f_y$, $c_y$ 자리)과 `decomposeE`에 넘긴 두 배열의 순서(프레임 1, 2)를 본다.
+- 회전이나 이동 방향이 틀리면 `decomposeE`에 넘긴 두 배열의 순서(프레임 1, 2)와 `matchById`의 `a`·`b`를 바꿔 쓰지 않았는지 본다.
 - "제자리 회전이면 null"만 실패하면 시차 검사를 빠뜨렸거나, 중앙값 대신 최댓값을 쓴 것이다. 엉터리 $t$로도 몇몇 점은 시차가 크게 나온다.
-- "20%가 엉터리" 테스트가 실패하면 재투영 오차 검사가 없거나, 에피폴라 거리를 정규화 좌표 단위로 `threshold`(픽셀)와 비교한 것이다.
+- "20%가 엉터리" 테스트가 실패하면 `reprojectionError` 검사가 없거나, 에피폴라 거리를 정규화 좌표 단위로 `threshold`(픽셀)와 비교한 것이다.
+- 예외 테스트가 실패하면 두 프레임 모두 `checkFrame`에 넣었는지 본다.
 - `points`가 id 순서가 아니라는 실패는 마지막에 정렬하면 된다.
 
 <SessionBreak id="s6" />

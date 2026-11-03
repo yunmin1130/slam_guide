@@ -24,7 +24,7 @@ SLAM 학습 사이트의 구조 설계 문서. 백엔드 없는 정적 사이트
 | 수식 | KaTeX (remark-math + rehype-katex) | 빌드 타임 렌더링 → 런타임 JS 0. Astro 7 기본 처리기(Sätteri)엔 KaTeX 플러그인이 없어 `markdown.processor: unified()`로 쓴다. katex는 rehype-katex와 같은 0.16.x로 맞춘다 (CSS·렌더러 버전 일치) |
 | 테스트 | Vitest (`ref`·`mine` 두 project) | §6 참고 |
 | 배포 | GitHub Pages + GitHub Actions | 무료, push 시 자동 배포, 포트폴리오 링크 |
-| C++ (12주차~) | C++17 + Eigen + OpenCV, CMake, GTest | 채용 시장 요구. Windows에서는 WSL2 Ubuntu 22.04 또는 Docker |
+| C++ (12주차~) | C++17 + Eigen + OpenCV, CMake, GTest | 채용 시장 요구. Windows에서는 WSL2 Ubuntu 24.04 (G0 2026-11-03: Ceres 2.2 `Manifold`가 apt로 깔린다), ORB-SLAM3는 별도 Docker |
 
 - 외부 스크립트는 런타임 CDN으로 불러오지 않고 전부 번들·셀프호스팅한다 (§7 토큰 보안).
 - Astro `site`는 `https://yunmin1130.github.io`, `base`는 `/slam_guide/`로 설정한다. 내부 링크와 `public/data` 경로는 모두 `import.meta.env.BASE_URL`을 붙여 참조한다.
@@ -40,7 +40,7 @@ slam_guide/
 │   ├── LESSON_TEMPLATE.md
 │   ├── DATA.md
 │   ├── WORKFLOW.md           # 진행 단계·검토 관문
-│   └── TASKS.md              # 0주차 플랫폼 체크리스트
+│   └── TASKS.md              # 현재 단계 체크리스트·결정 기록
 ├── site/                     # Astro 사이트
 │   ├── src/
 │   │   ├── content/lessons/  # 주차별 MDX (w01-vectors.mdx …)
@@ -50,20 +50,23 @@ slam_guide/
 │   │   │   ├── lesson/       # LABox, TaskCard, 체크 질문 등
 │   │   │   └── ui/           # 슬라이더, 토글 등 공용 UI
 │   │   ├── data/
-│   │   │   └── test-results.json  # CI가 생성 (mine 테스트 결과)
+│   │   │   ├── test-results.json  # CI가 생성 (mine 테스트 결과)
+│   │   │   └── mine-syntax.json   # CI가 생성 (mine 구문·import 검사 결과)
 │   │   ├── lib/
 │   │   │   ├── storage.ts    # 저장 계층 (유일한 저장 진입점)
 │   │   │   ├── impl.ts       # mine/reference 선택 로직 (유일한 분기점)
 │   │   │   ├── implStatus.ts # mine 테스트 상태 (빌드 전용, 결과 JSON 읽기)
 │   │   │   └── playground/   # 코드 연습장: 브라우저 채점(워커·vitest shim)·초안·제출 (§6.1)
 │   │   └── pages/            # 대시보드, 레슨 라우트
-│   └── public/data/          # 작은 샘플 데이터 (DATA §1 상한)
+│   └── public/data/          # 작은 샘플 데이터 (DATA §1 상한, 아직 없음)
 ├── core/                     # 수학 코어 (TypeScript, 사이트와 독립)
 │   ├── mine/                 # ✍️ 내가 직접 구현 (AI는 시그니처·힌트·TODO만)
 │   ├── reference/            # 정답 구현 (AI 작성, 테스트로 검증)
 │   └── tests/                # 테스트 (mine, reference 모두 대상)
-├── cpp/                      # C++ 미니 VO (12주차~, 별도 CMake 프로젝트)
-├── datasets/                 # 변환·캘리브레이션·매칭 스크립트 (PC Python 전용)
+├── cpp/                      # C++ 미니 VO (12주차~, 별도 CMake 프로젝트, 아직 없음)
+├── datasets/                 # 변환·캘리브레이션·매칭·트랙 스크립트 (PC Python 전용)
+├── scripts/                  # check-mine-syntax.mjs, qa.mjs (자동 QA)
+├── .claude/agents/           # 레슨 검토 에이전트 정의 (lesson-learner, lesson-visual-qa)
 ├── package.json              # 루트: npm workspaces(site) + core 의존성(ml-matrix) + 스크립트
 ├── package-lock.json
 ├── vitest.config.ts          # 루트: ref·mine projects, IMPL env, @core alias
@@ -108,6 +111,8 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
 - `test-results.json`과 `mine-syntax.json`은 생성물이라 gitignore한다. 빌드 전용 `lib/implStatus.ts`가 `import.meta.glob`으로 읽어서, 파일이 없으면 빈 결과로 처리한다 (로컬 빌드에서도 깨지지 않음). 상태는 `.astro`에서 구해 props로 넘긴다. `impl.ts`는 클라이언트 번들에 들어가므로 결과 JSON을 import하지 않는다 (G1, 2026-11-01).
 - 예외: `components/lesson/context.ts`는 읽기만 카드에 보여줄 reference **소스 문자열**을 빌드 시점에 `?raw`로 읽는다. 실행하지 않으므로 분기점이 아니다.
 - mine 실행 중 예외가 나면 에러 메시지를 데모 안에 보여주고 reference로 되돌릴 수 있게 한다 (5주차 `EpipolarDemo`부터, 2026-11-02). 데모는 함수마다 따로 try로 감싸서, 한 함수가 TODO여도 나머지 결과는 그린다. 내 구현에서 오류가 나면 "정답으로 보기" 버튼이 토글을 reference로 바꾼다.
+- VO 워커(`lib/vo.worker.ts`, 11c·11d)는 mine일 때 mine·reference w11을 둘 다 `loadWeek`로 불러, `initMap`·`trackPnP`·`localBA` 중 호출 때 `Error("TODO")`를 던지는 것만 reference로 바꿔 reference의 `makeVo`로 조립한다 (`lib/voFallback.ts`, 2026-11-03). 바꾼 함수 이름은 결과(`VoJobResult.fallbacks`)로 돌려주고 화면에 "아직 TODO라 정답을 쓴 함수"로 보인다. TODO가 아닌 오류는 바꾸지 않고 그대로 보여준다.
+  - 주의: 대체는 그 함수가 실제로 불려서 `Error("TODO")`를 던질 때만 일어난다. 그래서 화면 목록은 "실제로 불린 함수만"이고, 드물게 타는 분기에 `throw new Error("TODO")`를 남겨 두면 그 호출부터 조용히 reference로 바뀐다 (안내 한 줄 말고는 표시가 없다).
 - 비교 그리기: 5주차 데모는 같은 구현 안에서 "8점 전체"와 "RANSAC" 결과를 겹쳐 그린다. 내 구현과 정답을 동시에 겹쳐 그리는 모드는 필요해지면 붙인다 (TASKS "나중에").
 - 사용자 파일: 5주차 "내 사진으로 해보기"와 6주차 "3D 복원" 도구는 사용자가 고른 JSON(대응점·calib)을 브라우저 안에서만 읽고 저장하지 않는다. 형식 검사는 `lib/matchesFile.ts`, 파일 읽기·정규화 좌표 변환은 `lib/matchPrep.ts` 한 곳에서 한다.
 
@@ -134,7 +139,7 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
 - **채점**: `site/src/lib/playground/`. 실행마다 새 Web Worker를 만들어 `core/tests` 파일을 **그대로** 돌린다 (케이스 중복 없음).
   - sucrase로 타입만 지우고 `require` 허용 목록(`ml-matrix`, `../reference/wNN`, `@core/prev/wNN`, `../types`)으로 실행. 타입 검사는 하지 않는다.
   - `vitePlugin.ts`가 core/tests 안의 `"vitest"` → `shim.ts`, `"./loadImpl"` → `draftImpl.ts`로 바꿔 끼운다 (페이지·워커 빌드, vitest `site` project).
-  - 5초 넘으면 워커를 끊는다 (무한 루프). 새 워커를 쓰는 이유: 테스트 파일은 모듈 캐시 때문에 한 번만 등록된다.
+  - 제한 시간(기본 8초, 테스트가 무거운 11주차는 30초, `playground/timeouts.ts`의 `timeoutForWeek`. import 없는 파일이라 `scripts/qa.mjs`도 같은 값을 읽어 대기 시간을 정한다)을 넘으면 워커를 끊는다 (무한 루프). 시간 초과 안내는 PC의 `npm run test:mine`을 권한다. 새 워커를 쓰는 이유: 테스트 파일은 모듈 캐시 때문에 한 번만 등록된다.
   - **판정이 PC와 같아야 한다**: `shim.test.ts`가 matcher를 진짜 vitest expect와 나란히 비교하고, `parity.test.ts`가 reference 소스를 이 경로로 돌려 전부 통과·케이스 수 일치를 확인한다. 둘 다 CI `test:site`(통과 조건)에 들어간다.
 - **분기점은 그대로**: 초안 결과는 데모·배지에 영향이 없다. 배지와 데모 기본값은 계속 CI의 `test-results.json`(§5)으로만 정한다.
 - **제출**: GitHub Contents API로 그 파일을 main에 커밋 → CI가 테스트·배포 → 배지 갱신.
@@ -164,16 +169,23 @@ interface Progress {
 interface LessonState {
   status: "todo" | "in-progress" | "done";
   checked: string[];                       // 완료한 세션 id·체크 질문 id
-  minutes?: number;                        // 실제 소요 시간 (일정 재추정용)
+  minutes?: number;                        // 실제 소요 시간 합 (일정 재추정용). 직접 쓰지 않고 아래 규칙으로 계산
+  sessionMinutes?: Record<string, number>; // 세션 id → 분 (5~240, 5분 단위). "완료 표시" 뒤 선택 입력
+  legacyMinutes?: number;                  // 세션별 기록 이전에 저장된 합 (sessionMinutes와 함께만 있다)
   lastVisited?: string;                    // ISO 시간, 복귀 진입점 표시용
   notes?: string;
 }
 ```
 
+**minutes 규칙** (`storage.ts`의 `withSessionMinutes`·`sanitizeLesson`, 2026-11-03)
+- `sessionMinutes`가 있으면 `minutes = (legacyMinutes ?? 0) + sessionMinutes 합`. 불러올 때도 다시 계산한다 (저장된 `minutes`는 믿지 않는다).
+- `sessionMinutes`가 없으면 `minutes`는 예전 데이터의 합이라 그대로 둔다. 첫 세션 기록 때 그 값을 `legacyMinutes`로 옮겨 합에 더한다. 세션 기록이 다시 모두 지워지면 `minutes` 하나로 돌아간다.
+- 세션 체크를 해제하면 그 세션의 `sessionMinutes`도 지운다 (`applySessionToggle`). 기록 지우기는 "지우기" 버튼으로만 한다 (빈 값 제출은 오류).
+
 **단계적 구현**
 - 0주차: **localStorage 전용**.
 - 코드 초안은 진도와 다른 키 `slam-drafts`에 둔다 (`DraftStore`, 주차별 `{ code, baseHash, pending, updatedAt }`, 초안당 10만 자 제한). 타이핑마다 진도 JSON을 다시 쓰지 않고, Gist 동기화 때 따로 다루기 위함.
-- 3~4주차 (기기 간 불편이 실제로 생길 때): Gist 동기화 추가.
+- 기기 간 불편이 실제로 생길 때 Gist 동기화를 붙인다 (TASKS "나중에"). 그 전에는 iPhone Safari의 7일 삭제에 대비해 홈 화면 추가를 안내하고 저장소 보존을 요청한다 (G0 2026-11-03).
 
 **Gist 구현**
 - 비공개 Gist 하나에 `progress.json`을 저장한다.
@@ -185,16 +197,18 @@ interface LessonState {
 **토큰 보안**
 - fine-grained PAT, 권한은 Gists 읽기·쓰기 하나만, 만료 90일. (발급 시 해당 권한이 없으면 classic 토큰 `gist` 스코프만.)
 - **제출용 토큰(§6.1)은 따로 둔다** (결정 변경 2026-11-02): fine-grained PAT(`github_pat_`만 받는다, classic 거절), 저장소는 `slam_guide` 하나, 권한은 Contents 읽기·쓰기 하나, 만료 90일. 키 `slam-github-token`. 채점 워커에는 넘기지 않는다.
-  - 위험: 이 토큰이 새면 `site/` 코드도 고쳐 main에 push할 수 있고, 배포되면 같은 origin의 Gist 토큰까지 읽힐 수 있다 (Workflows 권한이 없어 CI 파일은 못 고친다). 그래서 CSP는 미루지 않고 Gist 동기화 전에 넣는다.
+  - 위험: 이 토큰이 새면 `site/` 코드도 고쳐 main에 push할 수 있고, 배포되면 같은 origin의 Gist 토큰까지 읽힐 수 있다 (Workflows 권한이 없어 CI 파일은 못 고친다). 그래서 CSP는 Gist 동기화 전에 넣었다 (2026-11-03, 아래).
 - 토큰은 해당 기기 localStorage에만 둔다. 로그·Gist·URL에 절대 쓰지 않는다.
 - `yunmin1130.github.io` 아래의 모든 Pages 저장소는 origin(=localStorage)을 공유한다. 같은 계정에 신뢰할 수 없는 Pages를 두지 않는다 (필요해지면 커스텀 도메인으로 분리).
-- 런타임 CDN 스크립트를 쓰지 않는다 (§2). CSP는 첫 배포가 안정된 뒤 프로덕션 빌드에만 meta로 넣는다:
+- 런타임 CDN 스크립트를 쓰지 않는다 (§2). CSP는 `site/astro.config.mjs`의 `security.csp`로 넣었다 (2026-11-03). Astro가 빌드한 페이지마다 `<meta http-equiv="content-security-policy">`를 만들고, 인라인 스크립트(island 하이드레이션) 해시를 `script-src`에 자동으로 붙인다 (dev 서버에는 붙지 않는다):
   ```
   default-src 'self'; script-src 'self' (+Astro 인라인 스크립트 해시);
-  style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;
-  connect-src 'self' https://api.github.com; worker-src 'self'; object-src 'none'; base-uri 'self'
+  style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;
+  connect-src 'self' https://api.github.com; worker-src 'self' blob:;
+  object-src 'none'; base-uri 'self'; frame-src 'none'
   ```
-  `style-src 'unsafe-inline'`은 KaTeX의 인라인 `style` 속성 때문에 필요하다. 인라인 스크립트(island 하이드레이션)는 해시로 허용한다. 다크 모드는 `prefers-color-scheme`만 따르므로 스크립트가 없다.
+  `style-src 'unsafe-inline'`은 KaTeX·React의 인라인 `style` 속성 때문에 필요하다 (이 값이 있으면 Astro가 style 해시를 넣지 않는다. 해시가 있으면 브라우저가 `'unsafe-inline'`을 무시하기 때문). `img-src blob:`은 궤적 파일 내려받기 링크, `font-src data:`는 KaTeX 글꼴 대비. 다크 모드는 `prefers-color-scheme`만 따르므로 스크립트가 없다. 검증은 `npm run build && npm run qa`(콘솔 오류 검사)로 한다.
+- iOS Safari는 7일 동안 열지 않은 사이트의 저장소(localStorage 포함)를 지운다. 확실히 막는 방법은 **홈 화면에 추가해서 여는 것뿐**이다. `storage.ts`가 처음 쓰일 때 `navigator.storage.persist()`를 한 번 요청하지만 이는 최선의 시도일 뿐이다 (허용돼도 Safari가 지우지 않는다는 보장이 없고, 실패는 무시한다). 대시보드(폰·패드, 이미 홈 화면 앱으로 열었으면 숨김)에 "홈 화면에 추가하면 지우지 않는다(홈 화면 앱은 저장소가 따로라 토큰을 한 번 더 넣는다), 코드 초안은 제출이 백업"이라고 안내한다. Gist 동기화 전까지는 이것이 전부다.
 
 ## 8. 모바일 우선 UI 원칙
 

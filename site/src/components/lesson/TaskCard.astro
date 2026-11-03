@@ -29,7 +29,8 @@ if (!source) throw new Error(`core/reference/${lesson.fileKey}.ts에 ${fn} 함�
 const status = fnStatus(lesson.week, fn);
 const TONE: Record<FnStatus, string> = { pass: "mine", todo: "ref", missing: "ref", fail: "fail", "syntax-error": "fail" };
 const tone = readOnly ? "muted" : TONE[status];
-const label = readOnly ? "읽기만 · reference 사용" : STATUS_LABEL[status];
+// 읽기만 카드는 위 eyebrow가 이미 "읽기만"이라 배지는 무엇을 쓰는지만 말한다
+const label = readOnly ? "reference 사용" : STATUS_LABEL[status];
 // 구문 오류(syntax-error)와 import 오류(결과 없음으로 나옴) 모두 메시지를 보여준다
 const syntax = readOnly ? undefined : syntaxMessage(lesson.week);
 const minePath = coreFile("mine", lesson.fileKey);
@@ -71,9 +72,10 @@ const initialSource = mineText === undefined ? "" : normalizeNewlines(mineText);
         />
         <a class="task-link" href={githubDevUrl(minePath)}>github.dev에서 편집</a>
         <a class="task-link" href={githubUrl(minePath)}>{minePath}</a>
-        <p class="task-run">
-          <span class="eyebrow">PC</span> <code>npx vitest --project mine -t {fn}</code>
-        </p>
+        <div class="task-run">
+          <span class="eyebrow">PC에서 이 함수만 테스트</span>
+          <pre class="task-cmd"><code>{`npx vitest --project mine\n  -t ${fn}`}</code></pre>
+        </div>
       </footer>
     )
   }
@@ -140,12 +142,17 @@ const initialSource = mineText === undefined ? "" : normalizeNewlines(mineText);
   }
   .task-run {
     width: 100%;
-    margin: 0;
-    font-size: var(--text-sm);
+    margin: var(--space-2) 0 0;
   }
-  /* 함수 이름이 길면 명령이 카드 밖으로 나가므로 이 칩만 줄바꿈을 허용한다 */
-  .task-run code {
-    white-space: normal;
+  /* 폰 폭에서 한 줄에 안 들어가므로 -t 이름을 일부러 다음 줄에 둔다. 함수 이름이 아주 길면 그 안에서만 줄바꿈 */
+  .task-cmd {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-sm);
+    white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .task-cmd code {
+    background: none;
+    padding: 0;
   }
 </style>

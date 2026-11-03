@@ -219,7 +219,7 @@ function Panel({ week, fn, path, initialSource, buildHash, buildIsStub, onClose 
           초기화
         </button>
       </div>
-
+      {/* 오류·충돌·제출 결과는 고정 안내보다 위에 둔다 (버튼 바로 아래에서 보이게) */}
       {draft.saveError && (
         <p className={styles.error} role="alert">
           {draft.saveError}
@@ -260,6 +260,8 @@ function Panel({ week, fn, path, initialSource, buildHash, buildIsStub, onClose 
           )}
         </p>
       )}
+
+      <p className={styles.note}>초안은 이 기기에만 저장된다. 제출하면 GitHub에 백업된다.</p>
 
       <PlaygroundResults outcome={outcome} cases={cases} running={running} />
 

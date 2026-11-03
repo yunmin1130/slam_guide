@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as w11 from "@core/reference/w11";
 import type { VoResult } from "@core/types";
 import { evaluateVo } from "./voEval";
+import { buildVoParts } from "./voFallback";
 import { buildVoOptions, runVoJob, summarize, SYNTHETIC_SETTINGS, TUM_SETTINGS } from "./voJob";
 import { makeVoScene, ROTATION_FRAMES, VO_FRAMES, VO_K } from "./voScene";
 
@@ -35,6 +36,22 @@ describe("runVoJob", () => {
   });
 });
 
+describe("runVoJob + 함수별 대체 (vo.worker.ts와 같은 조립)", () => {
+  it("mine 세 함수가 전부 TODO면 reference makeVo로 조립해 정답과 같은 결과를 내고, 대체한 이름을 돌려준다", () => {
+    const scene = makeVoScene({ seed: 1, noise: 0.7, outlierRate: 0.05, rotationStart: true });
+    const todo = () => {
+      throw new Error("TODO");
+    };
+    const job = { kind: "mine" as const, K: VO_K, frames: scene.frames, settings: SYNTHETIC_SETTINGS };
+    const { parts, fallbacks } = buildVoParts({ initMap: todo, trackPnP: todo, localBA: todo }, w11 as unknown as Record<string, unknown>);
+    const r = runVoJob(job, w11.makeVo(parts as unknown as w11.VoParts), undefined, fallbacks);
+    const expected = runVoJob({ ...job, kind: "reference" }, w11.vo);
+    expect(r.fallbacks).toEqual(["initMap", "trackPnP", "localBA"]);
+    expect(r.poses).toEqual(expected.poses);
+    expect(expected.fallbacks).toEqual([]);
+  });
+});
+
 describe("summarize", () => {
   const I = [
     [1, 0, 0],
@@ -45,6 +62,8 @@ describe("summarize", () => {
 
   it("내 vo가 프레임 수와 다른 길이·NaN 자세를 돌려주면 예외 (그림을 그릴 수 없다)", () => {
     expect(summarize(ok, 2, 1).poses).toHaveLength(2);
+    expect(summarize(ok, 2, 1).fallbacks).toEqual([]);
+    expect(summarize(ok, 2, 1, ["localBA"]).fallbacks).toEqual(["localBA"]);
     expect(() => summarize(ok, 3, 1)).toThrow(/자세/);
     expect(() => summarize({ ...ok, poses: [null, { R: I, t: [Number.NaN, 0, 0] }] }, 2, 1)).toThrow(/자세/);
     expect(() => summarize(undefined as unknown as VoResult, 2, 1)).toThrow();

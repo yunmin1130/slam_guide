@@ -179,12 +179,12 @@ gst-launch-1.0 -e nvarguscamerasrc sensor-mode=3 \
 
 | 데이터셋 | 용도 | 라이선스 | 비고 |
 | --- | --- | --- | --- |
-| KITTI Odometry | 11주차 VO, 12주차 C++ VO | CC BY-NC-SA 3.0 | 출처 표기·동일조건 공유 의무. 강의 판매 시 사용 불가 → 자체 데이터로 교체 |
-| EuRoC MAV | 13~14주차 EKF·VIO (기본 트랙) | 연구용 공개 | IMU + 스테레오 + 정답 궤적 (IMU 기준, §2 변환 필요) |
+| KITTI Odometry | 12주차 이후 선택 확장 (C++ VO), 15주차 라이다 ICP 샘플 | CC BY-NC-SA 3.0 | 출처 표기·동일조건 공유 의무. 강의 판매 시 사용 불가 → 자체 데이터로 교체 |
+| EuRoC MAV | 13~14주차 ESKF·VIO (기본 트랙) | 연구용 공개 | IMU + 스테레오 + 정답 궤적 (IMU 기준, §2 변환 필요) |
 | TUM RGB-D | 11주차 M1 리포트(2026-11-03 선택), 실내 VO | CC BY 4.0 | 정답 궤적 포함. `tum_tracks.py`로 트랙 JSON |
 | TUM RS-VIO | 캡스톤 롤링셔터 비교 | 데이터셋 페이지 확인 | 글로벌·롤링셔터 동시 촬영 |
 
 - 사이트 샘플에는 §1 상한만큼만 잘라서 넣고, 페이지에 출처를 표기한다.
-- 스크립트는 `datasets/` 폴더에 둔다: `kitti_to_std.py`, `euroc_to_std.py`, `tum_to_std.py`, `jetbot_to_std.py`, `calibrate.py`, `export_matches.py`, `tum_tracks.py`(11주차, 있음)
+- 스크립트는 `datasets/` 폴더에 둔다. 있음: `calibrate.py`(4주차), `export_matches.py`(5주차), `jetbot_to_std.py`(10주차), `tum_tracks.py`(11주차). 예정: `euroc_to_std.py`(13주차 전, T_BS 역행렬 없이·200Hz→20Hz 보간을 `--selftest`로 검증). 선택: `kitti_to_std.py`(KITTI 확장을 할 때). TUM은 `tum_tracks.py`가 원본 폴더를 바로 읽어서 `tum_to_std.py`는 만들지 않는다 (G0 2026-11-03).
 - `datasets/jetbot_to_std.py`(10주차): 주행 영상 mp4 → 표준 시퀀스 폴더(`images/`, `timestamps.txt`, `meta.json`, 선택 `calib.json`). 기본 3장마다 1장, 결과는 `datasets/sequences/{name}/`(저장소에 올리지 않는다). `--selftest`로 합성 영상 검증.
-- 스크립트는 PC 전용이며 사이트 빌드에 포함하지 않는다.
+- 스크립트는 PC 전용이며 사이트 빌드에 포함하지 않는다. Python 3.8 이상이 필요해서(`from __future__ import annotations`) JetBot(Python 3.6)에서는 돌리지 않는다. JetBot에서는 녹화(gst-launch)만 한다.

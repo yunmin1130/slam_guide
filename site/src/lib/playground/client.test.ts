@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { runInWorker, type WorkerLike } from "./client";
+import { RUN_TIMEOUT_MS, runInWorker, timeoutForWeek, type WorkerLike } from "./client";
 import type { WorkerMessage } from "./protocol";
 import { LOAD_FAILED_MESSAGE, STALE_CHUNK_MESSAGE } from "../staleChunk";
 
@@ -41,6 +41,35 @@ describe("runInWorker", () => {
     expect(out.kind).toBe("timeout");
     expect(out.cases).toHaveLength(1);
     expect(f.terminated()).toBe(true);
+  });
+
+  it("timeoutMs를 안 주면 주차별 제한 시간을 쓴다 (w11은 30초)", async () => {
+    vi.useFakeTimers();
+    const f = fakeWorker(() => undefined);
+    const p = runInWorker({ week: "w11", source: "", makeWorker: f.make });
+    let done = false;
+    void p.then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(RUN_TIMEOUT_MS + 1000);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(30000);
+    const out = await p;
+    vi.useRealTimers();
+    expect(out).toMatchObject({ kind: "timeout", timeoutMs: 30000 });
+  });
+
+  it("기본 주차는 8초에서 끊는다", async () => {
+    vi.useFakeTimers();
+    const f = fakeWorker(() => undefined);
+    const p = runInWorker({ week: "w03", source: "", makeWorker: f.make });
+    await vi.advanceTimersByTimeAsync(RUN_TIMEOUT_MS + 10);
+    const out = await p;
+    vi.useRealTimers();
+    expect(out).toMatchObject({ kind: "timeout", timeoutMs: RUN_TIMEOUT_MS });
+  });
+
+  it("timeoutForWeek: 목록에 없는 주차는 기본값", () => {
+    expect(timeoutForWeek("w01")).toBe(8000);
+    expect(timeoutForWeek("w11")).toBe(30000);
   });
 
   it("워커를 못 만들면 crash로 알린다", async () => {

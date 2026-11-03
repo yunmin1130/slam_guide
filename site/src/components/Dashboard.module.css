@@ -160,3 +160,9 @@
   height: 100%;
   background: var(--mine);
 }
+.storageNote {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--ink-soft);
+}

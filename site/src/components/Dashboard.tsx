@@ -29,6 +29,12 @@ function sessionHref(pick: SessionPick): string {
   return prev ? `${pick.lesson.href}#session-end-${prev.id}` : pick.lesson.href;
 }
 
+/** 홈 화면 앱으로 열렸는지. 이미 홈 화면 앱이면 저장소 안내가 필요 없다 */
+function isStandalone(): boolean {
+  const nav = navigator as Navigator & { standalone?: boolean };
+  return nav.standalone === true || window.matchMedia?.("(display-mode: standalone)").matches === true;
+}
+
 function formatDate(iso: string | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -39,9 +45,11 @@ export default function Dashboard({ lessons }: DashboardProps) {
   const { progress, error } = useProgress();
   // 서버 렌더링 때는 기기를 모른다 → null이면 자리만 잡아 둔다
   const [device, setDevice] = useState<Device | null>(null);
+  const [standalone, setStandalone] = useState(false);
 
   useEffect(() => {
     setDevice(detectDevice(navigator.userAgent, navigator.maxTouchPoints ?? 0));
+    setStandalone(isStandalone());
   }, []);
 
   const ready = progress !== null && device !== null;
@@ -96,6 +104,14 @@ export default function Dashboard({ lessons }: DashboardProps) {
 
           {ready && !next?.overall && <p className={styles.placeholder}>모든 세션을 끝냈어.</p>}
         </div>
+
+        {device !== null && device !== "pc" && !standalone && (
+          <p className={styles.storageNote}>
+            iPhone·iPad Safari는 이 사이트를 7일 동안 열지 않으면 이 기기에 저장된 진도·초안을 지운다. 홈 화면에 추가해서 열면
+            지우지 않는다 (홈 화면 앱은 저장소가 따로라 진도는 새로 시작하고, 제출 토큰도 거기서 한 번 더 넣어야 한다). 코드
+            초안은 제출하면 GitHub에 백업된다.
+          </p>
+        )}
       </section>
 
       <section aria-labelledby="lessons-heading">

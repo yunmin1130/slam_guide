@@ -3,7 +3,8 @@
 주행 영상 → 표준 시퀀스 폴더 (CURRICULUM 10주차 JetBot 데이터셋 제작, DATA §2 형식).
 
 JetBot(또는 아이폰)으로 찍은 mp4에서 N장마다 한 장씩 프레임을 꺼내 images/, timestamps.txt, meta.json을 만든다.
-calib.json을 주면 함께 복사한다. 11주차 VO와 캡스톤이 이 폴더를 그대로 읽는다.
+calib.json을 주면 함께 복사한다. 이 폴더를 VO에 넣으려면 트랙 JSON(DATA §2 tracks)으로 바꾸는 단계가 더 필요하다
+(예정: tum_tracks.py를 표준 시퀀스·어안 렌즈로 넓히기, M1 보너스 때). 캡스톤은 이 폴더를 그대로 읽는다.
 
 안전장치: 결과는 임시 폴더에 다 만든 뒤에만 제자리로 옮긴다. --force로 덮어쓸 때도
 그 폴더가 이 스크립트가 만든 시퀀스 폴더(meta.json, images/ …)일 때만 지운다.

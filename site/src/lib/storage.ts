@@ -1,6 +1,6 @@
 /**
  * 저장 계층 — 사이트의 유일한 저장 진입점 (ARCHITECTURE §7, CLAUDE.md "저장은 storage.ts만").
- * 0주차: localStorage 전용. Gist 동기화(3~4주차)는 이 파일 안에서만 붙인다.
+ * 지금은 localStorage 전용. Gist 동기화(기기 간 불편이 생길 때, TASKS "나중에")는 이 파일 안에서만 붙인다.
  */
 
 export type LessonStatus = "todo" | "in-progress" | "done";
@@ -8,7 +8,15 @@ export type LessonStatus = "todo" | "in-progress" | "done";
 export interface LessonState {
   status: LessonStatus;
   checked: string[]; // 완료한 세션 id·체크 질문 id
-  minutes?: number; // 실제 소요 시간 (일정 재추정용)
+  /**
+   * 실제 소요 시간 합 (일정 재추정용). 직접 쓰지 않고 항상 아래 규칙으로 계산한다 (lessonMinutes):
+   * - sessionMinutes가 있으면 (legacyMinutes ?? 0) + sessionMinutes 합
+   * - sessionMinutes가 없으면 예전 데이터의 값 그대로 (세션별 기록 이전에 저장된 합)
+   */
+  minutes?: number;
+  sessionMinutes?: Record<string, number>; // 세션 id → 걸린 시간(분). "완료 표시" 뒤에 고른다 (선택)
+  /** 세션별 기록 이전의 minutes. 첫 sessionMinutes 기록 때 옮겨 두고, sessionMinutes가 비면 다시 minutes로 돌아간다 */
+  legacyMinutes?: number;
   lastVisited?: string; // ISO 8601
   notes?: string;
 }
@@ -46,11 +54,19 @@ function sanitizeLesson(raw: unknown): LessonState | null {
   if (!isRecord(raw)) return null;
   const status = STATUSES.includes(raw.status as LessonStatus) ? (raw.status as LessonStatus) : "todo";
   const checked = Array.isArray(raw.checked) ? raw.checked.filter((x): x is string => typeof x === "string") : [];
-  const state: LessonState = { status, checked };
-  if (typeof raw.minutes === "number" && Number.isFinite(raw.minutes)) state.minutes = raw.minutes;
-  if (typeof raw.lastVisited === "string") state.lastVisited = raw.lastVisited;
-  if (typeof raw.notes === "string") state.notes = raw.notes;
-  return state;
+  const base: LessonState = { status, checked };
+  if (typeof raw.lastVisited === "string") base.lastVisited = raw.lastVisited;
+  if (typeof raw.notes === "string") base.notes = raw.notes;
+  const sessionMinutes = isRecord(raw.sessionMinutes)
+    ? (Object.fromEntries(Object.entries(raw.sessionMinutes).filter(([, m]) => isValidSessionMinutes(m))) as Record<string, number>)
+    : {};
+  // legacyMinutes가 있으면 그게 예전 합이고, 없으면 sessionMinutes 없이 저장된 minutes가 예전 합이다
+  const legacy = isValidLegacyMinutes(raw.legacyMinutes)
+    ? raw.legacyMinutes
+    : Object.keys(sessionMinutes).length === 0 && isValidLegacyMinutes(raw.minutes)
+      ? raw.minutes
+      : undefined;
+  return withMinutesTotal(base, sessionMinutes, legacy);
 }
 
 /** 저장된 값은 외부 입력으로 보고 검증한다. 살릴 수 있는 레슨은 살리고, 전체 구조가 틀리면 null. */
@@ -142,6 +158,7 @@ let browserStore: ProgressStore | null = null;
 /** 컴포넌트가 쓰는 기본 저장소. 저장 후 PROGRESS_EVENT를 보내 같은 페이지의 다른 화면을 갱신한다. */
 export function getStore(): ProgressStore {
   if (browserStore) return browserStore;
+  requestPersistentStorage();
   const base = createLocalStore(browserBackend());
   const notify = (p: Progress): Progress => {
     if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PROGRESS_EVENT, { detail: p }));
@@ -221,6 +238,7 @@ export function createDraftStore(backend: KeyValueBackend | null): DraftStore {
 let browserDrafts: DraftStore | null = null;
 
 export function getDraftStore(): DraftStore {
+  requestPersistentStorage();
   browserDrafts ??= createDraftStore(browserBackend());
   return browserDrafts;
 }
@@ -264,6 +282,86 @@ export function createTokenStore(backend: RemovableBackend | null): TokenStore {
 
 export function getTokenStore(): TokenStore {
   return createTokenStore(browserBackend() as RemovableBackend | null);
+}
+
+// ---- 세션 소요 시간 ----
+
+export const SESSION_MINUTES = { min: 5, max: 240, step: 5 } as const;
+
+export function isValidSessionMinutes(m: unknown): m is number {
+  return (
+    typeof m === "number" &&
+    Number.isInteger(m) &&
+    m >= SESSION_MINUTES.min &&
+    m <= SESSION_MINUTES.max &&
+    m % SESSION_MINUTES.step === 0
+  );
+}
+
+/** 세션별 기록 이전에 저장된 합: 0 이상의 유한한 수 */
+function isValidLegacyMinutes(m: unknown): m is number {
+  return typeof m === "number" && Number.isFinite(m) && m >= 0;
+}
+
+/** 예전 합(legacyMinutes 또는 sessionMinutes 없이 저장된 minutes). 없으면 undefined */
+function legacyMinutesOf(s: LessonState): number | undefined {
+  if (s.legacyMinutes !== undefined) return s.legacyMinutes;
+  return s.sessionMinutes && Object.keys(s.sessionMinutes).length > 0 ? undefined : s.minutes;
+}
+
+/**
+ * minutes·sessionMinutes·legacyMinutes를 규칙대로 다시 맞춘 새 상태 (LessonState.minutes 주석).
+ * sessionMinutes가 비면 legacyMinutes는 다시 minutes 하나로 돌아간다.
+ */
+function withMinutesTotal(s: LessonState, sessionMinutes: Record<string, number>, legacy: number | undefined): LessonState {
+  const { sessionMinutes: _s, minutes: _m, legacyMinutes: _l, ...others } = s;
+  if (Object.keys(sessionMinutes).length === 0) return legacy === undefined ? others : { ...others, minutes: legacy };
+  const total = (legacy ?? 0) + Object.values(sessionMinutes).reduce((a, b) => a + b, 0);
+  return legacy === undefined
+    ? { ...others, sessionMinutes, minutes: total }
+    : { ...others, sessionMinutes, legacyMinutes: legacy, minutes: total };
+}
+
+/**
+ * 세션 하나의 걸린 시간을 기록한 새 상태. 다시 기록하면 덮어쓴다 (두 번 더해지지 않게).
+ * minutes(레슨 합)는 다시 계산한다: 예전 합(legacyMinutes) + sessionMinutes 합. null이면 그 세션 기록을 지운다.
+ */
+export function withSessionMinutes(s: LessonState | undefined, sessionId: string, minutes: number | null): LessonState {
+  if (minutes !== null && !isValidSessionMinutes(minutes)) {
+    throw new Error(`${SESSION_MINUTES.min}~${SESSION_MINUTES.max}분, ${SESSION_MINUTES.step}분 단위로 넣어줘`);
+  }
+  const base: LessonState = s ?? { status: "todo", checked: [] };
+  const { [sessionId]: _old, ...rest } = base.sessionMinutes ?? {};
+  const sessionMinutes = minutes === null ? rest : { ...rest, [sessionId]: minutes };
+  return withMinutesTotal(base, sessionMinutes, legacyMinutesOf(base));
+}
+
+// ---- 저장 유지 요청 ----
+// iOS Safari는 7일 동안 열지 않은 사이트의 저장소를 지운다. 확실히 막는 방법은 홈 화면에 추가해서 여는 것뿐이다
+// (홈 화면 앱은 이 규칙의 예외). persist()는 최선의 시도일 뿐이라 허용돼도 Safari가 지우지 않는다는 보장은 없다.
+// 브라우저가 거절하거나 지원하지 않아도 동작은 같으니 결과는 무시한다.
+
+let persistAsked = false;
+
+interface PersistableStorage {
+  persist?: () => Promise<boolean>;
+}
+
+/** 페이지마다 한 번만 부른다. nav를 넘기면 그걸 쓴다 (테스트용) */
+export function requestPersistentStorage(nav: { storage?: PersistableStorage } | undefined = typeof navigator === "undefined" ? undefined : navigator): void {
+  if (persistAsked) return;
+  persistAsked = true;
+  try {
+    const p = nav?.storage?.persist?.();
+    if (p && typeof p.catch === "function") p.catch(() => undefined);
+  } catch {
+    // 지원하지 않는 브라우저: 무시
+  }
+}
+
+/** 테스트에서 "한 번만"을 다시 확인할 때 쓴다 */
+export function resetPersistRequestForTest(): void {
+  persistAsked = false;
 }
 
 /** 한 레슨의 상태만 바꾸는 편의 함수 */

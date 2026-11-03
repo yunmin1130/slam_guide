@@ -22,3 +22,5 @@ qa-output/
 # Python 캐시
 __pycache__/
 *.pyc
+# vitest가 루트에 만드는 캐시
+.vitest/

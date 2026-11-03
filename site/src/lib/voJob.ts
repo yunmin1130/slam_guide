@@ -55,6 +55,8 @@ export interface VoJobResult {
   readonly initFrames: readonly [number, number] | null;
   readonly lostAt: number | null;
   readonly ms: number;
+  /** mine에서 아직 TODO라 reference로 바꿔 쓴 함수 (lib/voFallback.ts). reference 실행은 [] */
+  readonly fallbacks: readonly string[];
 }
 
 /** 시드 고정 난수 (RANSAC 결과가 실행마다 같게) */
@@ -101,7 +103,7 @@ function isPose(T: unknown): T is SE3 {
 }
 
 /** 내 vo가 돌려준 값이 그림을 그릴 수 있는 꼴인지 확인하고 정리한다 */
-export function summarize(r: VoResult, frameCount: number, ms: number): VoJobResult {
+export function summarize(r: VoResult, frameCount: number, ms: number, fallbacks: readonly string[] = []): VoJobResult {
   if (!r || !Array.isArray(r.poses) || r.poses.length !== frameCount || !r.poses.every((T) => T === null || isPose(T))) {
     throw new Error("vo가 프레임마다 자세(또는 null)를 돌려주지 않았다");
   }
@@ -112,13 +114,15 @@ export function summarize(r: VoResult, frameCount: number, ms: number): VoJobRes
     initFrames: r.initFrames ?? null,
     lostAt: r.lostAt ?? null,
     ms,
+    fallbacks: [...fallbacks],
   };
 }
 
 export type VoFn = (K: Intrinsics, frames: readonly (readonly Feature[])[], opts: VoOptions) => VoResult;
 
-export function runVoJob(job: VoJob, vo: VoFn, onFrame?: (frame: number) => void): VoJobResult {
+/** fallbacks: 실행이 끝난 뒤 대체한 함수 목록을 읽는 함수 (대체는 호출 중에 정해진다) */
+export function runVoJob(job: VoJob, vo: VoFn, onFrame?: (frame: number) => void, fallbacks?: () => readonly string[]): VoJobResult {
   const t0 = performance.now();
   const r = vo(job.K, job.frames, buildVoOptions(job.settings, onFrame));
-  return summarize(r, job.frames.length, performance.now() - t0);
+  return summarize(r, job.frames.length, performance.now() - t0, fallbacks?.() ?? []);
 }

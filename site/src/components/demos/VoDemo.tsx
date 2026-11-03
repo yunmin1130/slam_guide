@@ -9,6 +9,7 @@ import { type ImplKind } from "../../lib/impl";
 import { useImplFns } from "../../lib/useImplFns";
 import { runVoInWorker, type VoOutcome } from "../../lib/voClient";
 import { evaluateVo } from "../../lib/voEval";
+import { fallbackNote } from "../../lib/voFallback";
 import { SYNTHETIC_SETTINGS, type VoSettings } from "../../lib/voJob";
 import { makeVoScene, ROTATION_FRAMES, VO_FRAMES, VO_K } from "../../lib/voScene";
 import ImplToggle, { defaultKind, type FnStatusEntry } from "../ui/ImplToggle";
@@ -90,6 +91,7 @@ export default function VoDemo({ week, statuses }: VoDemoProps) {
   const ev = evaluation?.ev ?? null;
   const who = kind === "mine" ? "내 구현" : "정답";
   const runError = runErrorText(run);
+  const fallbackText = kind === "mine" ? fallbackNote(result?.fallbacks) : null;
   const failed = !!runError || !!evaluation?.error;
   const fmt = (v: number, d = 3) => (Number.isFinite(v) ? v.toFixed(d) : "–");
   const kfSet = new Set(result?.keyframeFrames ?? []);
@@ -130,6 +132,7 @@ export default function VoDemo({ week, statuses }: VoDemoProps) {
       <div className={styles.readout}>
         <div role="status">
           {!fns && !loadError && <p className={styles.muted}>구현 불러오는 중…</p>}
+          {fallbackText && <p className={styles.muted}>{fallbackText}</p>}
           {run.kind === "running" && (
             <p className={styles.muted}>
               {who} VO 계산 중… 프레임 {run.frame}/{VO_FRAMES}

@@ -7,18 +7,25 @@ prereq: [w11c, w02]
 la_box: [직교 프로크루스테스 문제]
 tasks: [alignUmeyama, ate]
 read_only: [rpe]
-deliverables: ["M1 리포트: TUM RGB-D에서 내 VO의 ATE·RPE (local BA 켬/끔 비교, 궤적 그림, 실패 구간 분석)"]
+deliverables: ["M1 리포트: TUM RGB-D에서 내 구현(mine)으로 낸 ATE·RPE (사이트 숫자 + evo 검증), 소거 실험 표, ORB-SLAM 기준선(주의점 포함), 궤적 그림, 실패 구간 분석"]
 jetbot: false
-units: 1.25
+units: 2.5
 sessions:
   - { id: s1, device: phone, title: "개념: ATE, RPE, 왜 Sim(3) 정렬인가" }
   - { id: s2, device: phone, title: "개념: 우메야마 정렬 유도 + LA 박스" }
   - { id: s3, device: pad, title: "손 유도: 정렬, 반사 경우" }
-  - { id: s4, device: pc, title: "과제: alignUmeyama 구현·테스트 통과" }
-  - { id: s5, device: pc, title: "과제: ate 구현, 읽기: rpe" }
-  - { id: s6, device: pc, title: "실습: TUM 받기, 트랙 파일 만들기, 실행" }
-  - { id: s7, device: pc, title: "실습: 기준 숫자와 비교, 설정 바꿔 보기" }
-  - { id: s8, device: pc, title: "M1 리포트 쓰기" }
+  - { id: s4, device: pc, title: "과제: alignUmeyama 구현" }
+  - { id: s15, device: pc, title: "과제: alignUmeyama 디버그·테스트 통과" }
+  - { id: s5, device: pc, title: "과제: ate 구현" }
+  - { id: s16, device: pc, title: "과제: ate 디버그·테스트 통과, 읽기: rpe" }
+  - { id: s6, device: pc, title: "실습: TUM 받기, 트랙 파일 만들기" }
+  - { id: s10, device: pc, title: "실습: 실행기로 내 VO 돌리기" }
+  - { id: s7, device: pc, title: "실습: 기준 숫자와 비교" }
+  - { id: s11, device: pc, title: "실습: evo로 다시 재기" }
+  - { id: s12, device: pc, title: "실습: 소거 실험(ablation)" }
+  - { id: s13, device: pc, title: "실습: ORB-SLAM 기준선 표와 조건 차이" }
+  - { id: s8, device: pc, title: "M1 리포트: 결과 표와 그림" }
+  - { id: s14, device: pc, title: "M1 리포트: 실패 분석과 한계" }
   - { id: s9, device: phone, title: "체크 질문" }
 ---
 
@@ -39,9 +46,11 @@ VO의 월드는 첫 카메라이고, 길이 단위는 초기화의 $|t| = 1$이�
 
 둘을 비교하려면 먼저 회전 $R$, 이동 $t$, **크기 $s$** 를 맞춰야 한다. 이 7자유도 변환이 닮음 변환 Sim(3)이다: $y = sRx + t$.
 
-비교하는 위치는 카메라 중심이다. VO 자세는 $T_{cw}$라서 $T_{wc}$로 뒤집고, 위치로 카메라 중심 $-R^\top t$를 쓴다(실행기는 `voEval`에서 이렇게 한다).
+비교하는 위치는 카메라 중심이다. VO 자세는 $T_{cw}$라서 $T_{wc}$로 뒤집고, 위치로 카메라 중심 $-R^\top t$를 쓴다(실행기는 `site/src/lib/voEval.ts`에서 이렇게 한다).
 
-크기를 맞추는 것이 단안 평가의 관례다. TUM 평가 도구와 궤적 평가 도구 evo(`-a`는 정렬, `-s`는 크기 맞춤, 합쳐서 `-as`)가 모두 그렇게 한다. 스테레오나 RGB-D, IMU처럼 크기를 아는 시스템이면 $s = 1$로 두고 SE(3)으로만 맞춘다.
+TUM의 원래 평가 스크립트(`evaluate_ate.py`)는 크기 없이 회전·이동만 맞춘다(Horn 방법, 강체 정렬). RGB-D처럼 크기를 아는 시스템을 위한 도구라서다. 단안에서는 크기까지 맞추는 것이 관례이고, 궤적 평가 도구 evo의 `-as`(`-a` 정렬, `-s` 크기 맞춤)와 ORB-SLAM 논문의 7자유도 정렬이 그렇게 한다.
+
+스테레오나 RGB-D, IMU처럼 크기를 아는 시스템이면 $s = 1$로 두고 SE(3)으로만 맞춘다.
 
 ### RPE 식
 
@@ -57,7 +66,7 @@ $$
 
 <SessionBreak id="s1" />
 
-### 우메야마 정렬
+### 우메야마(Umeyama) 정렬
 
 대응하는 점 $x_i$(추정), $y_i$(정답), $i = 1..n$에서 다음을 최소화하는 $s, R, t$를 찾는다.
 
@@ -67,9 +76,11 @@ $$
 
 **1) $t$.** $t$로 미분해 0으로 두면 $t = \mu_y - sR\mu_x$다(평균끼리 맞춘다). 이제 중심을 뺀 $\bar x_i = x_i - \mu_x$, $\bar y_i = y_i - \mu_y$만 남는다.
 
-**2) $R$.** 제곱을 전개하면 $\lVert \bar y_i \rVert^2$, $s^2\lVert R\bar x_i \rVert^2$, 교차항이 나온다. 회전은 길이를 바꾸지 않아 $\lVert R\bar x_i \rVert = \lVert \bar x_i \rVert$이므로 $s^2\lVert \bar x_i \rVert^2$ 항은 $R$과 무관하다. 남는 교차항은 $-2s\sum_i \bar y_i^\top R \bar x_i = -2ns\,\mathrm{tr}(R^\top \Sigma)$이고, 교차 공분산은 $\Sigma = \frac{1}{n}\sum_i \bar y_i \bar x_i^\top$다.
+**2) $R$.** 제곱을 전개하면 $\lVert \bar y_i \rVert^2$, $s^2\lVert R\bar x_i \rVert^2$, 교차항이 나온다. 회전은 길이를 바꾸지 않아 $\lVert R\bar x_i \rVert = \lVert \bar x_i \rVert$이므로 $s^2\lVert \bar x_i \rVert^2$ 항은 $R$과 무관하다. 남는 교차항은 $-2s\sum_i \bar y_i^\top R \bar x_i = -2ns\,\mathrm{tr}(R^\top \Sigma)$이고, 교차 공분산(cross-covariance)은 $\Sigma = \frac{1}{n}\sum_i \bar y_i \bar x_i^\top$다.
 
-그러니 $\mathrm{tr}(R^\top\Sigma)$를 최대로 하는 회전을 찾으면 된다(LA 박스). $\Sigma = UDV^\top$이면 답은 $R = USV^\top$다. 여기서 $S = \mathrm{diag}(1, 1, \pm 1)$이고, $\det U \det V < 0$이면 $-1$을 써서 반사 대신 회전을 고른다.
+그러니 $\mathrm{tr}(R^\top\Sigma)$를 최대로 하는 회전을 찾으면 된다. 이것이 직교 프로크루스테스(orthogonal Procrustes) 문제다(LA 박스).
+
+$\Sigma = UDV^\top$이면 답은 $R = USV^\top$다. 여기서 $S = \mathrm{diag}(1, 1, \pm 1)$이고, $\det U \det V < 0$이면 $-1$을 써서 반사 대신 회전을 고른다.
 
 **3) $s$.** $s$로 미분하면 다음과 같다.
 
@@ -120,9 +131,11 @@ $$
   </Hint>
 
   <Hint level={2}>
+    개념 절의 $x$가 `src`, $y$가 `dst`다. 코드 주석의 $\mu_s$, $\mu_d$, $\sigma_s^2$는 각각 $\mu_x$, $\mu_y$, $\sigma_x^2$다.
+
     $\Sigma$의 $(r, c)$ 원소는 $\frac{1}{n}\sum_i \bar y_i[r]\,\bar x_i[c]$다. 순서($\bar y \bar x^\top$)를 바꾸면 $R$ 대신 $R^\top$이 나온다.
 
-    특이값은 0번부터 세고 내림차순이다($D_0 \ge D_1 \ge D_2$). 퇴화 검사는 $\sigma_x^2 > 0$이고 $D_1 > 10^{-10} D_0$(둘째 특이값이 첫째에 비해 0이 아닌지)로 한다.
+    특이값은 0번부터 세고 내림차순이다($D_0 \ge D_1 \ge D_2$). 퇴화 검사는 스텁 주석과 같이 $\sigma_s^2 > 10^{-15}$이고 $D_1 > 10^{-10} D_0$(둘째 특이값이 첫째에 비해 0이 아닌지)로 한다.
   </Hint>
 
   <Hint level={3}>
@@ -133,7 +146,8 @@ $$
       (yᵢ − μy)(xᵢ − μx)ᵀ
     σx² ← (1/n) Σᵢ |xᵢ − μx|²
     U, D, V ← SVD(Σ)
-    σx² ≈ 0 또는 D₁ ≈ 0 이면 예외
+    σx² ≤ 1e-15 또는
+      D₁ ≤ 1e-10·D₀ 이면 예외
     d ← det U · det V < 0 ? −1 : 1
     R ← U · diag(1, 1, d) · Vᵀ
     s ← withScale
@@ -145,6 +159,16 @@ $$
 </TaskCard>
 
 <SessionBreak id="s4" />
+
+### alignUmeyama 테스트가 안 맞을 때
+
+- 기본 테스트에서 회전만 틀리면 $\Sigma$를 $\bar x\bar y^\top$ 순서로 만든 것이다($R^\top$이 나온다).
+- 거울상 테스트에서 $\det R = -1$이면 $S$의 부호 처리를 빠뜨렸다.
+- 크기만 틀리면 $\sigma_x^2$를 정답 쪽($y$)으로 구했거나, $\mathrm{tr}(DS)$에서 셋째 특이값의 부호를 빠뜨렸다.
+- "최소제곱 해다" 테스트는 $s$, $R$, $t$를 조금씩 흔들어 오차가 커지는지 본다. 하나만 실패하면 그 항의 공식을 다시 본다.
+- 예외 테스트에서 "한 직선 위"만 실패하면 퇴화 검사가 없거나 기준이 너무 작다. 위 힌트 2의 두 조건을 그대로 쓴다.
+
+<SessionBreak id="s15" />
 
 <TaskCard fn="ate">
   추정 위치 `est`를 정답 위치 `gt`에 Sim(3)으로 맞춘 뒤(`alignUmeyama`, 크기 포함) 점마다 위치 오차를 구한다. 결과는 `rmse`, `mean`, `median`(짝수 개면 가운데 둘의 평균), `max`, `errors`, `align`이다. 입력이 이상하면 `alignUmeyama`의 예외를 그대로 낸다.
@@ -175,22 +199,26 @@ $$
   </Hint>
 </TaskCard>
 
-### 테스트가 안 맞을 때
+<SessionBreak id="s5" />
 
-- `alignUmeyama` 기본 테스트에서 회전만 틀리면 $\Sigma$를 $\bar x\bar y^\top$ 순서로 만든 것이다($R^\top$이 나온다).
-- 거울상 테스트에서 $\det R = -1$이면 $S$의 부호 처리를 빠뜨렸다.
-- 크기만 틀리면 $\sigma_x^2$를 정답 쪽($y$)으로 구했거나, $\mathrm{tr}(DS)$에서 셋째 특이값의 부호를 빠뜨렸다.
-- "최소제곱 해다" 테스트는 $s$, $R$, $t$를 조금씩 흔들어 오차가 커지는지 본다. 하나만 실패하면 그 항의 공식을 다시 본다.
+### ate 테스트가 안 맞을 때
+
+- `ate`는 `alignUmeyama`를 부르므로, `alignUmeyama` 테스트부터 통과시킨다.
+- 기본 테스트에서 0이 안 나오면 크기를 빼고(`false`) 불렀는지 본다. `align.s`가 기대값의 역수로 나오면 넘긴 순서가 거꾸로다(`est`가 `src`, `gt`가 `dst`).
+- `median`만 틀리면 짝수 개(40개)일 때 가운데 둘의 평균을 빠뜨린 것이다. 정렬은 복사본에 하고, `errors`는 점 순서 그대로 둔다.
+- 예외 테스트는 `alignUmeyama`의 예외를 그대로 내면 통과한다. 따로 잡아서 삼키지 않는다.
 
 ### 읽기: rpe
 
 <TaskCard fn="rpe" readOnly>
   $T_{wc}$ 궤적 두 개(`est`, `gt`)와 간격 $\Delta$(정수 프레임 수), ATE 정렬의 크기 `scale`로 상대 자세 오차를 구한다. 결과는 이동 RMSE, 회전 RMSE(도), 비교한 쌍의 수다.
 
+  카드에는 `rpe`만 보이므로, 에디터에서 `core/reference/w11.ts`를 열어 도우미 `rel`과 `angleDeg`도 함께 읽는다.
+
   읽으며 확인할 것: 같은 파일의 `rel(A, B, s)`가 $A^{-1}B$를 구하고 이동을 $s$배 한다. 추정 쪽에만 `scale`을 넘기는 이유는? 회전 오차 $\theta = \arccos((\mathrm{tr}\,R_E - 1)/2)$는 3주차 `logSO3`의 회전각과 같은가?
 </TaskCard>
 
-<SessionBreak id="s5" />
+<SessionBreak id="s16" />
 
 ## 실습: TUM RGB-D로 내 VO 채점하기 (M1)
 
@@ -207,51 +235,186 @@ python datasets/tum_tracks.py
 
 (보기 좋게 나눈 것이고, 실제로는 한 줄로 쓴다.) 명령은 저장소 루트 폴더에서 실행한다. 결과는 `datasets/tracks/` 폴더의 JSON(약 1.5MB)이고, 이 폴더는 저장소에 올리지 않는다.
 
-3. **freiburg1_desk**도 같은 다운로드 페이지에서 받아, 같은 명령에 그 폴더 경로만 바꿔 넣는다.
+3. **freiburg1_desk**도 같은 다운로드 페이지에서 받는다. 빠르게 움직이는 시퀀스라 30Hz로, 600장까지 만든다(아래 기준 숫자 표와 같은 조건). 실제로는 한 줄로 쓴다.
+
+```text
+python datasets/tum_tracks.py
+  path/to/rgbd_dataset_freiburg1_desk
+  --every 1 --max-frames 600
+```
+
 4. 긴 시퀀스는 프레임 간격을 늘린다. **freiburg3_long_office_household**(약 1.5GB, 87초, 사무실 한 바퀴)는 `--every 3 --max-frames 800`으로 만든다.
 
-### 실행기
-
-트랙 파일을 열고 "VO 실행"을 누른다. 파일은 브라우저 안에서만 읽고 어디에도 올리지 않는다. 계산은 PC에서 300프레임에 10초 안팎이고, 폰은 몇 배 걸린다. 결과 아래 "내 궤적 저장"은 TUM 형식 궤적 파일을 내려받는다. 12주차에 evo로 같은 숫자가 나오는지 확인할 때 쓴다.
-
-<VoFileRunner />
+받은 tgz 폴더는 지우지 않는다. 안의 `groundtruth.txt`(정답 궤적 원본)를 evo와 ORB-SLAM 비교에서 다시 쓴다.
 
 <SessionBreak id="s6" />
 
+### 실행기
+
+트랙 파일을 열고 "VO 실행"을 누른다. 파일은 브라우저 안에서만 읽고 어디에도 올리지 않는다. 계산은 PC에서 300프레임에 10초 안팎이고, 폰은 몇 배 걸린다.
+
+M1 숫자는 **내 구현(mine)** 으로 낸다. 아래 실행기 맨 위 토글을 내 구현에 둔다. 결과에 "아직 TODO라 정답을 쓴 함수" 안내가 뜨면 그 숫자는 내 숫자가 아니다.
+
+결과 아래 "내 궤적 저장"은 TUM 형식 궤적 파일(`T_wc`, 시각 + 위치 + 쿼터니언)을 내려받는다. 뒤의 evo 절에서 쓴다.
+
+<VoFileRunner />
+
+<SessionBreak id="s10" />
+
 ### 정답 구현으로 낸 기준 숫자
 
-이 레슨을 만들 때 정답 구현과 기본 설정(추적 기준 6px, local BA 켬)으로 돌린 결과다(2026-11-03). 내 구현의 숫자가 여기서 크게 벗어나면 어딘가 다르다는 신호다.
+이 레슨을 만들 때 정답 구현(reference)과 기본 설정(추적 기준 6px, local BA 켬)으로 돌린 결과다(2026-11-03). 리포트에는 이 숫자가 아니라 내 구현의 숫자를 쓴다. 내 숫자가 여기서 크게 벗어나면 어딘가 다르다는 신호다.
 
 | 시퀀스 | 추적한 프레임 | ATE (경로 길이) |
 | --- | --- | --- |
-| fr1/xyz (15Hz) | 299/300 | 4.6 cm (6.5 m) |
-| fr1/desk (30Hz) | 155/600 | 8.6 cm (2.5 m) |
-| fr3/long_office (10Hz) | 799/800 | 17 cm (20.8 m) |
+| fr1/xyz (15Hz) | 299/300 | 4.6&nbsp;cm (6.5&nbsp;m) |
+| fr1/desk (30Hz) | 155/600 | 8.6&nbsp;cm (2.5&nbsp;m) |
+| fr3/long_office (10Hz) | 799/800 | 17&nbsp;cm (20.8&nbsp;m) |
 
 - **local BA를 끄면** fr1/xyz는 151번, fr3/long_office는 92번 프레임에서 추적이 끊긴다. 긴 영상에서는 BA가 정확도뿐 아니라 추적 자체를 지킨다.
 - **fr1/desk**는 15Hz(기본 `--every 2`)로 만들면 77번 프레임에야 초기화되고 99번에서 끊긴다. 30Hz(`--every 1 --max-frames 600`)로 만들어도 198번에서 끊긴다. 책상 위를 빠르게 훑는 회전이 많은 시퀀스라, 재위치 인식(relocalization)이 없는 미니 VO의 한계가 그대로 보인다.
 - **fr3/long_office**의 ATE 17cm는 경로의 0.83%다. 루프 클로저 없이 한 바퀴를 돌면 스케일과 방향이 조금씩 흘러 출발점으로 정확히 돌아오지 못한다. 궤적 그림에서 시작과 끝이 벌어진 곳을 찾아본다. 9주차 포즈 그래프가 이 오차를 줄이는 도구다.
 
-### 설정 바꿔 보기
-
-- 추적 기준을 3px로 내리면 어떻게 되나? 합성 장면(11c)에서는 3px로 충분했는데 실제 데이터에서는 왜 모자랄까? (롤링 셔터, 보정 오차, 모션 블러)
-- fr1/desk 트랙을 `--features 500`으로 다시 만들면 더 오래 버티는가? 계산 시간은 얼마나 늘어나나?
+내 구현으로 세 시퀀스를 돌려 위 표와 나란히 적어 둔다. 추적 기준을 3px로 내려 보는 것도 해 본다. 합성 장면(11c)에서는 3px로 충분했는데 실제 데이터에서는 왜 모자랄까? (롤링 셔터, 보정 오차, 모션 블러)
 
 <SessionBreak id="s7" />
 
+### evo로 다시 재기
+
+evo는 궤적 평가에 널리 쓰는 표준 도구(파이썬 패키지)다. 사이트 숫자를 남의 도구로 한 번 더 재 두면, 내 `ate`·`rpe`와 내보낸 궤적 파일이 맞다는 근거가 된다. 리포트의 결과 표에는 두 숫자를 함께 적는다.
+
+**설치.** Windows의 Python 3.10 이상에서 pipx로 설치하는 것이 가장 간단하다. pipx는 도구마다 따로 가상환경(venv)을 만들어 주므로 다른 패키지와 섞이지 않는다.
+
+```text
+pip install pipx
+pipx install evo
+```
+
+트랙 파일을 만든 OpenCV용 venv가 Python 3.10 미만이면 최근 evo가 설치되지 않을 수 있으니, evo는 그 venv와 따로 설치한다. WSL2는 12a에서 만든다. 이미 만들었으면 그쪽에 설치해도 된다.
+
+**ATE.** `groundtruth.txt`는 TUM 폴더 안의 원본 정답이고, `est.txt`는 실행기의 "내 궤적 저장" 파일(`tum-…-vo.txt`)이다. 파일은 TUM 형식 `T_wc`라 그대로 넣는다. 이름이 길면 `est.txt`로 바꿔 둔다.
+
+```text
+evo_ape tum
+  groundtruth.txt
+  est.txt
+  -as --t_max_diff 0.02
+```
+
+**RPE.** 회전 오차를 보려면 `-r angle_deg`를 더한다(기본은 이동 성분).
+
+```text
+evo_rpe tum
+  groundtruth.txt
+  est.txt
+  -as -d 15 -u f
+```
+
+(둘 다 보기 좋게 나눈 것이고, 실제로는 한 줄로 쓴다.)
+
+- `-a`는 정렬(우메야마), `-s`는 크기 맞춤이다. 합친 `-as`가 우리 `ate`의 Sim(3) 정렬과 같다.
+- `-d 15 -u f`는 "15프레임 간격"이다. evo에는 "초" 단위가 없어서 프레임 수로 준다. 15Hz 트랙이면 15프레임이 약 1초이고, 10Hz(fr3/long_office)면 `-d 10`, 30Hz면 `-d 30`이다.
+- `--t_max_diff 0.02`는 시각 차이 0.02초 안의 두 자세만 짝짓는다는 뜻이다.
+
+숫자가 사이트와 조금 다를 수 있다. evo는 시각(timestamp)으로 정답과 추정을 짝짓고, 사이트는 트랙 파일을 만들 때 붙여 둔 정답 자세(같은 프레임)를 쓴다.
+
+RPE는 짝지은 결과에서 쌍을 다시 고르므로 비교하는 쌍도 달라진다. 차이가 작으면 정상이고, 크게 다르면 시각 짝짓기나 파일 형식을 의심한다.
+
+<SessionBreak id="s11" />
+
+### 소거 실험(ablation)
+
+소거 실험은 구성 요소를 하나씩 끄거나 바꿔 무엇이 숫자를 만드는지 보는 실험이다. 한 번에 하나만 바꾸고 나머지는 기본값으로 둔다. fr1/xyz로 하고, 여유가 있으면 fr3/long_office로 한 번 더 한다.
+
+| 바꾼 것 | 설정 | 볼 숫자 |
+| --- | --- | --- |
+| local BA | 켬 / 끔 | 추적 프레임, ATE |
+| 추적 기준 | 4 / 6 / 8 px | 추적 프레임, ATE |
+| 특징점 수 | 200 / 300 / 500 | ATE, 계산 시간 |
+| 프레임 간격 | 1 / 2 (30 / 15Hz) | 추적 프레임, ATE, RPE |
+| 처리 시간 | PC / 폰 | 프레임당 ms |
+
+- local BA와 추적 기준은 실행기에서 바로 바꾼다. 특징점 수는 `--features`, 프레임 간격은 `--every`로 트랙 파일을 다시 만든다. 기본 파일을 덮지 않게 `--out`으로 이름을 바꾼다(예: `datasets/tracks/xyz-f500.json`).
+- 30Hz 트랙은 300프레임이 10초뿐이라 `--max-frames 600`을 같이 준다. 실행기의 RPE 간격도 약 1초에 맞춰 30프레임으로 바뀐다.
+- 프레임당 처리 시간은 실행기의 "계산 시간" ÷ 프레임 수다. 같은 파일을 PC와 폰에서 한 번씩 돌린다.
+
+표를 다 채우면 한 줄씩 결론을 적는다. 예를 들어 "특징점을 500개로 늘리면 ATE는 거의 같고 시간만 늘었다"처럼, 숫자가 말하는 것만 쓴다.
+
+<SessionBreak id="s12" />
+
+### ORB-SLAM 기준선
+
+내 숫자가 좋은지는 같은 데이터에서 잘 알려진 시스템과 견줘 봐야 말할 수 있다. ORB-SLAM 논문(Mur-Artal 외, IEEE T-RO 2015, arXiv:1502.00956)의 표 III이 TUM RGB-D의 단안 결과를 싣고 있다. 키프레임 궤적의 절대 오차 RMSE이고, 5번 실행한 중앙값이며, 7자유도 닮음 변환으로 정렬했다.
+
+| 시퀀스 | ORB-SLAM (단안) |
+| --- | --- |
+| fr1/xyz | 0.90&nbsp;cm |
+| fr1/desk | 1.69&nbsp;cm |
+| fr3/long_office | 3.45&nbsp;cm |
+
+이 세션에서 할 일은 둘이다. 첫째, 리포트 초안에 이 표를 옮기고 시퀀스마다 내 VO(mine)의 ATE를 옆에 적는다.
+
+- fr1/xyz: 내 VO ___ cm
+- fr1/desk: 내 VO ___ cm (끊긴 프레임 번호도)
+- fr3/long_office: 내 VO ___ cm
+
+둘째, 조건이 다르다는 것을 표 아래에 꼭 적는다.
+
+- ORB-SLAM은 **키프레임 궤적**만, 30Hz **전체 시퀀스**에서 잰다. 루프 클로저와 재위치 인식도 켜져 있다.
+- 우리 VO는 프레임을 솎거나(fr1/xyz 15Hz, fr3/long_office 10Hz) 앞부분만 쓴 **일부 구간**의 **모든 프레임**을 잰다. 루프 클로저와 재위치 인식이 없고, fr1/desk는 중간에 끊긴다.
+- 그래서 이 표는 "같은 조건의 순위"가 아니라 "완성된 SLAM이 어디쯤인가"를 보여 주는 기준선이다.
+
+<Details summary="12주차 환경 설정 때: ORB-SLAM3 직접 돌려 보기 (선택)">
+  이 세션에서 하지 않는다. 12주차에 C++ 환경을 꾸밀 때 시간이 남으면 해 본다.
+
+  **주의: 이 절차는 아직 이 PC에서 검증하지 않았다.** 빌드가 한 단위(약 5시간)를 넘겨도 막히면 그만두고 위의 논문 숫자를 인용한다.
+
+  1. Docker에서 Ubuntu 20.04 기반 컨테이너를 만들고 ORB-SLAM3(github.com/UZ-SLAMLab/ORB_SLAM3)를 받는다. 이 조합이 가장 많이 쓰이는 경로다.
+  2. 저장소 안내대로 의존성(Pangolin, OpenCV, Eigen)을 넣고 빌드한다. 메모리가 모자라면 병렬 수를 `-j2`~`-j4`로 줄인다. 컨테이너에는 화면이 없으니 뷰어는 끈다(예제의 `System` 생성 마지막 인자를 `false`로).
+  3. 시퀀스를 돌린다. fr1은 `TUM1.yaml`, fr3은 `TUM3.yaml`을 쓴다.
+
+  ```text
+  ./Examples/Monocular/mono_tum
+    Vocabulary/ORBvoc.txt
+    Examples/Monocular/TUM1.yaml
+    <시퀀스 폴더>
+  ```
+
+  끝나면 `KeyFrameTrajectory.txt`(TUM 형식)가 생긴다. 위 evo 절과 같은 방법으로 잰다.
+
+  ```text
+  evo_ape tum
+    groundtruth.txt
+    KeyFrameTrajectory.txt
+    -as --t_max_diff 0.02
+  ```
+
+  실행마다 숫자가 조금씩 다르므로 몇 번 돌려 중앙값을 쓴다(논문은 5번).
+</Details>
+
+<SessionBreak id="s13" />
+
 ### M1 리포트 쓰기
 
-리포트에 넣을 것:
+리포트에 넣을 것(앞부분):
 
-1. **무엇을 만들었나:** 미니 VO 구조 한 문단(초기화 → PnP 추적 → 키프레임·local BA), 내가 직접 구현한 함수 목록.
-2. **결과 표:** 시퀀스마다 추적한 프레임, ATE RMSE와 경로 대비 %, RPE(1초 간격, 15Hz면 15프레임), local BA 켬/끔.
-3. **궤적 그림:** 실행기 화면 캡처. 정답(점선)과 내 궤적이 크게 벌어지는 구간을 표시한다.
-4. **실패 분석:** 끊긴 프레임 근처에서 무슨 일이 있었나(빠른 회전, 흐린 사진, 특징점 부족). 원본 사진을 확인해 근거를 붙인다.
-5. **한계와 다음 단계:** 스케일 드리프트, 재위치 인식 없음, 루프 클로저 없음. 12주차 C++ 포팅에서 무엇을 바꿀지.
+1. **무엇을 만들었나:** 미니 VO 구조 한 문단(초기화 → PnP 추적 → 키프레임·local BA). 내가 직접 구현한 함수(`initMap`, `trackPnP`, `alignUmeyama`, `ate`, 했다면 `localBA`)와 읽기만으로 쓴 함수를 나눠 적는다.
+2. **결과 표:** 모든 숫자는 **내 구현(mine)** 으로 낸다. 표에 "mine"이라 적고, 정답 구현으로 낸 숫자를 함께 싣는다면 "reference"로 따로 표시한다. 시퀀스마다 추적한 프레임, ATE RMSE와 경로 대비 %, RPE(약 1초 간격)를 적는다.
+3. **evo 검증:** 같은 궤적을 evo로 잰 ATE·RPE를 사이트 숫자 옆에 적고, 차이가 나는 이유를 한 줄 붙인다.
+4. **소거 실험 표:** local BA, 추적 기준, 특징점 수, 프레임 간격, 처리 시간(PC, 폰)과 한 줄 결론.
+5. **ORB-SLAM 기준선:** 논문 숫자(직접 돌렸으면 그 숫자도)와 위의 조건 차이.
+6. **궤적 그림:** 실행기 화면 캡처. 정답(점선)과 내 궤적이 크게 벌어지는 구간을 표시한다.
+
+<SessionBreak id="s8" />
+
+리포트에 넣을 것(뒷부분):
+
+7. **실패 분석:** 끊긴 프레임 근처에서 무슨 일이 있었나(빠른 회전, 흐린 사진, 특징점 부족). 원본 사진을 확인해 근거를 붙인다.
+8. **한계와 다음 단계:** 스케일 드리프트, 재위치 인식 없음, 루프 클로저 없음. 12주차 C++ 포팅에서 무엇을 바꿀지.
 
 리포트는 M1 관문에서 사이트에 페이지로 붙인다(관문 진행 중에 AI가 틀을 만든다). 그 전에는 마크다운 초안으로 둔다.
 
-<SessionBreak id="s8" />
+<SessionBreak id="s14" />
 
 ## 체크 질문
 
@@ -270,7 +433,7 @@ python datasets/tum_tracks.py
 <CheckQuestion q="면접에서 'TUM fr3/long_office에서 ATE 17cm'라고 했더니 '그게 좋은 숫자냐'고 묻는다. 어떻게 답하나?" kind="실무">
   숫자만으로는 판단할 수 없다고 먼저 말하고, 비교 기준을 같이 댄다. 정답 경로 20.8m 대비 0.83%이고, 루프 클로저와 재위치 인식이 없는 단안 VO이며, 같은 데이터에서 local BA를 끄면 92프레임에서 추적을 잃는다는 비교를 붙인다.
 
-  그다음 오차가 어디서 오는지(스케일 드리프트, 한 바퀴 뒤 시작점이 벌어짐)와 줄이는 방법(루프 클로저와 포즈 그래프 최적화, IMU로 스케일 관측, 재위치 인식)을 말한다. 공개된 SLAM 시스템과 비교하려면 같은 정렬 방식(Sim(3))과 같은 프레임 구간을 썼는지 확인해야 한다.
+  그다음 오차가 어디서 오는지(스케일 드리프트, 한 바퀴 뒤 시작점이 벌어짐)와 줄이는 방법(루프 클로저와 포즈 그래프 최적화, IMU로 스케일 관측, 재위치 인식)을 말한다. 공개된 SLAM 시스템과 비교하려면 같은 정렬 방식(Sim(3))과 같은 프레임 구간을 썼는지 확인해야 한다. 예를 들어 ORB-SLAM 논문의 3.45cm는 30Hz 전체 시퀀스의 키프레임 궤적을 루프 클로저까지 켜고 잰 숫자라, 그대로 줄 세우면 안 된다.
 </CheckQuestion>
 
 <SessionBreak id="s9" />

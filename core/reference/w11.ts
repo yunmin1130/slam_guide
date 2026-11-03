@@ -9,6 +9,7 @@ import type {
   AteResult,
   BAObservation,
   Feature,
+  FeaturePair,
   InitOptions,
   InitResult,
   Intrinsics,
@@ -93,14 +94,8 @@ const IDENTITY: SE3 = {
   t: [0, 0, 0],
 };
 
-interface Pair {
-  readonly id: number;
-  readonly a: Vec2;
-  readonly b: Vec2;
-}
-
-/** 픽셀 → 정규화 좌표 */
-function normalize(K: Intrinsics, uv: Vec2): Vec2 {
+/** 읽기만: 픽셀 → 정규화 좌표 x̂ = ((u − cx)/fx, (v − cy)/fy) */
+export function normalizePixel(K: Intrinsics, uv: Vec2): Vec2 {
   return [(uv[0] - K.cx) / K.fx, (uv[1] - K.cy) / K.fy];
 }
 
@@ -109,8 +104,8 @@ function toCamera(T: SE3, X: Vec3): Vec3 {
   return [p[0] + T.t[0], p[1] + T.t[1], p[2] + T.t[2]];
 }
 
-/** 재투영 오차 (픽셀). 카메라 뒤면 무한대 */
-function reprojError(K: Intrinsics, T: SE3, X: Vec3, uv: Vec2): number {
+/** 읽기만: 재투영 오차 (픽셀). T는 T_cw, 점이 카메라 뒤(깊이 ≤ 0)면 Infinity */
+export function reprojectionError(K: Intrinsics, T: SE3, X: Vec3, uv: Vec2): number {
   const p = toCamera(T, X);
   if (!(p[2] > 1e-9)) return Infinity;
   return Math.hypot(K.fx * (p[0] / p[2]) + K.cx - uv[0], K.fy * (p[1] / p[2]) + K.cy - uv[1]);
@@ -136,8 +131,8 @@ function median(xs: readonly number[]): number {
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
-/** 두 프레임에 모두 있는 id (첫 프레임 순서) */
-function commonPairs(f1: readonly Feature[], f2: readonly Feature[]): Pair[] {
+/** 읽기만: 두 프레임에 모두 있는 id의 짝 { id, a: 프레임 1 픽셀, b: 프레임 2 픽셀 } (프레임 1 순서) */
+export function matchById(f1: readonly Feature[], f2: readonly Feature[]): FeaturePair[] {
   const byId = new Map(f2.map((f) => [f.id, f.uv]));
   return f1.flatMap((f) => {
     const b = byId.get(f.id);
@@ -145,34 +140,52 @@ function commonPairs(f1: readonly Feature[], f2: readonly Feature[]): Pair[] {
   });
 }
 
-function checkK(K: Intrinsics, who: string): void {
-  if (!(K.fx > 0 && K.fy > 0 && Number.isFinite(K.cx) && Number.isFinite(K.cy))) throw new Error(`${who}: K가 이상하다 (fx, fy > 0)`);
+/**
+ * 읽기만: 입력 검사. K가 이상하거나(fx, fy ≤ 0, cx·cy가 유한하지 않음), 한 프레임에 같은 id가 두 번 있거나,
+ * 특징점 좌표에 NaN·무한대가 있으면 예외 (메시지 앞에 who)
+ */
+export function checkFrame(
+  K: Intrinsics,
+  features: readonly Feature[],
+  who: string,
+): void {
+  checkK(K, who);
+  const seen = new Set<number>();
+  for (const f of features) {
+    if (seen.has(f.id)) {
+      throw new Error(
+        `${who}: 한 프레임에 같은 id(${f.id})가 두 번 있다`,
+      );
+    }
+    seen.add(f.id);
+    const [u, v] = f.uv;
+    if (!(Number.isFinite(u) && Number.isFinite(v))) {
+      throw new Error(
+        `${who}: 특징점 좌표에 NaN·무한대가 있다`,
+      );
+    }
+  }
 }
 
-function checkFeatures(fs: readonly Feature[], who: string): void {
-  const seen = new Set<number>();
-  for (const f of fs) {
-    if (seen.has(f.id)) throw new Error(`${who}: 한 프레임에 같은 id(${f.id})가 두 번 있다`);
-    seen.add(f.id);
-    if (!(Number.isFinite(f.uv[0]) && Number.isFinite(f.uv[1]))) throw new Error(`${who}: 특징점 좌표에 NaN·무한대가 있다`);
-  }
+function checkK(K: Intrinsics, who: string): void {
+  if (!(K.fx > 0 && K.fy > 0 && Number.isFinite(K.cx) && Number.isFinite(K.cy))) throw new Error(`${who}: K가 이상하다 (fx, fy > 0)`);
 }
 
 /**
  * 두 자세 T1, T2에서 본 대응을 삼각측량해서 쓸 만한 점만 남긴다:
  * 두 카메라 앞, 두 재투영 오차 < threshold, 시차각 ≥ minParallax (도, 0이면 검사 안 함).
  */
-function triangulateGood(K: Intrinsics, T1: SE3, T2: SE3, pairs: readonly Pair[], threshold: number, minParallax: number): { point: MapPoint; parallax: number }[] {
+function triangulateGood(K: Intrinsics, T1: SE3, T2: SE3, pairs: readonly FeaturePair[], threshold: number, minParallax: number): { point: MapPoint; parallax: number }[] {
   const C1 = center(T1);
   const C2 = center(T2);
   return pairs.flatMap(({ id, a, b }) => {
     let X: Vec3;
     try {
-      X = triangulate(T1, T2, normalize(K, a), normalize(K, b));
+      X = triangulate(T1, T2, normalizePixel(K, a), normalizePixel(K, b));
     } catch {
       return []; // 광선이 평행
     }
-    if (!(reprojError(K, T1, X, a) < threshold && reprojError(K, T2, X, b) < threshold)) return [];
+    if (!(reprojectionError(K, T1, X, a) < threshold && reprojectionError(K, T2, X, b) < threshold)) return [];
     const parallax = parallaxDeg(C1, C2, X);
     if (parallax < minParallax) return [];
     return [{ point: { id, X }, parallax }];
@@ -182,15 +195,14 @@ function triangulateGood(K: Intrinsics, T1: SE3, T2: SE3, pairs: readonly Pair[]
 // ---- 11a ----
 
 export function initMap(K: Intrinsics, f1: readonly Feature[], f2: readonly Feature[], opts: InitOptions): InitResult | null {
-  checkK(K, "initMap");
-  checkFeatures(f1, "initMap");
-  checkFeatures(f2, "initMap");
+  checkFrame(K, f1, "initMap");
+  checkFrame(K, f2, "initMap");
   if (!(opts.threshold > 0 && opts.minParallaxDeg >= 0 && opts.minPoints >= 1)) throw new Error("initMap: threshold > 0, minParallaxDeg ≥ 0, minPoints ≥ 1 이어야 한다");
 
-  const pairs = commonPairs(f1, f2);
+  const pairs = matchById(f1, f2);
   if (pairs.length < Math.max(EIGHT, opts.minPoints)) return null;
-  const n1 = pairs.map((p) => normalize(K, p.a));
-  const n2 = pairs.map((p) => normalize(K, p.b));
+  const n1 = pairs.map((p) => normalizePixel(K, p.a));
+  const n2 = pairs.map((p) => normalizePixel(K, p.b));
   const f = (K.fx + K.fy) / 2; // 정규화 좌표의 거리를 픽셀로 바꾸는 배율
 
   // 1) RANSAC으로 E: 오차는 x̂2와 에피폴라 직선 E·x̂1 사이 거리 (픽셀)
@@ -245,27 +257,53 @@ interface Corr {
   readonly uv: Vec2;
 }
 
-/** 점을 고정하고 자세만 LM으로 다듬는다 (모션 전용 BA). 8a의 야코비안 pose 블록, 좌섭동 */
-function refinePose(K: Intrinsics, T0: SE3, corr: readonly Corr[]): SE3 {
+/**
+ * 읽기만: 점을 고정하고 자세 T_cw만 LM으로 다듬는다 (모션 전용 BA). 대응 (X, uv)의 재투영 오차를 줄인다.
+ * 8a 야코비안의 pose 블록, 좌섭동 R ← Exp(φ)R, t ← Exp(φ)t + ρ. 시도한 자세에서 점이 카메라 뒤면 잔차를 크게 둔다
+ */
+export function refinePose(
+  K: Intrinsics,
+  T0: SE3,
+  corr: readonly { readonly X: Vec3; readonly uv: Vec2 }[],
+): SE3 {
+  // 관측마다 [u − u관측, v − v관측]
   const residual = (T: SE3): number[] =>
     corr.flatMap((c) => {
       const p = toCamera(T, c.X);
-      if (!(p[2] > 1e-9)) return [BEHIND_PENALTY, BEHIND_PENALTY];
-      return [K.fx * (p[0] / p[2]) + K.cx - c.uv[0], K.fy * (p[1] / p[2]) + K.cy - c.uv[1]];
+      if (!(p[2] > 1e-9)) {
+        return [BEHIND_PENALTY, BEHIND_PENALTY];
+      }
+      const u = K.fx * (p[0] / p[2]) + K.cx;
+      const v = K.fy * (p[1] / p[2]) + K.cy;
+      return [u - c.uv[0], v - c.uv[1]];
     });
+  // 8a 야코비안의 pose 블록 (2×6). 뒤면 0
+  const zero = (): number[] => new Array<number>(6).fill(0);
   const jacobian = (T: SE3): number[][] =>
-    corr.flatMap((c) => (toCamera(T, c.X)[2] > 1e-9 ? projectionJacobian(T, c.X, K).pose : [new Array<number>(6).fill(0), new Array<number>(6).fill(0)]));
+    corr.flatMap((c) =>
+      toCamera(T, c.X)[2] > 1e-9
+        ? projectionJacobian(T, c.X, K).pose
+        : [zero(), zero()],
+    );
+  // 좌섭동: R ← Exp(φ)R, t ← Exp(φ)t + ρ
   const plus = (T: SE3, d: readonly number[]): SE3 => {
     const E = expSO3([d[3]!, d[4]!, d[5]!]);
     const t = mv(E, T.t);
-    return { R: mm(E, T.R), t: [t[0] + d[0]!, t[1] + d[1]!, t[2] + d[2]!] };
+    return {
+      R: mm(E, T.R),
+      t: [t[0] + d[0]!, t[1] + d[1]!, t[2] + d[2]!],
+    };
   };
-  return levenbergMarquardt<SE3>({ residual, jacobian, plus }, T0, { maxIterations: REFINE_ITERATIONS, tolerance: 1e-10 }).x;
+  const opts = {
+    maxIterations: REFINE_ITERATIONS,
+    tolerance: 1e-10,
+  };
+  const problem = { residual, jacobian, plus };
+  return levenbergMarquardt<SE3>(problem, T0, opts).x;
 }
 
 export function trackPnP(K: Intrinsics, map: readonly MapPoint[], features: readonly Feature[], opts: TrackOptions): TrackResult | null {
-  checkK(K, "trackPnP");
-  checkFeatures(features, "trackPnP");
+  checkFrame(K, features, "trackPnP");
   if (!(opts.threshold > 0 && opts.minInliers >= PNP_SAMPLE)) throw new Error(`trackPnP: threshold > 0, minInliers ≥ ${PNP_SAMPLE} 이어야 한다`);
 
   const byId = new Map(map.map((p) => [p.id, p.X]));
@@ -285,7 +323,7 @@ export function trackPnP(K: Intrinsics, map: readonly MapPoint[], features: read
     try {
       T = pnpDLT(
         s.map((c) => scale3(sub(c.X, mu), 1 / sigma)),
-        s.map((c) => normalize(K, c.uv)),
+        s.map((c) => normalizePixel(K, c.uv)),
       );
     } catch {
       return null;
@@ -293,7 +331,7 @@ export function trackPnP(K: Intrinsics, map: readonly MapPoint[], features: read
     const Rmu = mv(T.R, mu);
     return { R: T.R, t: [sigma * T.t[0] - Rmu[0], sigma * T.t[1] - Rmu[1], sigma * T.t[2] - Rmu[2]] };
   };
-  const err = (T: SE3, c: Corr): number => reprojError(K, T, c.X, c.uv);
+  const err = (T: SE3, c: Corr): number => reprojectionError(K, T, c.X, c.uv);
   const found = ransac(corr, { sampleSize: PNP_SAMPLE, fit, error: err, threshold: opts.threshold, iterations: opts.iterations, rng: opts.rng });
   if (!found) return null;
 
@@ -313,58 +351,113 @@ export function trackPnP(K: Intrinsics, map: readonly MapPoint[], features: read
   return { T, inliers: inl.map((i) => corr[i]!.id).sort((a, b) => a - b) };
 }
 
-// ---- 11c ----
-
-export function localBA(K: Intrinsics, keyframes: readonly Keyframe[], map: readonly MapPoint[], opts: LocalBAOptions): LocalBAResult {
+/**
+ * 읽기만 (11c): 최근 window개 키프레임과 그 안에서 두 번 이상 보인 맵 포인트를 8b smallBA로 함께 고친다.
+ * 창에서 가장 오래된 두 키프레임과, 창 밖에서 그 점을 본 키프레임은 고정 카메라로 넣는다.
+ */
+export function localBA(
+  K: Intrinsics,
+  keyframes: readonly Keyframe[],
+  map: readonly MapPoint[],
+  opts: LocalBAOptions,
+): LocalBAResult {
   checkK(K, "localBA");
-  if (!(Number.isInteger(opts.window) && opts.window >= 2)) throw new Error("localBA: window는 2 이상의 정수여야 한다");
-  if (keyframes.length < 2) throw new Error("localBA: 키프레임이 두 개 이상 필요하다");
+  const w = opts.window;
+  if (!(Number.isInteger(w) && w >= 2)) {
+    throw new Error("localBA: window는 2 이상의 정수");
+  }
+  if (keyframes.length < 2) {
+    throw new Error("localBA: 키프레임이 2개 이상 필요");
+  }
 
-  const first = Math.max(0, keyframes.length - opts.window);
+  const first = Math.max(0, keyframes.length - w);
   const active = keyframes.slice(first);
   const pointById = new Map(map.map((p) => [p.id, p.X]));
+  const inFront = (T: SE3, X: Vec3): boolean =>
+    toCamera(T, X)[2] > 1e-9;
 
-  // 창 안의 키프레임 두 개 이상에서 보이는 맵 포인트만, 그리고 시작값에서 카메라 앞에 있는 관측만
-  const obsByPoint = new Map<number, { cam: number; uv: Vec2 }[]>();
+  // 1) 창 안 관측을 점별로 (시작값에서 카메라 앞인 것만)
+  type Obs = { cam: number; uv: Vec2 };
+  const obsByPoint = new Map<number, Obs[]>();
   active.forEach((kf, cam) => {
     for (const f of kf.features) {
       const X = pointById.get(f.id);
-      if (!X || !(toCamera(kf.T, X)[2] > 1e-9)) continue;
-      obsByPoint.set(f.id, [...(obsByPoint.get(f.id) ?? []), { cam, uv: f.uv }]);
+      if (!X || !inFront(kf.T, X)) continue;
+      const list = obsByPoint.get(f.id) ?? [];
+      obsByPoint.set(f.id, [...list, { cam, uv: f.uv }]);
     }
   });
-  const ids = [...obsByPoint.keys()].filter((id) => obsByPoint.get(id)!.length >= 2).sort((a, b) => a - b);
-  if (ids.length === 0) return { keyframes: [...keyframes], map: [...map], costs: [] };
+  // 2) 창 안에서 두 번 이상 보인 점만, id 순서
+  const ids = [...obsByPoint.keys()]
+    .filter((id) => obsByPoint.get(id)!.length >= 2)
+    .sort((a, b) => a - b);
+  if (ids.length === 0) {
+    return {
+      keyframes: [...keyframes],
+      map: [...map],
+      costs: [],
+    };
+  }
 
-  // 창 밖 키프레임이 본 관측도 넣되 그 카메라는 고정한다. 빼면 점이 창 안의 짧은 기준선 관측만으로 다시 맞춰져
-  // 오래 쌓은 깊이 정보를 잃는다 (ORB-SLAM의 local BA와 같은 구성)
+  // 3) 창 밖 키프레임이 본 관측도 넣되, 그 카메라는
+  //    고정한다. 빼면 점이 창 안의 짧은 기준선만으로
+  //    다시 맞춰져 오래 쌓은 깊이 정보를 잃는다
   const chosen = new Set(ids);
-  const outside = keyframes.slice(0, first).flatMap((kf) => {
-    const seen = kf.features.filter((f) => chosen.has(f.id) && toCamera(kf.T, pointById.get(f.id)!)[2] > 1e-9);
-    return seen.length > 0 ? [{ kf, seen }] : [];
-  });
-  // 카메라 순서: 창 안 키프레임 (0, 1은 게이지로 고정), 그다음 창 밖에서 고정으로 넣은 키프레임
+  const outside = keyframes
+    .slice(0, first)
+    .flatMap((kf) => {
+      const seen = kf.features.filter(
+        (f) =>
+          chosen.has(f.id) &&
+          inFront(kf.T, pointById.get(f.id)!),
+      );
+      return seen.length > 0 ? [{ kf, seen }] : [];
+    });
+
+  // 4) 카메라 순서: 창 안 키프레임, 그다음 창 밖
   const pointIndex = new Map(ids.map((id, i) => [id, i]));
-  const observations: BAObservation[] = [
-    ...ids.flatMap((id, point) => obsByPoint.get(id)!.map((o) => ({ cam: o.cam, point, uv: o.uv }))),
-    ...outside.flatMap(({ seen }, j) => seen.map((f) => ({ cam: active.length + j, point: pointIndex.get(f.id)!, uv: f.uv }))),
+  const n = active.length;
+  const inside: BAObservation[] = ids.flatMap(
+    (id, point) =>
+      obsByPoint.get(id)!.map((o) => ({
+        cam: o.cam,
+        point,
+        uv: o.uv,
+      })),
+  );
+  const outer: BAObservation[] = outside.flatMap(
+    ({ seen }, j) =>
+      seen.map((f) => ({
+        cam: n + j,
+        point: pointIndex.get(f.id)!,
+        uv: f.uv,
+      })),
+  );
+  // 게이지: 창에서 가장 오래된 두 키프레임(0, 1)과
+  // 창 밖 카메라를 고정 (단안 7자유도를 묶는다)
+  const fixed = [0, 1, ...outside.map((_, j) => n + j)];
+  const cameras = [
+    ...active.map((kf) => kf.T),
+    ...outside.map(({ kf }) => kf.T),
   ];
-  const fixed = [0, 1, ...outside.map((_, j) => active.length + j)];
-  // 게이지: 창에서 가장 오래된 두 키프레임을 고정 (단안: 위치 3 + 회전 3 + 스케일 1을 묶는다)
+  const points = ids.map((id) => pointById.get(id)!);
   const r = smallBA(
     {
       K,
-      cameras: [...active.map((kf) => kf.T), ...outside.map(({ kf }) => kf.T)],
-      points: ids.map((id) => pointById.get(id)!),
-      observations,
+      cameras,
+      points,
+      observations: [...inside, ...outer],
       fixed,
     },
     opts.solver,
   );
 
+  // 5) 창 안 자세와 쓴 점만 바꾼 새 배열
   const newX = new Map(ids.map((id, i) => [id, r.points[i]!]));
   return {
-    keyframes: keyframes.map((kf, i) => (i < first ? kf : { ...kf, T: r.cameras[i - first]! })),
+    keyframes: keyframes.map((kf, i) =>
+      i < first ? kf : { ...kf, T: r.cameras[i - first]! },
+    ),
     map: map.map((p) => {
       const X = newX.get(p.id);
       return X ? { id: p.id, X } : p;
@@ -410,7 +503,7 @@ function findInit(parts: VoParts, K: Intrinsics, frames: readonly (readonly Feat
     opts.onFrame?.(i);
     const init = parts.initMap(K, frames[ref]!, frames[i]!, opts.init);
     if (init) return { ref, second: i, init };
-    if (commonPairs(frames[ref]!, frames[i]!).length < Math.max(EIGHT, opts.init.minPoints)) ref = i;
+    if (matchById(frames[ref]!, frames[i]!).length < Math.max(EIGHT, opts.init.minPoints)) ref = i;
   }
   return null;
 }
@@ -426,7 +519,7 @@ function newPoints(K: Intrinsics, s: VoState, kf: Keyframe, frames: readonly (re
   const uvAt = new Map<number, Map<number, Vec2>>();
   for (let k = first; k < kf.frame; k++) uvAt.set(k, new Map(frames[k]!.map((f) => [f.id, f.uv])));
   // 처음 보인 프레임별로 모은다
-  const byStart = new Map<number, Pair[]>();
+  const byStart = new Map<number, FeaturePair[]>();
   for (const f of fresh) {
     let start = -1;
     for (let k = kf.frame - 1; k >= first && poses[k] && uvAt.get(k)!.has(f.id); k--) start = k;
@@ -464,7 +557,7 @@ function addKeyframe(parts: VoParts, K: Intrinsics, s: VoState, kf: Keyframe, ad
  */
 function refineInit(K: Intrinsics, f1: readonly Feature[], f2: readonly Feature[], init: InitResult, opts: VoOptions): InitResult {
   if (!opts.ba || init.points.length === 0) return init;
-  const pairs = commonPairs(f1, f2);
+  const pairs = matchById(f1, f2);
   const byId = new Map(pairs.map((p) => [p.id, p]));
   const used = init.points;
   const observations: BAObservation[] = used.flatMap((p, i) => [

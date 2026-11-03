@@ -16,6 +16,26 @@ export default defineConfig({
   site: "https://yunmin1130.github.io",
   base: "/slam_guide/",
   integrations: [mdx(), react()],
+  // CSP (ARCHITECTURE §7): 빌드한 페이지마다 <meta http-equiv="content-security-policy">를 넣는다.
+  // 인라인 스크립트(island 하이드레이션)는 Astro가 해시로 허용한다 → script-src에 'unsafe-inline' 없음.
+  // style은 KaTeX·React의 인라인 style 속성 때문에 'unsafe-inline' (있으면 Astro가 style 해시를 빼 준다).
+  // 채점·VO 워커는 같은 출처 파일이라 페이지 CSP를 물려받지 않는다 (§6.1).
+  security: {
+    csp: {
+      directives: [
+        "default-src 'self'",
+        "img-src 'self' data: blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://api.github.com",
+        "worker-src 'self' blob:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-src 'none'",
+      ],
+      scriptDirective: { resources: ["'self'"] },
+      styleDirective: { resources: ["'self'", "'unsafe-inline'"] },
+    },
+  },
   // 수식은 빌드 타임에 KaTeX로 렌더링 → 런타임 JS 0 (ARCHITECTURE §2). MDX도 이 설정을 물려받는다.
   // 기본 처리기(Sätteri)에는 KaTeX 플러그인이 없어서 remark/rehype 파이프라인(unified)을 쓴다.
   markdown: {

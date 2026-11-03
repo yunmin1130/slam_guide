@@ -214,3 +214,12 @@
   background: var(--fail-bg);
   color: var(--fail);
 }
+/* 터치 기기(폰·패드)에서만 보이는 안내 */
+.coarseOnly {
+  display: none;
+}
+@media (pointer: coarse) {
+  .coarseOnly {
+    display: block;
+  }
+}

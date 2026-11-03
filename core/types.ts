@@ -200,6 +200,13 @@ export interface Feature {
   readonly uv: Vec2;
 }
 
+/** 두 프레임에서 같은 id로 이어진 특징점 짝 (11주차): a = 프레임 1 픽셀, b = 프레임 2 픽셀 */
+export interface FeaturePair {
+  readonly id: number;
+  readonly a: Vec2;
+  readonly b: Vec2;
+}
+
 /** 맵 포인트 (11주차): 추적 번호 id인 점의 월드 좌표 */
 export interface MapPoint {
   readonly id: number;

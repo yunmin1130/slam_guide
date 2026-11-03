@@ -51,7 +51,7 @@ export default function TokenSettings({ open, onToggle, onChange }: TokenSetting
           </li>
           <li>Expiration 90 days · Repository access: Only select → slam_guide</li>
           <li>Permissions → Contents: Read and write (나머지는 그대로)</li>
-          <li>만든 토큰을 아래에 붙여넣기. 이 기기 브라우저에만 저장돼</li>
+          <li>만든 토큰을 아래에 붙여넣기. 이 기기 브라우저에만 저장돼 (iPhone 홈 화면 앱은 저장소가 따로라 거기서 한 번 더 넣어야 해)</li>
         </ol>
         <div className={styles.tokenRow}>
           <input

@@ -4,13 +4,14 @@
  */
 import type { CaseResult, RunMessage, RunSummary, WorkerMessage } from "./protocol";
 import { LOAD_FAILED_MESSAGE, friendlyLoadError } from "../staleChunk";
+import { RUN_TIMEOUT_MS, timeoutForWeek } from "./timeouts";
 
-// 워커 시작·테스트 파일 로드 시간 포함. 느린 폰의 첫 실행도 넉넉히 들어오게
-export const RUN_TIMEOUT_MS = 8000;
+// 제한 시간 상수는 timeouts.ts에 둔다 (scripts/qa.mjs도 같은 값을 읽는다)
+export { RUN_TIMEOUT_MS, timeoutForWeek };
 
 export type RunOutcome =
   | RunSummary
-  | { kind: "timeout"; cases: CaseResult[] }
+  | { kind: "timeout"; cases: CaseResult[]; timeoutMs: number }
   | { kind: "crash"; message: string; cases: CaseResult[] };
 
 export interface WorkerLike {
@@ -29,12 +30,12 @@ export interface RunOptions {
   fn?: string;
   source: string;
   onCase?(c: CaseResult): void;
-  timeoutMs?: number;
+  timeoutMs?: number; // 없으면 timeoutForWeek(week)
   makeWorker?: () => WorkerLike; // 테스트용
 }
 
 export function runInWorker(opts: RunOptions): Promise<RunOutcome> {
-  const { timeoutMs = RUN_TIMEOUT_MS, makeWorker = createWorker } = opts;
+  const { timeoutMs = timeoutForWeek(opts.week), makeWorker = createWorker } = opts;
   return new Promise((resolve) => {
     const cases: CaseResult[] = [];
     let worker: WorkerLike;
@@ -52,7 +53,7 @@ export function runInWorker(opts: RunOptions): Promise<RunOutcome> {
       worker.terminate();
       resolve(outcome);
     };
-    const timer = setTimeout(() => finish({ kind: "timeout", cases }), timeoutMs);
+    const timer = setTimeout(() => finish({ kind: "timeout", cases, timeoutMs }), timeoutMs);
 
     worker.onmessage = (e) => {
       const m = e.data;
