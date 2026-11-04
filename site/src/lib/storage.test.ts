@@ -4,14 +4,12 @@ import {
   createLocalStore,
   createTokenStore,
   DRAFTS_KEY,
-  isValidSessionMinutes,
   MAX_DRAFT_CHARS,
   requestPersistentStorage,
   resetPersistRequestForTest,
   sanitizeProgress,
   STORAGE_KEY,
   TOKEN_KEY,
-  withSessionMinutes,
   type KeyValueBackend,
 } from "./storage";
 
@@ -28,7 +26,7 @@ function memoryBackend(initial: Record<string, string> = {}): KeyValueBackend & 
 
 describe("sanitizeProgress", () => {
   it("올바른 값은 그대로 통과", () => {
-    const p = { lessons: { w01: { status: "done", checked: ["s1"], minutes: 30, lastVisited: "2026-11-01T00:00:00.000Z" } } };
+    const p = { lessons: { w01: { status: "done", checked: ["s1"], lastVisited: "2026-11-01T00:00:00.000Z" } } };
     expect(sanitizeProgress(p)).toEqual(p);
   });
 
@@ -174,63 +172,27 @@ describe("TokenStore", () => {
   });
 });
 
-describe("세션 소요 시간", () => {
-  it("5~240분, 5분 단위 정수만 받는다", () => {
-    expect([5, 30, 240].every(isValidSessionMinutes)).toBe(true);
-    expect([0, 3, 7, 245, 12.5, Number.NaN, "30"].some(isValidSessionMinutes)).toBe(false);
-  });
-
-  it("세션별로 기록하고 minutes는 합으로 맞춘다. 같은 세션을 다시 넣으면 덮어쓴다", () => {
-    const a = withSessionMinutes(undefined, "s1", 30);
-    expect(a).toEqual({ status: "todo", checked: [], sessionMinutes: { s1: 30 }, minutes: 30 });
-    const b = withSessionMinutes(a, "s2", 45);
-    expect(b.minutes).toBe(75);
-    const c = withSessionMinutes(b, "s1", 20);
-    expect(c.sessionMinutes).toEqual({ s1: 20, s2: 45 });
-    expect(c.minutes).toBe(65);
-    expect(a.sessionMinutes).toEqual({ s1: 30 }); // 원래 상태는 그대로
-  });
-
-  it("null이면 그 세션 기록을 지우고, 다 지우면 필드도 없앤다", () => {
-    const a = withSessionMinutes({ status: "in-progress", checked: ["s1"] }, "s1", 30);
-    expect(withSessionMinutes(a, "s1", null)).toEqual({ status: "in-progress", checked: ["s1"] });
-  });
-
-  it("예전 데이터(minutes만 있음)는 첫 세션 기록 때 legacyMinutes로 옮겨 합에 더한다", () => {
-    const old = { status: "in-progress" as const, checked: ["s1"], minutes: 50 };
-    const a = withSessionMinutes(old, "s1", 30);
-    expect(a).toEqual({ status: "in-progress", checked: ["s1"], sessionMinutes: { s1: 30 }, legacyMinutes: 50, minutes: 80 });
-    expect(withSessionMinutes(a, "s1", 40).minutes).toBe(90);
-    // 세션 기록을 다 지우면 예전 모양(minutes 하나)으로 돌아간다
-    expect(withSessionMinutes(a, "s1", null)).toEqual(old);
-  });
-
-  it("불러올 때 minutes는 항상 sessionMinutes(+legacyMinutes)로 다시 계산한다", () => {
+describe("예전 걸린 시간 기록", () => {
+  it("불러올 때 minutes·sessionMinutes·legacyMinutes는 버린다 (기능 삭제, 2026-11-04)", () => {
     const p = sanitizeProgress({
       lessons: {
-        w01: { status: "todo", checked: [], sessionMinutes: { s1: 30, s2: 15 }, minutes: 999 },
-        w02: { status: "todo", checked: [], sessionMinutes: { s1: 30 }, legacyMinutes: 20, minutes: 1 },
-        w03: { status: "todo", checked: [], minutes: 40 },
-        w04: { status: "todo", checked: [], legacyMinutes: 25, minutes: 1 },
-        w05: { status: "todo", checked: [], minutes: -3 },
+        w01: { status: "in-progress", checked: ["s1"], sessionMinutes: { s1: 30 }, legacyMinutes: 20, minutes: 50, notes: "메모" },
       },
     });
-    expect(p?.lessons.w01).toEqual({ status: "todo", checked: [], sessionMinutes: { s1: 30, s2: 15 }, minutes: 45 });
-    expect(p?.lessons.w02).toEqual({ status: "todo", checked: [], sessionMinutes: { s1: 30 }, legacyMinutes: 20, minutes: 50 });
-    expect(p?.lessons.w03).toEqual({ status: "todo", checked: [], minutes: 40 }); // 예전 합은 그대로
-    expect(p?.lessons.w04).toEqual({ status: "todo", checked: [], minutes: 25 });
-    expect(p?.lessons.w05).toEqual({ status: "todo", checked: [] });
+    expect(p?.lessons.w01).toEqual({ status: "in-progress", checked: ["s1"], notes: "메모" });
   });
 
-  it("범위 밖 값은 저장하지 않고 오류", () => {
-    expect(() => withSessionMinutes(undefined, "s1", 300)).toThrow(/5~240/);
-  });
-
-  it("저장된 sessionMinutes도 검증해 이상한 값은 버린다", () => {
-    const p = sanitizeProgress({ lessons: { w01: { status: "todo", checked: [], sessionMinutes: { s1: 30, s2: -1, s3: "x" } } } });
-    expect(p?.lessons.w01?.sessionMinutes).toEqual({ s1: 30 });
-    const q = sanitizeProgress({ lessons: { w01: { status: "todo", checked: [], sessionMinutes: { s2: -1 } } } });
-    expect(q?.lessons.w01).not.toHaveProperty("sessionMinutes");
+  it("아주 오래된 형태(minutes만)와 이상한 값도 버리고 나머지는 살린다", () => {
+    const p = sanitizeProgress({
+      lessons: {
+        w01: { status: "done", checked: ["s1"], minutes: 40 },
+        w02: { status: "todo", checked: [], sessionMinutes: { s1: -1, s2: "x" }, minutes: "y" },
+      },
+    });
+    expect(p?.lessons).toEqual({
+      w01: { status: "done", checked: ["s1"] },
+      w02: { status: "todo", checked: [] },
+    });
   });
 });
 

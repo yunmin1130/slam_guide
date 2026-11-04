@@ -8,15 +8,6 @@ export type LessonStatus = "todo" | "in-progress" | "done";
 export interface LessonState {
   status: LessonStatus;
   checked: string[]; // 완료한 세션 id·체크 질문 id
-  /**
-   * 실제 소요 시간 합 (일정 재추정용). 직접 쓰지 않고 항상 아래 규칙으로 계산한다 (lessonMinutes):
-   * - sessionMinutes가 있으면 (legacyMinutes ?? 0) + sessionMinutes 합
-   * - sessionMinutes가 없으면 예전 데이터의 값 그대로 (세션별 기록 이전에 저장된 합)
-   */
-  minutes?: number;
-  sessionMinutes?: Record<string, number>; // 세션 id → 걸린 시간(분). "완료 표시" 뒤에 고른다 (선택)
-  /** 세션별 기록 이전의 minutes. 첫 sessionMinutes 기록 때 옮겨 두고, sessionMinutes가 비면 다시 minutes로 돌아간다 */
-  legacyMinutes?: number;
   lastVisited?: string; // ISO 8601
   notes?: string;
 }
@@ -57,16 +48,8 @@ function sanitizeLesson(raw: unknown): LessonState | null {
   const base: LessonState = { status, checked };
   if (typeof raw.lastVisited === "string") base.lastVisited = raw.lastVisited;
   if (typeof raw.notes === "string") base.notes = raw.notes;
-  const sessionMinutes = isRecord(raw.sessionMinutes)
-    ? (Object.fromEntries(Object.entries(raw.sessionMinutes).filter(([, m]) => isValidSessionMinutes(m))) as Record<string, number>)
-    : {};
-  // legacyMinutes가 있으면 그게 예전 합이고, 없으면 sessionMinutes 없이 저장된 minutes가 예전 합이다
-  const legacy = isValidLegacyMinutes(raw.legacyMinutes)
-    ? raw.legacyMinutes
-    : Object.keys(sessionMinutes).length === 0 && isValidLegacyMinutes(raw.minutes)
-      ? raw.minutes
-      : undefined;
-  return withMinutesTotal(base, sessionMinutes, legacy);
+  // 예전 버전의 걸린 시간 기록(minutes·sessionMinutes·legacyMinutes)은 기능을 뺐으므로 옮기지 않는다 (2026-11-04)
+  return base;
 }
 
 /** 저장된 값은 외부 입력으로 보고 검증한다. 살릴 수 있는 레슨은 살리고, 전체 구조가 틀리면 null. */
@@ -282,58 +265,6 @@ export function createTokenStore(backend: RemovableBackend | null): TokenStore {
 
 export function getTokenStore(): TokenStore {
   return createTokenStore(browserBackend() as RemovableBackend | null);
-}
-
-// ---- 세션 소요 시간 ----
-
-export const SESSION_MINUTES = { min: 5, max: 240, step: 5 } as const;
-
-export function isValidSessionMinutes(m: unknown): m is number {
-  return (
-    typeof m === "number" &&
-    Number.isInteger(m) &&
-    m >= SESSION_MINUTES.min &&
-    m <= SESSION_MINUTES.max &&
-    m % SESSION_MINUTES.step === 0
-  );
-}
-
-/** 세션별 기록 이전에 저장된 합: 0 이상의 유한한 수 */
-function isValidLegacyMinutes(m: unknown): m is number {
-  return typeof m === "number" && Number.isFinite(m) && m >= 0;
-}
-
-/** 예전 합(legacyMinutes 또는 sessionMinutes 없이 저장된 minutes). 없으면 undefined */
-function legacyMinutesOf(s: LessonState): number | undefined {
-  if (s.legacyMinutes !== undefined) return s.legacyMinutes;
-  return s.sessionMinutes && Object.keys(s.sessionMinutes).length > 0 ? undefined : s.minutes;
-}
-
-/**
- * minutes·sessionMinutes·legacyMinutes를 규칙대로 다시 맞춘 새 상태 (LessonState.minutes 주석).
- * sessionMinutes가 비면 legacyMinutes는 다시 minutes 하나로 돌아간다.
- */
-function withMinutesTotal(s: LessonState, sessionMinutes: Record<string, number>, legacy: number | undefined): LessonState {
-  const { sessionMinutes: _s, minutes: _m, legacyMinutes: _l, ...others } = s;
-  if (Object.keys(sessionMinutes).length === 0) return legacy === undefined ? others : { ...others, minutes: legacy };
-  const total = (legacy ?? 0) + Object.values(sessionMinutes).reduce((a, b) => a + b, 0);
-  return legacy === undefined
-    ? { ...others, sessionMinutes, minutes: total }
-    : { ...others, sessionMinutes, legacyMinutes: legacy, minutes: total };
-}
-
-/**
- * 세션 하나의 걸린 시간을 기록한 새 상태. 다시 기록하면 덮어쓴다 (두 번 더해지지 않게).
- * minutes(레슨 합)는 다시 계산한다: 예전 합(legacyMinutes) + sessionMinutes 합. null이면 그 세션 기록을 지운다.
- */
-export function withSessionMinutes(s: LessonState | undefined, sessionId: string, minutes: number | null): LessonState {
-  if (minutes !== null && !isValidSessionMinutes(minutes)) {
-    throw new Error(`${SESSION_MINUTES.min}~${SESSION_MINUTES.max}분, ${SESSION_MINUTES.step}분 단위로 넣어줘`);
-  }
-  const base: LessonState = s ?? { status: "todo", checked: [] };
-  const { [sessionId]: _old, ...rest } = base.sessionMinutes ?? {};
-  const sessionMinutes = minutes === null ? rest : { ...rest, [sessionId]: minutes };
-  return withMinutesTotal(base, sessionMinutes, legacyMinutesOf(base));
 }
 
 // ---- 저장 유지 요청 ----

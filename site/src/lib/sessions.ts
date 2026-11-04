@@ -2,7 +2,7 @@
  * 세션·기기 관련 순수 로직. 저장은 storage.ts, 화면은 컴포넌트가 맡는다.
  * 규칙 근거: LESSON_TEMPLATE §2 (다음 세션 = 현재 기기에 맞는 첫 미완료 세션)
  */
-import { withSessionMinutes, type LessonState, type Progress } from "./storage";
+import type { LessonState, Progress } from "./storage";
 
 export type Device = "phone" | "pad" | "pc";
 
@@ -69,22 +69,21 @@ export function nextSessions(lessons: readonly LessonMeta[], progress: Progress,
   return { overall };
 }
 
-/** 세션 체크/해제를 반영한 새 LessonState. 전부 체크되면 done. 해제하면 그 세션의 걸린 시간 기록도 지운다. */
+/** 세션 체크/해제를 반영한 새 LessonState. 전부 체크되면 done. */
 export function applySessionToggle(
   prevState: LessonState | undefined,
   sessionId: string,
   checked: boolean,
   allSessionIds: readonly string[],
 ): LessonState {
-  const state = !checked && prevState?.sessionMinutes?.[sessionId] !== undefined ? withSessionMinutes(prevState, sessionId, null) : prevState;
-  const prev = state?.checked ?? [];
+  const prev = prevState?.checked ?? [];
   const next = checked
     ? prev.includes(sessionId)
       ? prev
       : [...prev, sessionId]
     : prev.filter((id) => id !== sessionId);
   const allDone = allSessionIds.length > 0 && allSessionIds.every((id) => next.includes(id));
-  return { ...state, status: allDone ? "done" : "in-progress", checked: next };
+  return { ...prevState, status: allDone ? "done" : "in-progress", checked: next };
 }
 
 /**

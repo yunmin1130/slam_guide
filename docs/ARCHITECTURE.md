@@ -170,18 +170,12 @@ interface Progress {
 interface LessonState {
   status: "todo" | "in-progress" | "done";
   checked: string[];                       // 완료한 세션 id·체크 질문 id
-  minutes?: number;                        // 실제 소요 시간 합 (일정 재추정용). 직접 쓰지 않고 아래 규칙으로 계산
-  sessionMinutes?: Record<string, number>; // 세션 id → 분 (5~240, 5분 단위). "완료 표시" 뒤 선택 입력
-  legacyMinutes?: number;                  // 세션별 기록 이전에 저장된 합 (sessionMinutes와 함께만 있다)
   lastVisited?: string;                    // ISO 시간, 복귀 진입점 표시용
   notes?: string;
 }
 ```
 
-**minutes 규칙** (`storage.ts`의 `withSessionMinutes`·`sanitizeLesson`, 2026-11-03)
-- `sessionMinutes`가 있으면 `minutes = (legacyMinutes ?? 0) + sessionMinutes 합`. 불러올 때도 다시 계산한다 (저장된 `minutes`는 믿지 않는다).
-- `sessionMinutes`가 없으면 `minutes`는 예전 데이터의 합이라 그대로 둔다. 첫 세션 기록 때 그 값을 `legacyMinutes`로 옮겨 합에 더한다. 세션 기록이 다시 모두 지워지면 `minutes` 하나로 돌아간다.
-- 세션 체크를 해제하면 그 세션의 `sessionMinutes`도 지운다 (`applySessionToggle`). 기록 지우기는 "지우기" 버튼으로만 한다 (빈 값 제출은 오류).
+걸린 시간 기록(`minutes`·`sessionMinutes`·`legacyMinutes`)은 2026-11-04에 뺐다 (사용자 결정: 일정 재추정이 필요 없음). 예전 데이터에 남은 이 필드는 `sanitizeLesson`이 불러올 때 버린다.
 
 **단계적 구현**
 - 0주차: **localStorage 전용**.
