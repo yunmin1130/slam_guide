@@ -1,0 +1,232 @@
+/* 2주차 최소제곱 데모. 버튼·결과 표는 다른 데모와 같은 모양으로 맞춘다 */
+.demo {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+}
+.panel {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 캡션까지 합쳐 그림 영역이 400px 안에 들게 (LESSON_TEMPLATE §3 ③) */
+  max-height: 320px;
+  margin-inline: auto;
+}
+.ground {
+  fill: var(--paper-sunken);
+}
+.axis {
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+}
+.grid {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+.tick {
+  fill: var(--ink-soft);
+  font-size: 12px;
+}
+/* 색 (레슨 전체 규칙): 주황 = 내 직선(Ax), 청록 = 관측 점(b), 분홍 = 잔차 r */
+.demo {
+  --ls-mine: #d96a12;
+  --ls-point: #12897f;
+  --ls-res: #c2417a;
+}
+@media (prefers-color-scheme: dark) {
+  .demo {
+    --ls-mine: #f5a05a;
+    --ls-point: #4fd8c9;
+    --ls-res: #f28cb8;
+  }
+}
+.square {
+  fill: color-mix(in srgb, var(--ls-res) 16%, transparent);
+  stroke: color-mix(in srgb, var(--ls-res) 50%, transparent);
+  stroke-width: 1;
+}
+@media (prefers-color-scheme: dark) {
+  .square {
+    fill: color-mix(in srgb, var(--ls-res) 30%, transparent);
+    stroke: color-mix(in srgb, var(--ls-res) 75%, transparent);
+  }
+}
+.best {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+}
+.mine {
+  fill: none;
+  stroke: var(--ls-mine);
+  stroke-width: 3;
+}
+.residual {
+  stroke: var(--ls-res);
+  stroke-width: 2.5;
+}
+.point {
+  fill: var(--ls-point);
+}
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+/* 범례 항목은 한 덩어리로 줄바꿈한다 */
+.lgMine,
+.lgRes,
+.lgBest,
+.lgItem {
+  white-space: nowrap;
+}
+.lgMine::before,
+.lgRes::before,
+.lgBest::before,
+.lgItem::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 0;
+  margin-right: 0.3em;
+  vertical-align: 0.3em;
+}
+.lgMine::before {
+  border-top: 3px solid var(--ls-mine);
+}
+.lgRes::before {
+  border-top: 3px solid var(--ls-res);
+}
+.lgItem::before {
+  height: 0.8em;
+  border: 1px solid color-mix(in srgb, var(--ls-res) 60%, transparent);
+  background: color-mix(in srgb, var(--ls-res) 25%, transparent);
+  vertical-align: -0.1em;
+}
+.lgBest::before {
+  border-top: 2px dashed var(--ink);
+}
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+.segment {
+  display: inline-flex;
+  justify-self: start;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+}
+.option {
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.option[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.chip,
+.button {
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] {
+  border-color: #d96a12;
+  background: color-mix(in srgb, #d96a12 18%, var(--paper-raised));
+}
+.chip[aria-pressed="true"]::before {
+  content: "✓ ";
+}
+.option:focus-visible,
+.chip:focus-visible,
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+.readout [role="status"]:empty {
+  display: none;
+}
+.alerts {
+  display: grid;
+  gap: var(--space-2);
+}
+.values {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+.muted {
+  margin: 0;
+  color: var(--ink-faint);
+}
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}
+.chip:disabled,
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.status {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+}
+.status[data-hit="true"] {
+  background: var(--mine-bg);
+  color: var(--mine);
+  font-weight: 600;
+}

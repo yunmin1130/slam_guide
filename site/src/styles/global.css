@@ -239,6 +239,22 @@ td {
   white-space: nowrap;
 }
 
+/* 수식 안 색 구분 (\htmlClass{k-c1}{…}). 개념 그림과 같은 색: 첫째 열·v₁ = 파랑, 둘째 열·v₂ = 보라 */
+.k-c1 {
+  color: #2d63c8;
+}
+.k-c2 {
+  color: #8a46c4;
+}
+@media (prefers-color-scheme: dark) {
+  .k-c1 {
+    color: #82a9f5;
+  }
+  .k-c2 {
+    color: #c79bf2;
+  }
+}
+
 /* KaTeX: 긴 블록 수식은 화면 밖으로 밀지 않고 가로 스크롤 */
 .katex-display {
   overflow-x: auto;

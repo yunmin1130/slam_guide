@@ -1,0 +1,266 @@
+/* 2주차 개념 그림 MatrixWarp. 색은 의미로: 변환 결과 = 주황, 내가 고르는 x = 청록, v₁ = 파랑, v₂ = 보라 */
+.widget {
+  --w-image: #d96a12;
+  --w-probe: #12897f;
+  --w-v1: #2d63c8;
+  --w-v2: #8a46c4;
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--paper-raised);
+}
+@media (prefers-color-scheme: dark) {
+  .widget {
+    --w-image: #f5a05a;
+    --w-probe: #4fd8c9;
+    --w-v1: #82a9f5;
+    --w-v2: #c79bf2;
+  }
+}
+
+.panel {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.plane {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 캡션까지 합쳐 그림 영역이 400px 안에 들게 (LESSON_TEMPLATE §3 ③) */
+  max-height: 290px;
+  margin-inline: auto;
+}
+.ground {
+  fill: var(--paper-sunken);
+}
+.grid {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+.axis {
+  stroke: var(--ink-faint);
+  stroke-width: 1.2;
+}
+
+.shape_image {
+  fill: color-mix(in srgb, var(--w-image) 16%, transparent);
+  stroke: var(--w-image);
+  stroke-width: 2;
+}
+/* 단위 원 점선은 주황 도형 위에 그린다 (다크에서도 보이게 ink-soft) */
+.shape_faint {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+}
+.dashed {
+  stroke-dasharray: 5 4;
+}
+
+.line_image,
+.line_probe,
+.line_v1,
+.line_v2,
+.line_faint {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.line_image {
+  stroke: var(--w-image);
+}
+.line_probe {
+  stroke: var(--w-probe);
+}
+.line_v1 {
+  stroke: var(--w-v1);
+}
+.line_v2 {
+  stroke: var(--w-v2);
+}
+.line_faint {
+  stroke: var(--ink-soft);
+}
+.thick {
+  stroke-width: 4;
+}
+.through {
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+}
+
+.head_image,
+.dot_image,
+.text_image {
+  fill: var(--w-image);
+}
+.head_probe,
+.dot_probe,
+.text_probe {
+  fill: var(--w-probe);
+}
+.head_v1,
+.dot_v1,
+.text_v1 {
+  fill: var(--w-v1);
+}
+.head_v2,
+.dot_v2,
+.text_v2 {
+  fill: var(--w-v2);
+}
+.head_faint,
+.dot_faint,
+.text_faint {
+  fill: var(--ink-soft);
+}
+.markText {
+  font-size: 15px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: var(--paper-sunken);
+  stroke-width: 4px;
+}
+
+.caption {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+.key {
+  font-weight: 700;
+}
+.key[data-tone="image"] {
+  color: var(--w-image);
+}
+.key[data-tone="probe"] {
+  color: var(--w-probe);
+}
+.key[data-tone="v1"] {
+  color: var(--w-v1);
+}
+.key[data-tone="v2"] {
+  color: var(--w-v2);
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.segment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  padding: 3px;
+  border-radius: 22px;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+}
+.option {
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.option[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+.chip {
+  min-height: var(--touch);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.chip[aria-pressed="true"] {
+  border-color: var(--w-v2);
+  background: color-mix(in srgb, var(--w-v2) 16%, var(--paper));
+}
+.chip[aria-pressed="true"]::before {
+  content: "✓ ";
+}
+.option:focus-visible,
+.chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+.values {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  align-items: center;
+}
+.values dt {
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+.matrices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.status {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
+.status[data-hit="true"] {
+  background: var(--mine-bg);
+  color: var(--mine);
+  font-weight: 600;
+}
+
+/* 2×2 행렬: 양옆 괄호를 테두리로 */
+.matrix {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+}
+.matrixLabel {
+  font-weight: 600;
+}
+.matrixBody {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  gap: 0 var(--space-3);
+  padding: 0.1em 0.45em;
+  border-left: 2px solid var(--ink-soft);
+  border-right: 2px solid var(--ink-soft);
+  border-radius: 4px;
+  text-align: right;
+}

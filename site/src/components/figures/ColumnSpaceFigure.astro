@@ -1,0 +1,167 @@
+---
+/**
+ * 2주차 정적 그림: 최소제곱 = b를 열공간(평면)에 수직으로 내린 그림자.
+ * 점 3개짜리 본문 예시를 3차원(축 = 1·2·3번 점의 y값)으로 본 모습이다. 축척은 정확하지 않은 개념도다.
+ * 색은 레슨 규칙과 같다: 파랑 = t 열, 보라 = 1 열, 주황 = Ax, 청록 = b, 분홍 = 잔차 r.
+ */
+---
+
+<figure class="cs-figure" aria-label="b를 열공간 평면에 수직으로 내린 그림자 Ax와 잔차 r">
+  <svg viewBox="0 0 320 230" aria-hidden="true">
+    <g class="axes">
+      <line x1="262" y1="70" x2="300" y2="70"></line>
+      <line x1="262" y1="70" x2="286" y2="50"></line>
+      <line x1="262" y1="70" x2="262" y2="32"></line>
+      <text x="302" y="74">y₁</text>
+      <text x="288" y="46">y₂</text>
+      <text x="256" y="27">y₃</text>
+    </g>
+
+    <path class="plane" d="M14,190 L218,190 L306,120 L102,120 Z"></path>
+    <text class="plane-label" x="14" y="212">평면 = 열공간 (a·t열 + c·1열로 만드는 모든 Ax)</text>
+
+    <line class="col1" x1="70" y1="172" x2="150" y2="176"></line>
+    <path class="col1-head" d="M150,176 l-9,-5 l1,9 z"></path>
+    <text class="col1-label" x="100" y="168">t 열 (0,1,2)</text>
+    <line class="col2" x1="70" y1="172" x2="118" y2="134"></line>
+    <path class="col2-head" d="M118,134 l-9,2 l5,7 z"></path>
+    <text class="col2-label" x="18" y="114">1 열 (1,1,1)</text>
+    <circle class="origin" cx="70" cy="172" r="3"></circle>
+
+    <line class="other" x1="160" y1="136" x2="200" y2="38"></line>
+    <circle class="other-dot" cx="160" cy="136" r="4"></circle>
+    <text class="other-label" x="16" y="40">회색 점 = 다른 x의 Ax</text>
+    <text class="other-label" x="16" y="56">(회색 점선: b까지 더 멀다)</text>
+
+    <line class="res" x1="200" y1="150" x2="200" y2="38"></line>
+    <path class="right" d="M200,139 L211,141 L211,152"></path>
+    <circle class="foot" cx="200" cy="150" r="5"></circle>
+    <circle class="b" cx="200" cy="38" r="5"></circle>
+
+    <text class="b-label" x="168" y="26">b (관측값)</text>
+    <text class="res-label" x="208" y="92">r = b − Ax</text>
+    <text class="res-label" x="208" y="108">평면에 수직</text>
+    <text class="foot-label" x="206" y="176" text-anchor="middle">Ax = 그림자</text>
+  </svg>
+  <figcaption>
+    방향만 보여 주는 개념도라 위치·길이는 정확하지 않다 (오른쪽 위 축도 방향 표시다). 축 y₁, y₂, y₃는 1·2·3번 점의 y값이다. b = (1, 1, 3)은 관측한 y 세 개, Ax는 직선 하나가 예측하는 y 세 개라 둘 다 이 공간의 점이다.
+    b는 평면 밖에 있어서 Ax = b가 될 수 없다. 평면 위에서 b에 가장 가까운 점은 수직으로 내린 그림자다. 평면 위 다른 점까지의 선(회색 점선)은 직각삼각형의 빗변이라 늘 더 길다.
+  </figcaption>
+</figure>
+
+<style>
+  .cs-figure {
+    --c-b: #12897f;
+    --c-foot: #d96a12;
+    --c-res: #c2417a;
+    --c-col1: #2d63c8;
+    --c-col2: #8a46c4;
+    margin: var(--space-4) 0 var(--space-6);
+    display: grid;
+    gap: var(--space-2);
+  }
+  @media (prefers-color-scheme: dark) {
+    .cs-figure {
+      --c-b: #4fd8c9;
+      --c-foot: #f5a05a;
+      --c-res: #f28cb8;
+      --c-col1: #82a9f5;
+      --c-col2: #c79bf2;
+    }
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 340px;
+    background: var(--paper-sunken);
+    border-radius: var(--radius-sm);
+  }
+  text {
+    font-size: 12.5px;
+    fill: var(--ink);
+  }
+  .axes line {
+    stroke: var(--ink-soft);
+    stroke-width: 1.2;
+  }
+  .axes text {
+    fill: var(--ink-soft);
+    font-size: 11.5px;
+  }
+  .plane {
+    fill: color-mix(in srgb, var(--c-foot) 12%, transparent);
+    stroke: var(--ink-soft);
+    stroke-width: 1.5;
+  }
+  .plane-label,
+  .other-label {
+    fill: var(--ink-soft);
+    font-size: 11.5px;
+  }
+  .col1,
+  .col2 {
+    stroke-width: 2.5;
+  }
+  .col1 {
+    stroke: var(--c-col1);
+  }
+  .col2 {
+    stroke: var(--c-col2);
+  }
+  .col1-head,
+  .col1-label {
+    fill: var(--c-col1);
+  }
+  .col2-head,
+  .col2-label {
+    fill: var(--c-col2);
+  }
+  .col1-label,
+  .col2-label {
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .origin {
+    fill: var(--ink-soft);
+  }
+  .other {
+    stroke: var(--ink-soft);
+    stroke-width: 1.5;
+    stroke-dasharray: 2 4;
+  }
+  .other-dot {
+    fill: var(--ink-soft);
+  }
+  .res {
+    stroke: var(--c-res);
+    stroke-width: 3;
+  }
+  .right {
+    fill: none;
+    stroke: var(--c-res);
+    stroke-width: 1.5;
+  }
+  .foot {
+    fill: var(--c-foot);
+  }
+  .b {
+    fill: var(--c-b);
+  }
+  .b-label {
+    fill: var(--c-b);
+    font-weight: 700;
+  }
+  .res-label {
+    fill: var(--c-res);
+    font-weight: 700;
+  }
+  .foot-label {
+    fill: var(--c-foot);
+    font-weight: 700;
+  }
+  figcaption {
+    font-size: var(--text-sm);
+    color: var(--ink-soft);
+  }
+</style>

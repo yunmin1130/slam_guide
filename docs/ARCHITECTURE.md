@@ -46,6 +46,8 @@ slam_guide/
 │   │   ├── content/lessons/  # 주차별 MDX (w01-vectors.mdx …)
 │   │   ├── components/
 │   │   │   ├── demos/        # 레슨별 데모 컴포넌트
+│   │   │   ├── concepts/     # 개념 그림 위젯 (core 안 씀, 토글 없음. 2주차 MatrixWarp)
+│   │   │   ├── figures/      # 정적 SVG 개념도 (.astro)
 │   │   │   ├── viewer3d/     # 공용 3D 뷰어
 │   │   │   ├── lesson/       # LABox, TaskCard, 체크 질문 등
 │   │   │   └── ui/           # 슬라이더, 토글 등 공용 UI
@@ -99,6 +101,7 @@ PC Python(datasets/) ──> JSON (캘리브레이션, 대응점) ──> public
 2. 데모는 core 함수를 직접 import하지 않고 `lib/impl.ts`를 통해 가져온다.
 3. `impl.ts`는 현재 토글 상태에 따라 mine 또는 reference 구현을 반환한다.
 4. 데모는 결과를 3D 뷰어·그래프로 렌더링한다.
+5. 개념 그림(`components/concepts`, `components/figures`)은 core를 쓰지 않는다. 그림에 필요한 작은 계산(2×2 고유분해·SVD 등)은 `lib/`의 그림 전용 모듈(`lib/mat2.ts`)에 두고 사이트 테스트로 검사한다. 과제 함수의 결과를 보여 줘야 하면 개념 그림이 아니라 데모로 만든다 (2026-11-05).
 
 ## 5. mine / reference 토글
 

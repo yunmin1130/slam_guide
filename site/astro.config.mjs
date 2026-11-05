@@ -39,7 +39,11 @@ export default defineConfig({
   // 수식은 빌드 타임에 KaTeX로 렌더링 → 런타임 JS 0 (ARCHITECTURE §2). MDX도 이 설정을 물려받는다.
   // 기본 처리기(Sätteri)에는 KaTeX 플러그인이 없어서 remark/rehype 파이프라인(unified)을 쓴다.
   markdown: {
-    processor: unified({ remarkPlugins: [remarkMath], rehypePlugins: [[rehypeKatex, { throwOnError: true }]] }), // 잘못된 수식은 빌드 실패
+    // 잘못된 수식은 빌드 실패. \htmlClass만 허용한다: 수식 글자 색을 global.css 클래스(.k-c1, .k-c2)로 주어 다크 모드에서도 읽히게
+    processor: unified({
+      remarkPlugins: [remarkMath],
+      rehypePlugins: [[rehypeKatex, { throwOnError: true, trust: (/** @type {{ command: string, class?: string }} */ ctx) => ctx.command === "\\htmlClass" && /^k-c[12]$/.test(ctx.class ?? "") }]],
+    }),
     // 코드 블록도 기기 다크 모드를 따른다 (global.css의 --shiki-dark 규칙)
     shikiConfig: { themes: { light: "github-light", dark: "github-dark" } },
   },
