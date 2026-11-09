@@ -151,7 +151,7 @@ $k$는 보통 잡음 크기의 1~2배로 잡는다. ORB-SLAM은 재투영 오차
 1. 잔차 하나 $r(x) = x^2 - 2$를 $x_0 = 1$에서 시작해 GN으로 두 걸음 간다. $x_1$, $x_2$는? 무엇에 다가가는가?
 2. $\tfrac{1}{2}\lVert r + J\delta \rVert^2$를 전개하면 $\tfrac{1}{2} r^\top r + \delta^\top J^\top r + \tfrac{1}{2}\delta^\top J^\top J \delta$다. 이것을 $\delta$로 미분해 0으로 놓아 정규방정식을 유도한다. 벡터 미분 규칙 $\partial(\delta^\top a)/\partial\delta = a$, $\partial(\delta^\top A \delta)/\partial\delta = 2A\delta$($A$ 대칭)를 쓴다. 2주차처럼 "잔차 $r + J\delta$가 $J$의 열들과 수직" 조건으로 유도해도 된다.
 3. 관측마다 잡음 크기 $\sigma_i$가 다르면 최대 우도가 어떤 가중 최소제곱이 되는지 $-\log p$로 보인다.
-4. Huber $k = 0.1$에서 $r = 0.05$와 $r = 0.3$의 $\rho$와 가중치 $w$를 구한다. 제곱 비용과 비교하면 $r = 0.3$인 점이 답을 끄는 힘($\rho'$)이 몇 분의 1로 줄었나?
+4. Huber $k = 1$에서 $r = 0.5$와 $r = 3$의 $\rho$와 가중치 $w$를 구한다. 제곱 비용과 비교하면 $r = 3$인 점이 답을 끄는 힘($\rho'$)이 몇 분의 1로 줄었나?
 5. 곡선 $y = a\,e^{bt}$의 잔차 하나에 대해 야코비안 한 줄을 유도한다(개념 절의 결과와 맞는가).
 6. 2번의 미분에 $\delta = 0$을 넣으면 비용의 기울기가 $J^\top r$임을 확인한다. LM에서 $\lambda \to 0$이면 GN이 되고, $\lambda$가 아주 크면 $\delta \approx -\tfrac{1}{\lambda}\,\mathrm{diag}(J^\top J)^{-1} J^\top r$이 됨을 보인다. $-J^\top r$은 비용의 어떤 방향인가?
 
