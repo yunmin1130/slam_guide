@@ -19,7 +19,11 @@ sessions:
   - { id: s6, device: phone, title: "LA 박스 훑기" }
   - { id: s14, device: phone, title: "데모: 직선 손으로 맞추기" }
   - { id: s7, device: pad, title: "손으로 정규방정식 유도 + 직선 맞추기" }
+  - { id: s15, device: pad, title: "손으로 고유분해 해 보기" }
+  - { id: s18, device: phone, title: "SVD 준비: AAᵀ와 열×행 읽기" }
+  - { id: s16, device: pad, title: "손으로 SVD 구하기 (U, Σ, V)" }
   - { id: s8, device: pad, title: "손으로 Ax=0의 답이 V의 어느 열인지 보이기" }
+  - { id: s17, device: pad, title: "손으로 분해 응용하기 (거듭제곱·최소제곱·근사·회전)" }
   - { id: s9, device: pc, title: "과제: solveLeastSquares 구현" }
   - { id: s10, device: pc, title: "과제: solveLeastSquares 디버그·테스트 통과" }
   - { id: s11, device: pc, title: "과제: nullspaceSVD 구현" }
@@ -402,31 +406,406 @@ $x = 0$은 늘 답이라 쓸모가 없다. 또 $(1, -1)$이 답이면 $(2, -2)$,
 
 <SessionBreak id="s7" />
 
+### 손으로 고유분해 해 보기
+
+$S = Q \Lambda Q^\top$처럼 행렬을 고유벡터와 고유값으로 쪼개는 것을 고유분해(eigendecomposition)라 한다. 본문에서는 고유벡터를 "곱해 보니 같은 방향이더라"로 확인만 했다. 여기서는 처음부터 찾는다.
+
+먼저 $Av = \lambda v$의 오른쪽을 $\lambda I v$로 바꿔 쓴다($Iv = v$라 값은 같다). 숫자 $\lambda$를 행렬 $\lambda I$로 바꿔야 행렬끼리 뺄 수 있다. 그러면 $Av - \lambda I v = (A - \lambda I)v = 0$이다.
+
+$v \neq 0$인데 0으로 눌린다는 것은 $A - \lambda I$가 한 방향을 납작하게 누른다는 뜻이다. 1주차 행렬식 절에서 봤듯이, 그런 행렬은 행렬식이 0이다.
+
+$$
+\det(A - \lambda I) = 0
+$$
+
+이 식을 특성방정식(characteristic equation)이라 한다. 고유분해는 두 단계로 한다.
+
+- ① 특성방정식을 풀어 $\lambda$를 얻는다.
+- ② $\lambda$마다 $(A - \lambda I)v = 0$을 풀어 $v$를 얻는다. $v = (x, y)$로 두고 푼다.
+
+2×2 행렬 $\begin{bmatrix} p & q \\ r & s \end{bmatrix}$이면 대각에서 $\lambda$를 빼고 행렬식을 펼친다.
+
+$$
+\begin{aligned}
+&\det\begin{bmatrix} p - \lambda & q \\ r & s - \lambda \end{bmatrix} \\
+&= (p - \lambda)(s - \lambda) - qr \\
+&= \lambda^2 - p\lambda - s\lambda + ps - qr \\
+&= \lambda^2 - (p + s)\lambda + (ps - qr)
+\end{aligned}
+$$
+
+$\lambda$ 앞에는 −(대각의 합), 상수항에는 행렬식이 온다. 대각의 합을 대각합(trace)이라 한다.
+
+두 해를 $\lambda_1, \lambda_2$라 하면 같은 식을 이렇게도 쓸 수 있다.
+
+$$
+\begin{aligned}
+&(\lambda - \lambda_1)(\lambda - \lambda_2) \\
+&= \lambda^2 - (\lambda_1 + \lambda_2)\lambda + \lambda_1\lambda_2
+\end{aligned}
+$$
+
+계수를 맞대 보면 두 고유값은 **더하면 대각합, 곱하면 행렬식**인 두 수다.
+
+1. $S = \begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$의 고유값을 특성방정식으로 구한다. 고유벡터를 길이 1로 맞춰 $Q$와 $\Lambda$를 쓰고, $Q \Lambda Q^\top$를 곱해 $S$가 다시 나오는지 확인한다.
+2. $S = \begin{bmatrix} 5 & 2 \\ 2 & 2 \end{bmatrix}$도 같은 순서로 분해한다. 두 고유벡터가 서로 수직인지 내적으로 확인한다.
+3. $A = \begin{bmatrix} 2 & 1 \\ 0 & 1 \end{bmatrix}$은 대칭이 아니다. 고유값과 고유벡터를 구한다. 두 고유벡터는 수직인가? 수직이 아니면 $Q \Lambda Q^\top$ 대신 무엇으로 쪼개야 하나?
+4. 90° 회전 $\begin{bmatrix} 0 & -1 \\ 1 & 0 \end{bmatrix}$의 특성방정식을 쓴다. 실수 해가 있나? 본문 그림의 <strong>회전 30°</strong>와 비교한다.
+
+<Details summary="막히면: 1~4번 디딤돌">
+  1번: 대각의 합은 4, 행렬식은 $4 - 1 = 3$이다. 더해서 4, 곱해서 3인 두 수가 고유값이다.
+
+  $\lambda = 3$이면 $S - 3I = \begin{bmatrix} -1 & 1 \\ 1 & -1 \end{bmatrix}$이고, 첫 행에서 $-x + y = 0$이다. 둘째 행은 같은 식이라 새 정보가 없다(행렬식이 0이니 당연하다).
+
+  2번: 더해서 7, 곱해서 6이다. 고유벡터를 길이 1로 줄일 때는 그 벡터의 길이로 나눈다. 예를 들어 $(2, 1)$이면 $\sqrt{2^2 + 1^2} = \sqrt{5}$로 나눈다.
+
+  3번: 대각 아래가 0인 행렬(삼각행렬, triangular matrix)은 특성방정식이 $(2 - \lambda)(1 - \lambda) = 0$이다. 그래서 대각 성분이 그대로 고유값이다.
+
+  고유벡터 $v_1, v_2$를 열로 쌓은 행렬을 $P$라 하자. 수직이 아니면 $P$는 직교행렬이 아니라서 $P^\top$가 역행렬이 되지 못한다.
+
+  대신 이렇게 본다. $AP$의 $i$번째 열은 $A$에 $P$의 $i$번째 열 $v_i$를 곱한 $A v_i = \lambda_i v_i$다. $P\Lambda$의 $i$번째 열도 $\lambda_i v_i$다. 그래서 $AP = P\Lambda$인데, 양변 오른쪽에 무엇을 곱하면 $A = \ldots$ 꼴이 되나?
+
+  4번: 대각의 합 0, 행렬식 1이다. 어떤 실수를 제곱해야 $-1$이 되나?
+</Details>
+
+<Details summary="확인: 1~4번 답과 풀이">
+  1번: $\lambda^2 - 4\lambda + 3 = (\lambda - 3)(\lambda - 1)$이라 $\lambda = 3, 1$이다. 고유벡터는 $(1, 1)$과 $(1, -1)$이고, 길이 $\sqrt{2}$로 나눠 열로 쌓는다.
+
+  $$
+  \begin{aligned}
+  Q &= \tfrac{1}{\sqrt{2}}\begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix} \\
+  \Lambda &= \begin{bmatrix} 3 & 0 \\ 0 & 1 \end{bmatrix}
+  \end{aligned}
+  $$
+
+  확인 곱셈에서 $\tfrac{1}{\sqrt{2}}$ 두 개가 만나 $\tfrac{1}{2}$이 된다. 이 $Q$는 $Q^\top = Q$다.
+
+  $$
+  \begin{aligned}
+  Q\Lambda &= \tfrac{1}{\sqrt{2}}\begin{bmatrix} 3 & 1 \\ 3 & -1 \end{bmatrix} \\
+  Q\Lambda Q^\top &= \tfrac{1}{2}\begin{bmatrix} 4 & 2 \\ 2 & 4 \end{bmatrix} = S
+  \end{aligned}
+  $$
+
+  2번: $\lambda^2 - 7\lambda + 6 = (\lambda - 6)(\lambda - 1)$이다. $\lambda = 6$이면 $-x + 2y = 0$이라 $(2, 1)$이고, $\lambda = 1$이면 $4x + 2y = 0$이라 $(1, -2)$다. 내적은 $2 - 2 = 0$으로 수직이다.
+
+  $$
+  \begin{aligned}
+  Q &= \tfrac{1}{\sqrt{5}}\begin{bmatrix} 2 & 1 \\ 1 & -2 \end{bmatrix} \\
+  \Lambda &= \begin{bmatrix} 6 & 0 \\ 0 & 1 \end{bmatrix}
+  \end{aligned}
+  $$
+
+  확인 곱셈에서는 $\tfrac{1}{\sqrt{5}}$ 두 개가 만나 $\tfrac{1}{5}$이 된다.
+
+  $$
+  \begin{aligned}
+  Q\Lambda &= \tfrac{1}{\sqrt{5}}\begin{bmatrix} 12 & 1 \\ 6 & -2 \end{bmatrix} \\
+  Q\Lambda Q^\top &= \tfrac{1}{5}\begin{bmatrix} 25 & 10 \\ 10 & 10 \end{bmatrix} = S
+  \end{aligned}
+  $$
+
+  3번: $\lambda = 2$이면 $A - 2I = \begin{bmatrix} 0 & 1 \\ 0 & -1 \end{bmatrix}$이라 $y = 0$, 고유벡터 $(1, 0)$이다. $\lambda = 1$이면 $x + y = 0$이라 $(1, -1)$이다. 내적이 $1$이라 수직이 아니다.
+
+  $AP = P\Lambda$의 양변 오른쪽에 $P^{-1}$을 곱하면 $A = P \Lambda P^{-1}$이다. 전치 대신 역행렬을 쓰는 것이다. 이 $P$는 마침 $P^2 = I$라 $P^{-1} = P$다.
+
+  $$
+  \begin{aligned}
+  P &= \begin{bmatrix} 1 & 1 \\ 0 & -1 \end{bmatrix} \\
+  P\Lambda &= \begin{bmatrix} 2 & 1 \\ 0 & -1 \end{bmatrix} \\
+  P \Lambda P^{-1} &= \begin{bmatrix} 2 & 1 \\ 0 & 1 \end{bmatrix} = A
+  \end{aligned}
+  $$
+
+  본문의 $S = Q \Lambda Q^\top$도 같은 이유로 나온다. 대칭이면 고유벡터들이 서로 수직이라 $Q^{-1} = Q^\top$(역행렬이 그냥 전치)일 뿐이다.
+
+  대칭이 아니면 이 혜택이 없다. SVD는 입력 축 $V$와 출력 축 $U$를 따로 두어서, 어떤 행렬이든 직교행렬 두 개로 쪼갠다. 이것이 SVD를 쓰는 이유다.
+
+  4번: $\lambda^2 + 1 = 0$, 즉 $\lambda^2 = -1$이라 실수 해가 없다. 모든 방향이 90° 돌아가서 같은 직선에 남는 방향이 없다. 회전 30°도 같은 이유로 고유벡터 표시가 한 번도 뜨지 않았다.
+</Details>
+
+<SessionBreak id="s15" />
+
+### 손으로 SVD 구하기
+
+본문 SVD 절의 순서를 그대로 따른다.
+
+- ① $A^\top A$를 만든다.
+- ② 고유값을 구하고, 제곱근을 큰 것부터 $\sigma_1, \sigma_2$로 놓는다.
+- ③ 고유벡터를 길이 1로 맞춰 $v_1, v_2$로 놓는다($V$의 열). $-v$도 고유벡터라 어느 쪽을 골라도 된다.
+- ④ $u_i = A v_i / \sigma_i$로 $U$의 열을 구한다. ③에서 부호를 반대로 골랐다면 $u_i$도 따라서 뒤집혀 나오므로 그대로 맞는 답이다.
+- ⑤ $U \Sigma V^\top$를 곱해 $A$가 나오는지 확인한다.
+
+문제에 앞서 도구 두 개를 더 챙긴다.
+
+**$U$는 $AA^\top$의 고유벡터다.** 본문에서 $A^\top A$로 $V$를 찾은 것과 같은 계산을 순서만 바꿔 한다. $V^\top V = I$라 가운데가 사라진다.
+
+$$
+\begin{aligned}
+AA^\top &= U \Sigma V^\top V \Sigma^\top U^\top \\
+&= U (\Sigma \Sigma^\top) U^\top
+\end{aligned}
+$$
+
+그리고 $AA^\top$의 $(i, j)$ 성분은 "$A$의 $i$번째 행 · $A$의 $j$번째 행"이다. $A^\top$의 열이 $A$의 행이기 때문이다.
+
+**열×행으로 쪼개 읽기.** 열벡터 $a$와 행벡터 $b^\top$의 곱 $ab^\top$를 바깥곱(outer product)이라 한다. $(i, j)$ 성분이 $a_i b_j$인 행렬이고, 1주차의 외적(cross product)과는 다른 것이다.
+
+$$
+\begin{bmatrix} 1 \\ 2 \end{bmatrix}\begin{bmatrix} 3 & 4 \end{bmatrix} = \begin{bmatrix} 3 & 4 \\ 6 & 8 \end{bmatrix}
+$$
+
+행렬곱 $BC$는 "$B$의 $k$번째 열"과 "$C$의 $k$번째 행"의 바깥곱을 $k$마다 더한 것과 같다. $BC$의 $(i, j)$ 성분은 $\sum_k B_{ik} C_{kj}$이고, $k$번째 바깥곱의 $(i, j)$ 성분이 바로 $B_{ik} C_{kj}$이기 때문이다.
+
+$\Sigma$는 대각이라 $U\Sigma$의 $k$번째 열은 $U$의 $k$번째 열에 $\sigma_k$를 곱한 $\sigma_k u_k$다. $V^\top$의 $k$번째 행은 $v_k^\top$다. 그래서 SVD는 이렇게도 쓴다.
+
+$$
+A = \sigma_1 u_1 v_1^\top + \sigma_2 u_2 v_2^\top
+$$
+
+조각 하나가 "$v_i$ 방향 성분을 재서 $\sigma_i$배 하고 $u_i$ 방향에 놓는" 일을 한다. 그 조각들을 더한 것이 $A$다.
+
+<SessionBreak id="s18" />
+
+이제 문제를 푼다. 문제는 세 개다.
+
+1. $A = \begin{bmatrix} 1 & 0 \\ 0 & -2 \end{bmatrix}$의 SVD를 구한다. 이미 대각행렬인데 왜 $U = V = I$, $\Sigma = A$가 답이 아닐까? 걸리는 규칙이 두 개다.
+2. $A = \begin{bmatrix} 6 & 8 \\ -4 & 3 \end{bmatrix}$의 SVD를 ①~⑤로 구한다. 그다음 $AA^\top$를 계산해 $U$가 왜 그렇게 나왔는지 설명한다. 만약 $u_1$만 $(-1, 0)$으로 바꿨다면 $U \Sigma V^\top$는 $A$와 같을까?
+3. $A = \begin{bmatrix} 3 & 4 \\ 6 & 8 \\ 6 & 8 \end{bmatrix}$(3×2)의 SVD를 구한다. 행들이 어떤 벡터의 몇 배인가? $U$, $\Sigma$, $V$의 크기와 0이 아닌 특이값 개수(랭크)를 확인한다.
+
+<Details summary="막히면: 1~3번 디딤돌">
+  1번: 특이값은 길이의 배율이라 음수가 될 수 없다. 그리고 $\sigma_1 \ge \sigma_2$ 순서다.
+
+  $A^\top A = \begin{bmatrix} 1 & 0 \\ 0 & 4 \end{bmatrix}$에서 더 큰 고유값의 고유벡터가 $v_1$이다. 음수 부호는 ④단계 $u_i = A v_i / \sigma_i$에서 어디로 들어가나?
+
+  2번: $A^\top A$의 대각 합은 125, 행렬식은 2500이다. 더해서 125, 곱해서 2500인 두 수를 찾는다.
+
+  고유벡터는 3-4-5 방향으로 나온다. $A$는 본문 SVD 예시와 다르지만, $A^\top A$의 고유벡터 방향은 같다.
+
+  ⑤ 확인은 위의 열×행 식으로 하면 편하다. $u_1$만 $(-1, 0)$으로 바꾸면 첫 조각 $\sigma_1 u_1 v_1^\top$가 어떻게 되나?
+
+  3번: 둘째 열이 첫째 열의 $\tfrac{4}{3}$배라 랭크가 1이다. 그래서 $\sigma_2 = 0$이고, $u_2 = A v_2 / \sigma_2$는 0으로 나누게 되어 쓸 수 없다.
+
+  $U$는 3×3 직교행렬이어야 하니 $u_1$에 수직인 단위벡터 두 개를 직접 고른다. $u_1$이 $(1, 2, 2)$ 방향이면, 수직인 $(x, y, z)$는 $x + 2y + 2z = 0$을 만족한다.
+
+  성분을 $\pm 1, \pm 2$로 맞춰 보면 길이가 3으로 딱 떨어지는 벡터를 찾을 수 있다. 셋째 벡터는 $u_1$과 그 벡터의 외적(1주차)으로 얻는다. 답은 하나가 아니다.
+</Details>
+
+<Details summary="확인: 1~3번 답과 풀이">
+  1번: $A^\top A$의 고유값 4, 1에서 $\sigma_1 = 2$, $\sigma_2 = 1$이다. 큰 쪽이 먼저라 $v_1 = (0, 1)$, $v_2 = (1, 0)$이다.
+
+  $A v_1 = (0, -2)$라 $u_1 = (0, -1)$이고, $A v_2 = (1, 0)$이라 $u_2 = (1, 0)$이다. 음수 부호는 $U$로 들어간다.
+
+  $$
+  \begin{aligned}
+  U &= \begin{bmatrix} 0 & 1 \\ -1 & 0 \end{bmatrix} \\
+  \Sigma &= \begin{bmatrix} 2 & 0 \\ 0 & 1 \end{bmatrix} \\
+  V &= \begin{bmatrix} 0 & 1 \\ 1 & 0 \end{bmatrix}
+  \end{aligned}
+  $$
+
+  ⑤ 확인: $U\Sigma = \begin{bmatrix} 0 & 1 \\ -2 & 0 \end{bmatrix}$이고, 여기에 $V^\top$($= V$)를 곱하면 두 열이 자리를 바꿔 $\begin{bmatrix} 1 & 0 \\ 0 & -2 \end{bmatrix} = A$다.
+
+  걸리는 규칙은 두 가지다. 첫째, $\sigma \ge 0$이라 음수 부호는 $U$로 간다. 둘째, $\sigma$는 큰 것부터라 열 순서가 바뀐다.
+
+  2번: 고유값을 구하는 식은 이렇다.
+
+  $$
+  \begin{aligned}
+  A^\top A &= \begin{bmatrix} 52 & 36 \\ 36 & 73 \end{bmatrix} \\
+  0 &= \lambda^2 - 125\lambda + 2500 \\
+  &= (\lambda - 100)(\lambda - 25)
+  \end{aligned}
+  $$
+
+  그래서 $\sigma_1 = 10$, $\sigma_2 = 5$다. $\lambda = 100$이면 $-48x + 36y = 0$이라 $(3, 4)$ 방향이고, $v_1 = (0.6, 0.8)$이다. $\lambda = 25$이면 $27x + 36y = 0$이라 $v_2 = (-0.8, 0.6)$이다.
+
+  $A v_1$은 $(3.6 + 6.4,\ -2.4 + 2.4)$, 즉 $(10, 0)$이라 $u_1 = (1, 0)$이다. $A v_2$는 $(-4.8 + 4.8,\ 3.2 + 1.8)$, 즉 $(0, 5)$라 $u_2 = (0, 1)$이다.
+
+  $$
+  \begin{aligned}
+  U &= I \\
+  \Sigma &= \begin{bmatrix} 10 & 0 \\ 0 & 5 \end{bmatrix} \\
+  V &= \begin{bmatrix} 0.6 & -0.8 \\ 0.8 & 0.6 \end{bmatrix}
+  \end{aligned}
+  $$
+
+  ⑤ 확인은 열×행 식으로 한다. $10\,u_1 v_1^\top = \begin{bmatrix} 6 & 8 \\ 0 & 0 \end{bmatrix}$이고 $5\,u_2 v_2^\top = \begin{bmatrix} 0 & 0 \\ -4 & 3 \end{bmatrix}$이라, 더하면 $A$다.
+
+  $AA^\top$의 성분은 행끼리의 내적이다. 두 행 $(6, 8)$, $(-4, 3)$의 내적이 $-24 + 24 = 0$이라 $AA^\top = \begin{bmatrix} 100 & 0 \\ 0 & 25 \end{bmatrix}$로 이미 대각이다. 그래서 $AA^\top$의 고유벡터는 $e_1, e_2$이고, 출력 쪽 축을 돌릴 필요가 없어 $U = I$다.
+
+  $u_1$만 $(-1, 0)$으로 바꾸면 첫 조각이 $\begin{bmatrix} -6 & -8 \\ 0 & 0 \end{bmatrix}$로 뒤집힌다. 그러면 $A$의 첫 행이 $(-6, -8)$이 되어 틀린다.
+
+  $u$와 $v$는 **짝으로 함께** 뒤집을 때만 또 다른 답이 된다. 그래서 $u$는 $AA^\top$에서 따로 구하지 않고 꼭 $A v / \sigma$로 구한다. 라이브러리 결과가 손계산과 부호만 다른 것도 이 이유다.
+
+  3번: 행이 모두 $(3, 4)$의 1배, 2배, 2배다. 즉 $A$는 바깥곱 $(1, 2, 2)\,(3, 4)^\top$다(위 바깥곱 예시와 같은 모양).
+
+  $$
+  \begin{aligned}
+  A^\top A &= \begin{bmatrix} 81 & 108 \\ 108 & 144 \end{bmatrix} \\
+  0 &= \lambda^2 - 225\lambda + 0 \\
+  &= \lambda(\lambda - 225)
+  \end{aligned}
+  $$
+
+  $\sigma_1 = 15$, $\sigma_2 = 0$이다. $v_1 = (0.6, 0.8)$, $v_2 = (-0.8, 0.6)$이다. $A v_1 = (5, 10, 10)$은 길이 15라 $u_1 = \tfrac{1}{3}(1, 2, 2)$다.
+
+  $x + 2y + 2z = 0$을 만족하는 $(2, 1, -2)$는 길이가 3이라 $u_2 = \tfrac{1}{3}(2, 1, -2)$로 쓴다. $(1, 2, 2)$와 $(2, 1, -2)$의 외적은 $(-6, 6, -3)$이고, 부호를 바꿔 길이 1로 맞추면 $u_3 = \tfrac{1}{3}(2, -2, 1)$이다. $-u_3$도 답이라 부호는 아무거나 되는데, 여기서는 첫 성분이 양수가 되게 바꿨다.
+
+  크기는 $U$ 3×3, $\Sigma$ 3×2, $V$ 2×2다. $\Sigma$는 왼쪽 위에만 15가 있고 나머지는 0이다.
+
+  0이 아닌 특이값이 하나라 랭크 1이다. $A v_2 = 0$이니 $v_2$가 영공간이다. $\sigma_1 = 15 = 3 \times 5$는 두 벡터 $(1, 2, 2)$, $(3, 4)$의 길이의 곱이다(바깥곱 행렬은 늘 이렇다).
+</Details>
+
+<SessionBreak id="s16" />
+
 ### 손으로 $Ax = 0$의 답 찾기
 
 1. $A = U\Sigma V^\top$에서 $V$의 열 $v_1, \ldots, v_n$으로 $x = \sum c_i v_i$라 쓴다. $\lVert x \rVert^2 = \sum c_i^2$임을 보인다($V$가 직교라서).
 2. $A v_i = \sigma_i u_i$를 이용해 $\lVert Ax \rVert^2 = \sum \sigma_i^2 c_i^2$임을 보인다($U$도 직교라서).
 3. $\sum c_i^2 = 1$에서 2번 값을 가장 작게 하려면 $c$를 어떻게 골라야 하나? 그러면 $x$는 $V$의 어느 열인가? 영공간 절의 그림에서 찾은 방향과 같은지 확인한다.
-4. $\begin{bmatrix} 1 & 1 & 0 \\ 0 & 1 & 1 \\ 1 & 2 & 1 \end{bmatrix} x = 0$을 처음 두 행으로 직접 풀어 영공간 방향을 구한다. 셋째 행은 왜 새 정보를 주지 않나?
-5. $\begin{bmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \end{bmatrix}$의 영공간은 무엇인가? SVD가 $V$를 3×3이 아니라 3×2로만 돌려준다면 무엇을 잃나?
+4. 아래 식을 처음 두 행으로 직접 풀어 영공간 방향을 구한다. 셋째 행은 왜 새 정보를 주지 않나?
+
+   $$
+   \begin{bmatrix} 1 & 1 & 0 \\ 0 & 1 & 1 \\ 1 & 2 & 1 \end{bmatrix} x = 0
+   $$
+
+5. 아래 2×3 행렬의 영공간은 무엇인가? SVD가 $V$를 3×3이 아니라 3×2로만 돌려준다면 무엇을 잃나?
+
+   $$
+   \begin{bmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \end{bmatrix}
+   $$
 
 <Details summary="막히면: 1~5번 디딤돌">
   1번: $c_i$는 "$x$를 $V$의 축으로 잰 좌표"다. 직교행렬로 좌표축만 바꾼 것이라 길이는 그대로다. 식으로는 $x = V c$이고, 직교행렬 절의 $\lVert Qx \rVert = \lVert x \rVert$를 쓴다.
 
   2번: 열로 읽기로 $Ax = \sum c_i A v_i = \sum c_i \sigma_i u_i$다. 이것은 $U$의 축으로 잰 좌표가 $c_i \sigma_i$인 벡터다. 1번과 같은 이유로 길이의 제곱을 쓴다.
 
-  3번: 2차원이면 $c = (\cos\varphi, \sin\varphi)$로 두고 $\sigma_1^2 \cos^2\varphi + \sigma_2^2 \sin^2\varphi$를 본다. 영공간 절의 그림에서 x를 돌릴 때 |Ax|가 바뀌던 것이 바로 이 식이다. $\varphi = 0°$와 $\varphi = 90°$에서 값을 각각 구해 비교해 본다.
+  3번: 2차원이면 $c_1^2 + c_2^2 = 1$이니 $c_2^2 = 1 - c_1^2$를 넣는다. 그러면 이렇게 된다.
+
+  $$
+  \begin{aligned}
+  &\sigma_1^2 c_1^2 + \sigma_2^2 c_2^2 \\
+  &= \sigma_2^2 + (\sigma_1^2 - \sigma_2^2)\,c_1^2
+  \end{aligned}
+  $$
+
+  $\sigma_1 \ge \sigma_2$라 괄호 안은 0 이상이다. 이 값이 가장 작아지는 $c_1$은 무엇인가? 영공간 절의 그림에서 x를 돌릴 때 |Ax|가 바뀌던 것이 바로 이 식이다.
 
   4번: 미지수가 3개인데 식이 2개라 하나는 정해지지 않는다. $x_3 = 1$로 두고 둘째 행부터 풀면 $x_2$, 그다음 첫째 행에서 $x_1$이 바로 나온다. 셋째 행을 첫째·둘째 행의 합이나 차로 만들 수 있는지 찾아 본다.
 
-  확인: $(1, -1, 1)$ 방향(또는 그 몇 배)이 나오면 맞다. 셋째 행에 넣어도 $1 - 2 + 1 = 0$이다.
-
-  5번: $A e_3$을 계산해 본다. $V$는 3×3이라 열이 3개인데, 2×3 행렬의 특이값은 2개뿐이다.
+  5번: $A e_3$을 계산해 본다. $V$는 3×3이라 열이 3개인데, 2×3 행렬의 특이값은 2개뿐이다. $\Sigma$가 2×3이라 대각 자리가 2개뿐이기 때문이다.
 
   짝이 되는 특이값이 없는 열은 0배로 눌리는 방향이다. 열이 2개만 오면 어느 열이 빠지나?
 </Details>
 
+<Details summary="확인: 3~5번 답과 풀이">
+  3번: 위 식에서 $c_1 = 0$, 즉 $c_2 = \pm 1$일 때 가장 작고 값은 $\sigma_2^2$다. $n$차원에서도 가장 작은 특이값에 무게를 전부 주어야 하니, 답은 $x = \pm v_n$($V$의 마지막 열)이다.
+
+  4번: $x_3 = 1$이면 둘째 행 $x_2 + x_3 = 0$에서 $x_2 = -1$, 첫째 행 $x_1 + x_2 = 0$에서 $x_1 = 1$이다. 그래서 영공간은 $(1, -1, 1)$ 방향(또는 그 몇 배)이다.
+
+  셋째 행 $(1, 2, 1)$은 첫째 행 $(1, 1, 0)$과 둘째 행 $(0, 1, 1)$의 합이다. 그래서 새 정보가 없다. 넣어 봐도 $1 - 2 + 1 = 0$이다.
+
+  5번: $A e_3 = (0, 0)$이라 영공간은 $e_3 = (0, 0, 1)$ 방향이다. $A^\top A = \mathrm{diag}(1, 1, 0)$이라 특이값 1, 1의 짝은 $e_1, e_2$이고, 짝 없는 셋째 열이 $e_3$다.
+
+  $V$가 3×2로 잘려 오면 바로 이 열이 빠진다. 이렇게 잘린 분해를 thin SVD(얇은 SVD)라 하고, 아래 nullspaceSVD 힌트 2의 함정이 이것이다.
+</Details>
+
 <SessionBreak id="s8" />
+
+### 손으로 분해 응용하기
+
+분해를 해 두면 어려운 계산이 **대각행렬 계산**으로 바뀐다. 대각행렬은 거듭제곱도, 역수도, 일부를 0으로 지우는 것도 성분마다 따로 하면 된다. 앞에서 구한 두 분해를 다시 쓴다.
+
+- 고유분해 1번: $S = \begin{bmatrix} 2 & 1 \\ 1 & 2 \end{bmatrix}$, $\lambda = 3, 1$, $Q = \tfrac{1}{\sqrt{2}}\begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix}$
+- SVD 2번: $A = \begin{bmatrix} 6 & 8 \\ -4 & 3 \end{bmatrix}$, $\sigma = 10, 5$, $U = I$, $v_1 = (0.6, 0.8)$, $v_2 = (-0.8, 0.6)$
+
+1. **거듭제곱과 역행렬.** $S^2 = Q\Lambda Q^\top Q \Lambda Q^\top$에서 가운데 $Q^\top Q$는 무엇인가? 그러면 $S^k$는 어떤 꼴인가? 이것으로 $S^3$과 $S^{-1}$을 구하고, 직접 곱한 결과와 비교한다.
+2. **최소제곱.** SVD 2번의 $A$에 0행을 하나 붙인 3×2 행렬 $A'$와 $b$가 있다. $\lVert A'x - b \rVert$를 가장 작게 하는 $x$를 구한다.
+
+   $$
+   A' = \begin{bmatrix} 6 & 8 \\ -4 & 3 \\ 0 & 0 \end{bmatrix}, \quad b = \begin{bmatrix} 10 \\ 5 \\ 7 \end{bmatrix}
+   $$
+
+   $A'$의 SVD는 $\sigma$, $V$가 SVD 2번과 같고 $U$만 3×3 단위행렬이다. 잔차 $b - A'x$는 무엇이고, $b$의 셋째 성분 7은 어디로 갔나?
+3. **랭크 1 근사.** "손으로 SVD 구하기"의 열×행 식 $A = \sigma_1 u_1 v_1^\top + \sigma_2 u_2 v_2^\top$에서 작은 쪽 조각을 버린 $A_1 = \sigma_1 u_1 v_1^\top$을 구한다. 버린 행렬 $A - A_1$은 무엇이고, 그 성분 제곱합의 제곱근은 얼마인가?
+4. **가장 가까운 회전.** $A = U\Sigma V^\top$에서 $\Sigma$를 $I$로 바꾼 $R = UV^\top$를 구한다. $R^\top R = I$와 $\det R = 1$을 확인한다. $R e_1$을 계산해 $e_1 = (1, 0)$이 어느 쪽으로 돌아가는지 본다.
+
+<Details summary="막히면: 1~4번 디딤돌">
+  1번: $Q$는 직교행렬이다. 가운데가 사라지면 $\Lambda$ 두 개가 붙는다. 대각행렬의 거듭제곱은 대각 성분만 거듭제곱하면 된다.
+
+  역행렬은 $k = -1$이다. 즉 대각 성분을 역수로 바꾼다.
+
+  2번: $y = V^\top x$로 둔다. $UU^\top = I$라 $b = UU^\top b$로 쓸 수 있다.
+
+  $$
+  \begin{aligned}
+  A'x - b &= U\Sigma V^\top x - b \\
+  &= U(\Sigma y - U^\top b)
+  \end{aligned}
+  $$
+
+  앞에 붙은 $U$는 직교행렬이라 길이를 바꾸지 않는다. 그래서 $\lVert A'x - b \rVert = \lVert \Sigma y - U^\top b \rVert$이고, $\Sigma$가 대각이라 성분마다 $\sigma_k y_k = u_k \cdot b$를 따로 푼다.
+
+  $u_1 = (1, 0, 0)$, $u_2 = (0, 1, 0)$이라 내적은 $b$의 성분을 하나씩 꺼내는 것이다. 특이값은 2개뿐이라 $u_3$ 방향에는 맞출 $y$가 없다. $y$를 구한 뒤에는 $x = Vy = y_1 v_1 + y_2 v_2$로 되돌린다.
+
+  3번: $u_1 = (1, 0)$이면 바깥곱 $u_1 v_1^\top$은 첫 행에만 $v_1$이 놓인 2×2 행렬이다. "성분 제곱합의 제곱근"은 행렬을 숫자 4개짜리 벡터로 보고 잰 길이다. 두 행렬이 얼마나 다른지를 이 값으로 잰다.
+
+  4번: $U = I$라 $R = V^\top$다. $V$의 열이 $R$의 행이 된다. $R e_1$은 열로 읽기로 $R$의 첫 열이니, 그 점이 가로축 위쪽인지 아래쪽인지 본다.
+</Details>
+
+<Details summary="확인: 1~4번 답과 풀이">
+  1번: $Q^\top Q = I$라 가운데가 사라지고 $S^2 = Q\Lambda^2 Q^\top$, 일반적으로 $S^k = Q\Lambda^k Q^\top$이다. 고유분해 1번의 확인 곱셈과 같은 방법으로 계산한다.
+
+  $$
+  \begin{aligned}
+  S^3 &= \tfrac{1}{2}\begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix}\begin{bmatrix} 27 & 0 \\ 0 & 1 \end{bmatrix}\begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix} \\
+  &= \tfrac{1}{2}\begin{bmatrix} 28 & 26 \\ 26 & 28 \end{bmatrix} = \begin{bmatrix} 14 & 13 \\ 13 & 14 \end{bmatrix}
+  \end{aligned}
+  $$
+
+  직접 곱하면 $S^2 = \begin{bmatrix} 5 & 4 \\ 4 & 5 \end{bmatrix}$, $S^3 = S^2 S = \begin{bmatrix} 14 & 13 \\ 13 & 14 \end{bmatrix}$로 같다. 역행렬은 3 대신 $\tfrac{1}{3}$을 넣는다. 분수를 피하려고 $\tfrac{1}{3}$을 밖으로 뺀다.
+
+  $$
+  \begin{aligned}
+  \Lambda^{-1} &= \begin{bmatrix} \tfrac{1}{3} & 0 \\ 0 & 1 \end{bmatrix} = \tfrac{1}{3}\begin{bmatrix} 1 & 0 \\ 0 & 3 \end{bmatrix} \\
+  S^{-1} &= \tfrac{1}{6}\begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix}\begin{bmatrix} 1 & 0 \\ 0 & 3 \end{bmatrix}\begin{bmatrix} 1 & 1 \\ 1 & -1 \end{bmatrix} \\
+  &= \tfrac{1}{6}\begin{bmatrix} 4 & -2 \\ -2 & 4 \end{bmatrix} = \tfrac{1}{3}\begin{bmatrix} 2 & -1 \\ -1 & 2 \end{bmatrix}
+  \end{aligned}
+  $$
+
+  $\tfrac{1}{6}$은 $\tfrac{1}{\sqrt{2}}$ 두 개가 만난 $\tfrac{1}{2}$과 밖으로 뺀 $\tfrac{1}{3}$을 곱한 것이다.
+
+  $S S^{-1} = \tfrac{1}{3}\begin{bmatrix} 3 & 0 \\ 0 & 3 \end{bmatrix} = I$로 맞다. 13주차 공분산의 역행렬(정보 행렬)도 이렇게 축마다 역수를 취한 것이다.
+
+  $k$가 커지면 $3^k$이 $1^k$을 압도한다. 그래서 $S^k$를 어떤 벡터에 곱해도 결과가 거의 $(1, 1)$ 방향이 된다. 가장 큰 고유값의 방향이 살아남는 것이다.
+
+  2번: $\sigma_1 y_1 = u_1 \cdot b = 10$이라 $y_1 = 1$이고, $\sigma_2 y_2 = u_2 \cdot b = 5$라 $y_2 = 1$이다. 그래서 $x = v_1 + v_2 = (-0.2, 1.4)$다.
+
+  $A'x$는 $(-1.2 + 11.2,\ 0.8 + 4.2,\ 0)$, 즉 $(10, 5, 0)$이다. 잔차는 $(0, 0, 7)$, 길이 7이다. $b$의 $u_3$ 방향 성분 7은 $A'$의 열공간 밖이라 어떤 $x$로도 만들 수 없어 버려진다.
+
+  잔차 $(0, 0, 7)$은 두 열 $(6, -4, 0)$, $(8, 3, 0)$과 내적이 0이다. 최소제곱 절의 "잔차가 열공간에 수직"과 같은 결론이다. 이 풀이가 표의 $V \Sigma^{-1} U^\top b$이고, 아래 solveLeastSquares 과제에서 코드로 옮긴다.
+
+  3번: $A_1 = 10\,u_1 v_1^\top = 10\,(1, 0)\,(0.6, 0.8)^\top$, 즉 $\begin{bmatrix} 6 & 8 \\ 0 & 0 \end{bmatrix}$이다. 버린 쪽은 $A - A_1 = \begin{bmatrix} 0 & 0 \\ -4 & 3 \end{bmatrix} = \sigma_2 u_2 v_2^\top$이다.
+
+  성분 제곱합의 제곱근은 $\sqrt{16 + 9} = 5 = \sigma_2$다. 이 잣대(프로베니우스 노름, Frobenius norm)로 재면 랭크 1 행렬 중 $A$에 가장 가까운 것이 $A_1$이다. 그 거리가 버린 특이값이다(에카르트-영 정리, Eckart–Young).
+
+  여러 개를 버리면 버린 특이값들의 제곱합의 제곱근이 거리다. 5주차에서 노이즈 때문에 랭크 3으로 나온 F를 랭크 2로 고칠 때, 가장 작은 특이값을 0으로 지우는 것이 바로 이것이다.
+
+  4번: $R = V^\top = \begin{bmatrix} 0.6 & 0.8 \\ -0.8 & 0.6 \end{bmatrix}$이다. $R^\top R$의 대각은 $0.36 + 0.64 = 1$, 대각 밖은 $0.48 - 0.48 = 0$이라 $I$다. $\det R = 0.36 + 0.64 = 1$이다.
+
+  $R e_1 = (0.6, -0.8)$이라 $e_1$이 가로축 아래로 내려간다. 시계 방향 회전이고, 각은 3-4-5 직각삼각형의 한 각인 약 53°다.
+
+  $A$에서 축마다 늘리는 부분 $\Sigma$만 빼고 돌리는 부분만 남긴 것이다. 성분 제곱합 거리로 재면 $A$에 가장 가까운 회전이 이 $UV^\top$다(증명은 생략).
+
+  $\det A = \det U \cdot \det \Sigma \cdot \det V^\top$이고 $\det \Sigma \gt 0$이라, $\det(UV^\top)$은 $\det A$와 부호가 같다. 여기서는 $\det A = 18 + 32 = 50 \gt 0$이라 반사가 아니라 회전이 나왔다.
+
+  3주차에서 수치 오차가 쌓여 직교성이 깨진 $R$도 같은 방법으로 고친다. $R$ 자신을 $U'\Sigma' V'^\top$로 분해하고, $\Sigma'$를 $I$로 바꾼 $U'V'^\top$를 새 $R$로 쓴다. 11주차 궤적 정렬(Umeyama)도 같은 방법이다.
+
+  $\det(U'V'^\top) = -1$이 나오면 회전이 아니라 거울 반사라서 부호를 고쳐야 한다. 3주차와 11주차에서 다룬다.
+</Details>
+
+<SessionBreak id="s17" />
 
 <TaskCard fn="solveLeastSquares">
   $m \times n$ 행렬 $A$($m \ge n$)와 길이 $m$인 $b$를 받아 $\lVert Ax - b \rVert^2$을 최소로 하는 길이 $n$의 $x$를 돌려준다. 행이 열보다 적거나 $b$ 길이가 맞지 않으면 예외를 던진다. $A$의 열은 일차독립이라고 가정한다. ml-matrix의 `Matrix`, `SingularValueDecomposition`(`.diagonal`, `.leftSingularVectors`, `.rightSingularVectors`), `solve`를 써도 된다.
@@ -470,7 +849,7 @@ $x = 0$은 늘 답이라 쓸모가 없다. 또 $(1, -1)$이 답이면 $(2, -2)$,
   $m \times n$ 행렬 $A$를 받아 $\lVert x \rVert = 1$이면서 $\lVert Ax \rVert$가 가장 작은 길이 $n$의 단위벡터를 돌려준다. 부호는 상관없다. $m$이 $n$보다 작아도(가로로 긴 행렬) 동작해야 하고, 입력 $A$를 바꾸지 않는다.
 
   <Hint level={1}>
-    손 유도 3번의 결론이 곧 답이다. 남은 일은 SVD 결과에서 그 열을 꺼내는 것과, 그 열이 **실제로 존재하는지** 확인하는 것이다.
+    "손으로 $Ax = 0$의 답 찾기" 3번의 결론이 곧 답이다. 남은 일은 SVD 결과에서 그 열을 꺼내는 것과, 그 열이 **실제로 존재하는지** 확인하는 것이다("손으로 $Ax = 0$의 답 찾기" 5번).
   </Hint>
 
   <Hint level={2}>
