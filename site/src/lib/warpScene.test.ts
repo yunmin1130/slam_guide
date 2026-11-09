@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { norm } from "./mat2";
-import { EIGEN_PRESETS, EIGEN_STEP, eigenProbe, MIN_PRESETS, MIN_STEP, minimizeProbe, rangeFor, sliderAngles } from "./warpScene";
+import { norm, svd2 } from "./mat2";
+import { EIGEN_PRESETS, EIGEN_STEP, eigenProbe, EXAMPLE, MIN_PRESETS, MIN_STEP, minAngles, minimizeProbe, rangeFor, sliderAngles } from "./warpScene";
 
 describe("eigenProbe", () => {
   it("기본: 대칭·비대칭 preset은 슬라이더 눈금 위에서 고유벡터 방향(양쪽 부호 포함 4곳)에 닿는다", () => {
@@ -25,10 +25,38 @@ describe("eigenProbe", () => {
   });
 });
 
-describe("minimizeProbe", () => {
-  it("기본: 각 preset은 눈금 위에서 가장 짧은 방향(±v₂) 두 곳에 정확히 닿는다", () => {
+describe("본문 SVD 예시", () => {
+  it("기본: A = (1/5)[[4,-3],[6,8]]는 σ = 2, 1, v₁ = (0.6, 0.8), v₂ = (-0.8, 0.6), u₁ = (0, 1), u₂ = (-1, 0) (본문 숫자)", () => {
+    const { U, sigma, V } = svd2(EXAMPLE);
+    [2, 1].forEach((s, i) => expect(sigma[i]).toBeCloseTo(s, 12));
+    [0.6, -0.8, 0.8, 0.6].forEach((v, i) => expect(V[i]).toBeCloseTo(v, 12));
+    [0, -1, 1, 0].forEach((v, i) => expect(U[i]).toBeCloseTo(v, 12));
+  });
+});
+
+describe("minAngles", () => {
+  it("기본: 3° 눈금을 모두 담고, 0~360 사이에서 오름차순·중복 없음", () => {
     for (const p of MIN_PRESETS) {
-      const hits = sliderAngles(MIN_STEP)
+      const a = minAngles(p.m);
+      sliderAngles(MIN_STEP).forEach((d) => expect(a).toContain(d));
+      a.forEach((d, i) => {
+        expect(d).toBeGreaterThanOrEqual(0);
+        expect(d).toBeLessThan(360);
+        if (i > 0) expect(d).toBeGreaterThan(a[i - 1]!);
+      });
+    }
+  });
+
+  it("경계: 눈금 위에 있는 방향(랭크 1의 135°)은 두 번 들어가지 않는다", () => {
+    const rank1 = MIN_PRESETS.find((p) => p.id === "rank1")!;
+    expect(minAngles(rank1.m)).toHaveLength(sliderAngles(MIN_STEP).length);
+  });
+});
+
+describe("minimizeProbe", () => {
+  it("기본: 각 preset은 슬라이더 위치 중 가장 짧은 방향(±v₂) 두 곳에 정확히 닿는다", () => {
+    for (const p of MIN_PRESETS) {
+      const hits = minAngles(p.m)
         .map((d) => minimizeProbe(p.m, d))
         .filter((r) => r.hit);
       expect(hits).toHaveLength(2);
@@ -38,7 +66,7 @@ describe("minimizeProbe", () => {
 
   it("경계: 랭크 1 preset은 닿은 곳에서 |Ax|가 정확히 0이다 (상태문 '|Ax| = 0'과 판독값이 일치)", () => {
     const rank1 = MIN_PRESETS.find((p) => p.id === "rank1")!;
-    const hits = sliderAngles(MIN_STEP)
+    const hits = minAngles(rank1.m)
       .map((d) => minimizeProbe(rank1.m, d))
       .filter((r) => r.hit);
     expect(hits.length).toBeGreaterThan(0);

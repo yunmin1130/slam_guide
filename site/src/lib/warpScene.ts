@@ -11,9 +11,8 @@ export interface Preset {
 }
 
 export const DEG = Math.PI / 180;
-const R5 = Math.sqrt(5);
-/** 본문 예시: σ가 3, 1로 딱 떨어진다 */
-export const EXAMPLE: M2 = [3 / R5, 0, 4 / R5, 5 / R5];
+/** 본문 예시 (1/5)[[4,-3],[6,8]]: σ = 2, 1, V의 열 (0.6, 0.8)·(-0.8, 0.6), U = 90° 회전으로 손계산이 딱 떨어진다 */
+export const EXAMPLE: M2 = [0.8, -0.6, 1.2, 1.6];
 /** 본문 영공간 예시: (1, −1) 방향이 0으로 눌린다 */
 export const RANK1: M2 = [1, 1, 2, 2];
 
@@ -46,7 +45,21 @@ export function sliderAngles(step: number): number[] {
   return Array.from({ length: Math.round(360 / step) }, (_, i) => i * step);
 }
 
-export const unitAt = (deg: number): V2 => [Math.cos(deg * DEG), Math.sin(deg * DEG)];
+/**
+ * minimize 슬라이더가 멈추는 각도(도): MIN_STEP 눈금 + ±v₂ 방향.
+ * 본문 예시의 v₂(143.13°)처럼 눈금에 없는 정답 방향에도 정확히 멈추게 끼워 넣는다
+ */
+export function minAngles(A: M2): number[] {
+  const { V } = svd2(A);
+  const base = Math.atan2(V[3], V[1]) / DEG;
+  const wrap = (d: number) => ((d % 360) + 360) % 360;
+  const extra = [wrap(base), wrap(base + 180)];
+  const grid = sliderAngles(MIN_STEP);
+  const merged = [...grid, ...extra.filter((e) => grid.every((g) => Math.abs(g - e) > 1e-6))];
+  return merged.sort((a, b) => a - b);
+}
+
+export const unitAt =(deg: number): V2 => [Math.cos(deg * DEG), Math.sin(deg * DEG)];
 
 /** 두 벡터 사이 각 (0~180°). 0 벡터면 NaN */
 export function angleBetween(a: V2, b: V2): number {

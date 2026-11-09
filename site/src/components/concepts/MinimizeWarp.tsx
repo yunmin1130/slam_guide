@@ -1,7 +1,7 @@
 /** MatrixWarp minimize 모드: |x| = 1에서 |Ax|가 가장 작은 방향 = V의 마지막 열 (Ax = 0 풀기) */
 import { useId, useState } from "react";
 import { svd2 } from "../../lib/mat2";
-import { findPreset, MIN_PRESETS, MIN_STEP, minimizeProbe, rangeFor } from "../../lib/warpScene";
+import { findPreset, MIN_PRESETS, minAngles, minimizeProbe, rangeFor } from "../../lib/warpScene";
 import Slider from "../ui/Slider";
 import { Arrow, fmtNum, Mark, Plane, Shape, Through } from "./Plane";
 import { Chip, CIRCLE, colOf, Frame, imageOf, Key, rowStyle, Segment, Status, valuesStyle } from "./warpParts";
@@ -12,13 +12,19 @@ function minimizeStatus(hit: boolean, sigmaMin: number): string {
   return "|Ax|가 가장 작다 (= σ₂). x = ±v₂, V의 마지막 열";
 }
 
+/** 3° 눈금은 정수로, 끼워 넣은 정답 방향(예: 143.1°)은 소수 한 자리로 */
+const fmtDeg = (d: number): string => (Number.isInteger(d) ? String(d) : d.toFixed(1));
+
 export default function MinimizeWarp({ initial }: { initial: string }) {
   const id = useId();
   const [presetId, setPresetId] = useState(initial);
-  const [deg, setDeg] = useState(0);
+  const [index, setIndex] = useState(0);
   const [show, setShow] = useState(false);
   const preset = findPreset(MIN_PRESETS, presetId);
   const A = preset.m;
+  const angles = minAngles(A);
+  const safeIndex = Math.min(index, angles.length - 1);
+  const deg = angles[safeIndex]!;
   const { V } = svd2(A);
   const { x, Ax, len, hit, sigma } = minimizeProbe(A, deg);
   const range = rangeFor(A);
@@ -35,7 +41,17 @@ export default function MinimizeWarp({ initial }: { initial: string }) {
       controls={
         <>
           <Segment label="행렬" options={MIN_PRESETS} value={preset.id} onChange={setPresetId} />
-          <Slider id={`${id}-deg`} label="x의 방향" value={deg} min={0} max={360 - MIN_STEP} step={MIN_STEP} unit="°" onChange={setDeg} />
+          <Slider
+            id={`${id}-deg`}
+            label="x의 방향"
+            value={safeIndex}
+            min={0}
+            max={angles.length - 1}
+            step={1}
+            unit="°"
+            onChange={setIndex}
+            format={(i) => fmtDeg(angles[i] ?? 0)}
+          />
           <div className={rowStyle}>
             <Chip on={show} onToggle={() => setShow(!show)}>
               V의 열 보기
@@ -59,7 +75,7 @@ export default function MinimizeWarp({ initial }: { initial: string }) {
         </>
       }
     >
-      <Plane range={range} label={`${preset.label}, x 방향 ${deg}°`}>
+      <Plane range={range} label={`${preset.label}, x 방향 ${fmtDeg(deg)}°`}>
         <Shape points={imageOf(A)} tone="image" />
         <Shape points={CIRCLE} tone="faint" dashed />
         {show && (
