@@ -1,4 +1,4 @@
-/** 9주차 — 내가 직접 구현하는 파일. AI는 시그니처·힌트·TODO만 작성한다. */
+/** 21주차 — 내가 직접 구현하는 파일. AI는 시그니처·힌트·TODO만 작성한다. */
 import type { PoseGraphProblem, PoseGraphResult, SolverOptions } from "../types";
 
 // 이전 주차 함수는 이렇게 가져온다 (정답 구현을 쓴다, ARCHITECTURE §3)

@@ -1,4 +1,4 @@
-"""12a 결과 쇼케이스용 JSON 만들기 (형식 "slam-guide-result" v1, docs/DATA.md §2).
+"""22a 결과 쇼케이스용 JSON 만들기 (형식 "slam-guide-result" v1, docs/DATA.md §2).
 
 evo 결과 zip(--save_results)의 stats.json 에서 RMSE를 꺼내거나, 숫자를 직접 받아
 site/src/data/cpp-results/<시퀀스>-<구현>.json 을 만든다. 사이트는 빌드 때 이 파일들을 표로 보여준다.
@@ -140,7 +140,7 @@ def write_json(path: Path, data: dict, force: bool) -> None:
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="12a 결과 쇼케이스 JSON 만들기")
+    p = argparse.ArgumentParser(description="22a 결과 쇼케이스 JSON 만들기")
     p.add_argument("--sequence", help="예: fr1/xyz")
     p.add_argument("--impl", choices=IMPLS)
     p.add_argument("--ape", help="evo_ape --save_results zip")

@@ -1,15 +1,15 @@
-/** 14주차 — 내가 직접 구현하는 파일. AI는 시그니처·힌트·TODO만 작성한다. */
+/** 24주차 — 내가 직접 구현하는 파일. AI는 시그니처·힌트·TODO만 작성한다. */
 import type { ImuBias, ImuSample, IntegrateOptions, NavState, Preintegrated } from "../types";
 
 // 읽기만 함수: 정답을 그대로 내보낸다 (LESSON_TEMPLATE §2)
 //   biasJacobians: 바이어스 1차 보정 야코비안 (레슨의 손 유도와 맞춰 읽는다)
-export { biasJacobians } from "../reference/w14";
+export { biasJacobians } from "../reference/w24";
 
 // 이전 주차 함수는 이렇게 가져온다 (정답 구현을 쓴다, ARCHITECTURE §3)
 //   import { expSO3 } from "@core/prev/w03";
 
 /**
- * 14a — IMU 적분: 시작 상태에서 측정을 차례로 적분해 측정 시각마다의 상태를 낸다.
+ * 24a — IMU 적분: 시작 상태에서 측정을 차례로 적분해 측정 시각마다의 상태를 낸다.
  *
  * 구간 k (samples[k] → samples[k+1], dt = t_{k+1} − t_k) 마다:
  *   euler:    R' = R·Exp(ω_k·dt),               a = R·f_k + g
@@ -24,7 +24,7 @@ export function integrateIMU(init: NavState, samples: readonly ImuSample[], opts
 }
 
 /**
- * 14b — 사전적분: 시각 t_0 → t_{n−1} 사이 측정을 몸체 0 좌표로 묶는다 (중력·시작 상태와 무관).
+ * 24b — 사전적분: 시각 t_0 → t_{n−1} 사이 측정을 몸체 0 좌표로 묶는다 (중력·시작 상태와 무관).
  *
  * ΔR = I, Δv = 0, Δp = 0 에서 시작해 구간 k 마다 (ω = gyro_k − bg, f = accel_k − ba):
  *   Δp ← Δp + Δv·dt + ½·ΔR·f·dt²

@@ -1,5 +1,5 @@
 /**
- * 12a 결과 쇼케이스: site/src/data/cpp-results/*.json (datasets/cpp_result.py가 만든다)을 검사·정렬한다.
+ * 22a 결과 쇼케이스: site/src/data/cpp-results/*.json (datasets/cpp_result.py가 만든다)을 검사·정렬한다.
  * 형식 "slam-guide-result" v1 (docs/DATA.md §2). 빌드 때 읽으므로 틀리면 파일 이름과 함께 빌드를 멈춘다.
  */
 

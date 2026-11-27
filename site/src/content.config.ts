@@ -21,6 +21,8 @@ const lessons = defineCollection({
     .object({
       week: z.number().int().min(0),
       part: z.enum(["a", "b", "c", "d"]).optional(),
+      // optional = 선택 레슨: 대시보드에서 핵심 경로와 따로 보여 준다 (CURRICULUM의 선택 표)
+      track: z.enum(["core", "optional"]).default("core"),
       title: z.string().min(1),
       summary: z.string().min(1),
       prereq: z.array(z.string().regex(/^w\d{2}[a-d]?$/, "선행 레슨은 w05 또는 w07a 꼴")).default([]),

@@ -1,4 +1,4 @@
-/** 9주차 정답 구현. 시그니처는 core/mine/w09.ts와 같다. */
+/** 21주차 정답 구현. 시그니처는 core/mine/w21.ts와 같다. */
 import { CholeskyDecomposition, Matrix } from "ml-matrix";
 import { levenbergMarquardt } from "@core/prev/w07";
 import type { Pose2, PoseGraphEdge, PoseGraphProblem, PoseGraphResult, SolverOptions } from "../types";

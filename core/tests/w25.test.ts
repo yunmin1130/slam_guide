@@ -1,20 +1,20 @@
 /**
- * 15주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
+ * 25주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
  *   describe(구현) > describe("<함수명>") > it("기본|경계|수치: …")
  * - 장면: 바닥과 벽 세 개, 기둥 하나가 있는 방 (라이다가 실내에서 보는 평면들). 점마다 법선을 안다.
  * - "같은 점을 옮긴 것"은 정확히 맞아야 하고, "같은 방을 따로 샘플링한 것"은 대응이 근사라 오차가 남는다
- *   (점-평면이 점-점보다 훨씬 작게 남기는 것이 15주차 요점).
+ *   (점-평면이 점-점보다 훨씬 작게 남기는 것이 25주차 요점).
  * - 점-평면 테스트의 점-점 비교값은 손코딩 함수에 기대지 않게 정답을 직접 쓴다 (LESSON_TEMPLATE §4).
  */
 import { describe, expect, it } from "vitest";
 import { expSO3, logSO3 } from "../reference/w03";
-import { icpPointToPoint as refIcpPointToPoint } from "../reference/w15";
+import { icpPointToPoint as refIcpPointToPoint } from "../reference/w25";
 import { IMPL, loadImpl } from "./loadImpl";
 import { createRng, type Rng } from "./rng";
 import type { IcpOptions, Mat3, SE3, Vec3 } from "../types";
 
-type W15 = typeof import("../reference/w15");
-const m = await loadImpl<W15>("w15");
+type W25 = typeof import("../reference/w25");
+const m = await loadImpl<W25>("w25");
 
 interface Scan {
   readonly points: Vec3[];

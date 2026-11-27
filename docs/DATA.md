@@ -43,7 +43,7 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
 }
 ```
 - `conditions`는 캡스톤 실험(회전 속도·조명·노출 비교)에서 그룹을 나누는 키로 쓴다. `exposure`는 `auto | fixed`.
-- `eval: return-to-start`는 출발점 복귀 오차다. 루프 클로저(9주차)와 다른 개념이라 이름을 구분한다.
+- `eval: return-to-start`는 출발점 복귀 오차다. 루프 클로저(21주차)와 다른 개념이라 이름을 구분한다.
 
 ### timestamps.txt
 - 한 줄에 하나, 이미지 번호 순서대로.
@@ -84,8 +84,8 @@ EuRoC와 비슷한 폴더 구조를 쓴다.
 - 쿼터니언은 이 문서의 다른 파일과 같이 w가 먼저다(TUM 원본은 x, y, z, w 순서).
 - 사이트 상한: 프레임 2000장, 프레임당 특징점 2000개, 파일 30MB.
 
-### cpp-results/{name}.json (12a 결과 쇼케이스)
-`datasets/cpp_result.py`가 evo 결과 zip(`--save_results`의 `stats.json`) 또는 직접 입력한 숫자로 만든다. 저장 위치는 `site/src/data/cpp-results/`이고 저장소에 올린다(작은 숫자 파일). 사이트 12a 레슨이 빌드 때 읽어 표로 보여준다(`site/src/lib/cppResults.ts`, 형식이 틀리면 빌드가 멈춘다).
+### cpp-results/{name}.json (22a 결과 쇼케이스)
+`datasets/cpp_result.py`가 evo 결과 zip(`--save_results`의 `stats.json`) 또는 직접 입력한 숫자로 만든다. 저장 위치는 `site/src/data/cpp-results/`이고 저장소에 올린다(작은 숫자 파일). 사이트 22a 레슨이 빌드 때 읽어 표로 보여준다(`site/src/lib/cppResults.ts`, 형식이 틀리면 빌드가 멈춘다).
 ```jsonc
 {
   "format": "slam-guide-result", "version": 1,
@@ -198,12 +198,12 @@ gst-launch-1.0 -e nvarguscamerasrc sensor-mode=3 \
 
 | 데이터셋 | 용도 | 라이선스 | 비고 |
 | --- | --- | --- | --- |
-| KITTI Odometry | 12주차 이후 선택 확장 (C++ VO), 15주차 선택 PC 실습(Open3D, 기본 레슨은 합성 방 장면) | CC BY-NC-SA 3.0 | 출처 표기·동일조건 공유 의무. 강의 판매 시 사용 불가 → 자체 데이터로 교체 |
-| EuRoC MAV | 13~14주차 ESKF·VIO (기본 트랙) | 연구용 공개 | IMU + 스테레오 + 정답 궤적 (IMU 기준, §2 변환 필요) |
+| KITTI Odometry | 22주차 이후 선택 확장 (C++ VO), 25주차 선택 PC 실습(Open3D, 기본 레슨은 합성 방 장면) | CC BY-NC-SA 3.0 | 출처 표기·동일조건 공유 의무. 강의 판매 시 사용 불가 → 자체 데이터로 교체 |
+| EuRoC MAV | 23~24주차 ESKF·VIO (기본 트랙) | 연구용 공개 | IMU + 스테레오 + 정답 궤적 (IMU 기준, §2 변환 필요) |
 | TUM RGB-D | 11주차 M1 리포트(2026-11-03 선택), 실내 VO | CC BY 4.0 | 정답 궤적 포함. `tum_tracks.py`로 트랙 JSON |
 | TUM RS-VIO | 캡스톤 롤링셔터 비교 | 데이터셋 페이지 확인 | 글로벌·롤링셔터 동시 촬영 |
 
 - 사이트 샘플에는 §1 상한만큼만 잘라서 넣고, 페이지에 출처를 표기한다.
-- 스크립트는 `datasets/` 폴더에 둔다. 있음: `calibrate.py`(4주차), `export_matches.py`(5주차), `jetbot_to_std.py`(10주차), `tum_tracks.py`(11주차). 예정: `euroc_to_std.py`(13주차 전, T_BS 역행렬 없이·200Hz→20Hz 보간을 `--selftest`로 검증). 선택: `kitti_to_std.py`(KITTI 확장을 할 때). TUM은 `tum_tracks.py`가 원본 폴더를 바로 읽어서 `tum_to_std.py`는 만들지 않는다 (G0 2026-11-03).
+- 스크립트는 `datasets/` 폴더에 둔다. 있음: `calibrate.py`(4주차), `export_matches.py`(5주차), `jetbot_to_std.py`(10주차), `tum_tracks.py`(11주차). 예정: `euroc_to_std.py`(23주차 전, T_BS 역행렬 없이·200Hz→20Hz 보간을 `--selftest`로 검증). 선택: `kitti_to_std.py`(KITTI 확장을 할 때). TUM은 `tum_tracks.py`가 원본 폴더를 바로 읽어서 `tum_to_std.py`는 만들지 않는다 (G0 2026-11-03).
 - `datasets/jetbot_to_std.py`(10주차): 주행 영상 mp4 → 표준 시퀀스 폴더(`images/`, `timestamps.txt`, `meta.json`, 선택 `calib.json`). 기본 3장마다 1장, 결과는 `datasets/sequences/{name}/`(저장소에 올리지 않는다). `--selftest`로 합성 영상 검증.
 - 스크립트는 PC 전용이며 사이트 빌드에 포함하지 않는다. Python 3.8 이상이 필요해서(`from __future__ import annotations`) JetBot(Python 3.6)에서는 돌리지 않는다. JetBot에서는 녹화(gst-launch)만 한다.

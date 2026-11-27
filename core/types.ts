@@ -140,7 +140,7 @@ export interface BAResult {
   readonly costs: readonly number[];
 }
 
-/** 2D 자세 (9주차): 위치 (x, y)와 방향 θ (라디안). 월드에서 본 로봇 자세 T_wi */
+/** 2D 자세 (21주차): 위치 (x, y)와 방향 θ (라디안). 월드에서 본 로봇 자세 T_wi */
 export interface Pose2 {
   readonly x: number;
   readonly y: number;
@@ -148,7 +148,7 @@ export interface Pose2 {
 }
 
 /**
- * 포즈 그래프 엣지 (9주차): 노드 i에서 본 노드 j의 상대 자세 측정 z_ij = T_i⁻¹·T_j.
+ * 포즈 그래프 엣지 (21주차): 노드 i에서 본 노드 j의 상대 자세 측정 z_ij = T_i⁻¹·T_j.
  * info는 3×3 정보 행렬 (측정 공분산의 역, 순서 [x, y, θ]). 오도메트리와 루프 클로저 모두 이 꼴이다.
  */
 export interface PoseGraphEdge {
@@ -334,10 +334,10 @@ export interface RpeResult {
   readonly count: number;
 }
 
-// ---- 13주차: 오차 상태 칼만 필터 ----
+// ---- 23주차: 오차 상태 칼만 필터 ----
 
 /**
- * ESKF 상태 (13주차). 명목 상태(R, p, v)와 오차 상태 공분산 P.
+ * ESKF 상태 (23주차). 명목 상태(R, p, v)와 오차 상태 공분산 P.
  * R = R_wb (몸체 → 월드), p·v 는 월드 좌표.
  * 오차 상태 δx = [δθ, δp, δv] (9개, 이 순서). 회전 오차는 좌섭동: 참 R = Exp(δθ)·R.
  */
@@ -349,7 +349,7 @@ export interface EskfState {
   readonly P: MatN;
 }
 
-/** IMU 한 번의 측정과 그 측정을 쓸 시간 간격 (13주차) */
+/** IMU 한 번의 측정과 그 측정을 쓸 시간 간격 (23주차) */
 export interface ImuStep {
   /** 자이로 (rad/s, 몸체 좌표) */
   readonly gyro: Vec3;
@@ -359,7 +359,7 @@ export interface ImuStep {
   readonly dt: number;
 }
 
-/** ESKF 예측 설정 (13주차) */
+/** ESKF 예측 설정 (23주차) */
 export interface EskfNoise {
   /** 자이로 잡음 표준편차 (rad/s) */
   readonly gyro: number;
@@ -369,16 +369,16 @@ export interface EskfNoise {
   readonly gravity: Vec3;
 }
 
-// ---- 14주차: IMU 적분과 사전적분 ----
+// ---- 24주차: IMU 적분과 사전적분 ----
 
-/** 항법 상태 (14주차): R_wb, 월드 위치·속도 */
+/** 항법 상태 (24주차): R_wb, 월드 위치·속도 */
 export interface NavState {
   readonly R: Mat3;
   readonly p: Vec3;
   readonly v: Vec3;
 }
 
-/** 시각이 붙은 IMU 측정 (14주차) */
+/** 시각이 붙은 IMU 측정 (24주차) */
 export interface ImuSample {
   /** 시각 (초) */
   readonly t: number;
@@ -392,13 +392,13 @@ export interface IntegrateOptions {
   readonly method: "euler" | "midpoint";
 }
 
-/** IMU 바이어스 (14주차): 측정 = 참값 + 바이어스 */
+/** IMU 바이어스 (24주차): 측정 = 참값 + 바이어스 */
 export interface ImuBias {
   readonly gyro: Vec3;
   readonly accel: Vec3;
 }
 
-/** 사전적분 결과 (14주차): 시각 i → j 사이 몸체 i 좌표의 상대 움직임 */
+/** 사전적분 결과 (24주차): 시각 i → j 사이 몸체 i 좌표의 상대 움직임 */
 export interface Preintegrated {
   readonly dR: Mat3;
   readonly dv: Vec3;
@@ -407,7 +407,7 @@ export interface Preintegrated {
   readonly dt: number;
 }
 
-/** 바이어스 1차 보정 야코비안 (14주차, 3×3 각각). dR 은 우섭동: dR(b̄+δb) ≈ dR(b̄)·Exp(dR_dbg·δbg) */
+/** 바이어스 1차 보정 야코비안 (24주차, 3×3 각각). dR 은 우섭동: dR(b̄+δb) ≈ dR(b̄)·Exp(dR_dbg·δbg) */
 export interface PreintJacobians {
   readonly dR_dbg: MatN;
   readonly dv_dbg: MatN;
@@ -416,9 +416,9 @@ export interface PreintJacobians {
   readonly dp_dba: MatN;
 }
 
-// ---- 15주차: 라이다 ICP ----
+// ---- 25주차: 라이다 ICP ----
 
-/** 최근접 이웃 하나 (15주차) */
+/** 최근접 이웃 하나 (25주차) */
 export interface Neighbor {
   /** dst 안의 번호 */
   readonly index: number;

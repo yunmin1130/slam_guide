@@ -20,6 +20,8 @@ export interface LessonMeta {
   week: number;
   /** 한 주차를 여러 페이지로 나눈 파트 (LESSON_TEMPLATE §1). 없으면 그 주차 페이지는 하나 */
   part?: Part;
+  /** core = 핵심 경로, optional = 선택 레슨 (CURRICULUM의 선택 표) */
+  track: Track;
   title: string;
   href: string;
   units: number;
@@ -39,6 +41,7 @@ export interface NextSessions {
 }
 
 export type Part = "a" | "b" | "c" | "d";
+export type Track = "core" | "optional";
 
 /** 진도 저장 키이자 화면 표기: w07, 파트가 있으면 w07a (파트끼리 진도가 섞이지 않게) */
 export function lessonKey(week: number, part?: Part): string {
@@ -56,8 +59,9 @@ function pendingSessions(lesson: LessonMeta, state: LessonState | undefined): Se
   return lesson.sessions.filter((s) => !checked.has(s.id));
 }
 
+/** 다음 세션은 핵심 경로에서만 고른다. 선택 레슨은 사용자가 직접 골라 들어간다 */
 export function nextSessions(lessons: readonly LessonMeta[], progress: Progress, device: Device): NextSessions {
-  const ordered = [...lessons].sort(compareLessons);
+  const ordered = lessons.filter((l) => l.track === "core").sort(compareLessons);
   let overall: SessionPick | undefined;
 
   for (const lesson of ordered) {

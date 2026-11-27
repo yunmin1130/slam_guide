@@ -24,7 +24,7 @@ SLAM 학습 사이트의 구조 설계 문서. 백엔드 없는 정적 사이트
 | 수식 | KaTeX (remark-math + rehype-katex) | 빌드 타임 렌더링 → 런타임 JS 0. Astro 7 기본 처리기(Sätteri)엔 KaTeX 플러그인이 없어 `markdown.processor: unified()`로 쓴다. katex는 rehype-katex와 같은 0.16.x로 맞춘다 (CSS·렌더러 버전 일치) |
 | 테스트 | Vitest (`ref`·`mine` 두 project) | §6 참고 |
 | 배포 | GitHub Pages + GitHub Actions | 무료, push 시 자동 배포, 포트폴리오 링크 |
-| C++ (12주차~) | C++17 + Eigen + OpenCV, CMake, GTest | 채용 시장 요구. Windows에서는 WSL2 Ubuntu 24.04 (G0 2026-11-03: Ceres 2.2 `Manifold`가 apt로 깔린다), ORB-SLAM3는 별도 Docker |
+| C++ (22주차~) | C++17 + Eigen + OpenCV, CMake, GTest | 채용 시장 요구. Windows에서는 WSL2 Ubuntu 24.04 (G0 2026-11-03: Ceres 2.2 `Manifold`가 apt로 깔린다), ORB-SLAM3는 별도 Docker |
 
 - 외부 스크립트는 런타임 CDN으로 불러오지 않고 전부 번들·셀프호스팅한다 (§7 토큰 보안).
 - Astro `site`는 `https://yunmin1130.github.io`, `base`는 `/slam_guide/`로 설정한다. 내부 링크와 `public/data` 경로는 모두 `import.meta.env.BASE_URL`을 붙여 참조한다.
@@ -54,7 +54,7 @@ slam_guide/
 │   │   ├── data/
 │   │   │   ├── test-results.json  # CI가 생성 (mine 테스트 결과)
 │   │   │   ├── mine-syntax.json   # CI가 생성 (mine 구문·import 검사 결과)
-│   │   │   └── cpp-results/       # 12a 결과 쇼케이스 JSON (datasets/cpp_result.py, DATA §2)
+│   │   │   └── cpp-results/       # 22a 결과 쇼케이스 JSON (datasets/cpp_result.py, DATA §2)
 │   │   ├── lib/
 │   │   │   ├── storage.ts    # 저장 계층 (유일한 저장 진입점)
 │   │   │   ├── impl.ts       # mine/reference 선택 로직 (유일한 분기점)
@@ -66,7 +66,7 @@ slam_guide/
 │   ├── mine/                 # ✍️ 내가 직접 구현 (AI는 시그니처·힌트·TODO만)
 │   ├── reference/            # 정답 구현 (AI 작성, 테스트로 검증)
 │   └── tests/                # 테스트 (mine, reference 모두 대상)
-├── cpp/                      # C++ 미니 VO (12주차~, 사용자가 만드는 별도 CMake 프로젝트, CI는 cpp.yml, 아직 없음)
+├── cpp/                      # C++ 미니 VO (22주차~, 사용자가 만드는 별도 CMake 프로젝트, CI는 cpp.yml, 아직 없음)
 ├── datasets/                 # 변환·캘리브레이션·매칭·트랙 스크립트 (PC Python 전용)
 ├── scripts/                  # check-mine-syntax.mjs, qa.mjs (자동 QA)
 ├── .claude/agents/           # 레슨 검토 에이전트 정의 (lesson-learner, lesson-visual-qa)

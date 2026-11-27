@@ -65,7 +65,7 @@ const components = { CheckQuestion, Details, Hint, LABox, SessionBreak, TaskCard
   <LessonTracker client:idle lessonKey={key} />
 
   <header class="lesson-head">
-    <span class="eyebrow">{key} · {d.units}단위 · 세션 {d.sessions.length}개{d.jetbot && " · JetBot"}</span>
+    <span class="eyebrow">{key} · {d.units}단위 · 세션 {d.sessions.length}개{d.jetbot && " · JetBot"}{d.track === "optional" && " · 선택"}</span>
     <h1>{d.title}</h1>
   </header>
 

@@ -1,4 +1,4 @@
-/** 13주차 정답 구현. 시그니처는 core/mine/w13.ts와 같다. */
+/** 23주차 정답 구현. 시그니처는 core/mine/w23.ts와 같다. */
 import { skew } from "@core/prev/w01";
 import { expSO3 } from "@core/prev/w03";
 import { CholeskyDecomposition, Matrix, inverse } from "ml-matrix";

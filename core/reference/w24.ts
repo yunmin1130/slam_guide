@@ -1,4 +1,4 @@
-/** 14주차 정답 구현. 시그니처는 core/mine/w14.ts와 같다. */
+/** 24주차 정답 구현. 시그니처는 core/mine/w24.ts와 같다. */
 import { skew } from "@core/prev/w01";
 import { expSO3 } from "@core/prev/w03";
 import type { ImuBias, ImuSample, IntegrateOptions, Mat3, MatN, NavState, PreintJacobians, Preintegrated, Vec3 } from "../types";

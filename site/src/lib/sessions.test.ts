@@ -13,6 +13,7 @@ const lessons: LessonMeta[] = [
   {
     key: "w02",
     week: 2,
+    track: "core",
     title: "선형대수 ②",
     href: "/w02",
     units: 2,
@@ -24,6 +25,7 @@ const lessons: LessonMeta[] = [
   {
     key: "w01",
     week: 1,
+    track: "core",
     title: "선형대수 ①",
     href: "/w01",
     units: 1,
@@ -62,6 +64,22 @@ describe("compareLessons", () => {
 });
 
 describe("nextSessions", () => {
+  it("경계: 선택 레슨은 추천하지 않는다 (핵심에 이 기기 세션이 없어도, 핵심을 다 끝내도)", () => {
+    const optional: LessonMeta = {
+      key: "w21",
+      week: 21,
+      track: "optional",
+      title: "포즈 그래프",
+      href: "/w21",
+      units: 1.5,
+      sessions: [{ id: "s1", device: "pad", title: "손 유도" }],
+    };
+    const withOptional = [...lessons, optional];
+    expect(nextSessions(withOptional, empty, "pad").forDevice).toBeUndefined();
+    const allCoreDone: Progress = { lessons: { w01: { status: "done", checked: [] }, w02: { status: "done", checked: [] } } };
+    expect(nextSessions(withOptional, allCoreDone, "pad")).toEqual({ overall: undefined });
+  });
+
   it("진도가 없으면 가장 앞 주차의 첫 세션", () => {
     const r = nextSessions(lessons, empty, "phone");
     expect(r.overall?.lesson.key).toBe("w01");

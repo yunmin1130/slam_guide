@@ -1,4 +1,4 @@
-/** 15주차 정답 구현. 시그니처는 core/mine/w15.ts와 같다. */
+/** 25주차 정답 구현. 시그니처는 core/mine/w25.ts와 같다. */
 import { expSO3 } from "@core/prev/w03";
 import { alignUmeyama } from "@core/prev/w11";
 import { CholeskyDecomposition, Matrix } from "ml-matrix";

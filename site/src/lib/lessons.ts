@@ -14,6 +14,7 @@ export function toLessonMeta(entry: LessonEntry): LessonMeta {
     key: lessonKey(d.week, d.part),
     week: d.week,
     ...(d.part ? { part: d.part } : {}),
+    track: d.track,
     title: d.title,
     href: lessonHref(entry),
     units: d.units,

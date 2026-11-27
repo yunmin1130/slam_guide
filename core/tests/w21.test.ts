@@ -1,5 +1,5 @@
 /**
- * 9주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
+ * 21주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
  *   describe(구현) > describe("<함수명>") > it("기본|경계|수치: …")
  * - 2D 자세 계산(합성 ⊕, 상대 자세 ⊖, 각도 감싸기)은 테스트 안에서 직접 한다.
  * - 정답을 아는 그래프(원 위의 노드 8개 + 루프 엣지)와, 손으로 풀리는 가중 평균 문제로 본다.
@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { IMPL, loadImpl } from "./loadImpl";
 import { createRng, type Rng } from "./rng";
 
-type W09 = typeof import("../reference/w09");
+type W21 = typeof import("../reference/w21");
 interface Pose2 {
   x: number;
   y: number;
@@ -21,7 +21,7 @@ interface Edge {
   info: number[][];
 }
 
-const m = await loadImpl<W09>("w09");
+const m = await loadImpl<W21>("w21");
 
 // ---- 테스트용 도우미 ----
 

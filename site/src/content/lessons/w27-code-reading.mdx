@@ -1,8 +1,9 @@
 ---
-week: 17
+week: 27
+track: optional
 title: ORB-SLAM3·VINS-Mono 코드 리딩
 summary: 대표 오픈소스 SLAM 두 개(ORB-SLAM3, VINS-Mono)의 코드를 내 미니 VO와 지금까지의 레슨에 대응시키며 읽고, 리딩 노트와 내 데이터로 돌린 ORB-SLAM3 결과를 남긴다
-prereq: [w11c, w14b, w16]
+prereq: [w11c, w24b, w26]
 la_box: []
 tasks: []
 read_only: []
@@ -48,7 +49,7 @@ sessions:
 - `src/LocalMapping.cc` → 11c, 8b
 - `src/LoopClosing.cc` → 9
 - `src/Optimizer.cc` → 7, 8, 9
-- `src/ImuTypes.cc` → 14b
+- `src/ImuTypes.cc` → 24b
 
 **VINS-Mono** (경로는 `vins_estimator/src/` 아래)
 
@@ -85,7 +86,7 @@ VINS-Mono는 카메라 하나와 IMU로 도는 VIO다. 노드 두 개로 나뉜�
 - **feature_tracker:** 10주차 KLT로 특징점을 추적하고 정규화 좌표를 넘긴다. 디스크립터 매칭을 쓰지 않는다.
 - **vins_estimator:** 최근 키프레임 몇 개(슬라이딩 윈도우)의 자세·속도·바이어스를 재투영 오차와 IMU 사전적분 오차로 함께 최적화한다(Ceres).
 
-창이 가득 차면 가장 오래된 프레임을 그냥 버리지 않고 주변화(marginalization)한다. 그 프레임이 남긴 정보를 남은 변수에 대한 사전 정보(prior)로 바꿔 두는 것이다. 16주차에서 본 Schur complement가 여기서 쓰인다.
+창이 가득 차면 가장 오래된 프레임을 그냥 버리지 않고 주변화(marginalization)한다. 그 프레임이 남긴 정보를 남은 변수에 대한 사전 정보(prior)로 바꿔 두는 것이다. 26주차에서 본 Schur complement가 여기서 쓰인다.
 
 초기화도 다르다. 먼저 카메라만으로 몇 프레임의 SfM(구조와 움직임)을 풀고, 그 궤적을 IMU 사전적분과 맞춰 자이로 바이어스, 중력 방향, 스케일을 구한다. 단안 VO와 달리 VIO는 스케일을 IMU로 알 수 있다.
 
@@ -116,7 +117,7 @@ VINS-Mono는 카메라 하나와 IMU로 도는 VIO다. 노드 두 개로 나뉜�
 - 11b `trackPnP` → `TrackWithMotionModel`: PnP가 아님
 - 11c `localBA` → `LocalBundleAdjustment`: 창 고르는 법
 - 9 포즈 그래프 → `OptimizeEssentialGraph`: Sim(3)
-- 14b `preintegrate` → `IntegrationBase`: 중점법
+- 24b `preintegrate` → `IntegrationBase`: 중점법
 - 16 주변화 → `MarginalizationInfo`: 사전 정보
 
 이 함수·클래스 이름도 버전마다 다를 수 있다. 노트에는 내가 받은 커밋에서 찾은 실제 이름과 파일·줄 번호를 적는다.
@@ -153,10 +154,10 @@ VINS-Mono는 카메라 하나와 IMU로 도는 VIO다. 노드 두 개로 나뉜�
 - `PoseOptimization`의 로버스트 커널과 이상치 처리(몇 번 반복하며 버리나)를 우리 `cullOutliers`와 비교한다.
 - `NeedNewKeyFrame`의 조건을 모두 적는다. 우리 `selectKeyframe`(최소·최대 프레임, 추적 비율)과 겹치는 것과 더 있는 것은?
 
-**스테레오 깊이 (16주차와 연결).** 스테레오 모드에서는 프레임을 만들 때 왼쪽·오른쪽 사진의 특징점을 같은 행에서 짝지어 시차로 깊이를 구한다. `Frame` 클래스의 스테레오 짝짓기 함수(`ComputeStereoMatches` 꼴, 이름은 버전마다 다를 수 있다)를 찾는다.
+**스테레오 깊이 (26주차와 연결).** 스테레오 모드에서는 프레임을 만들 때 왼쪽·오른쪽 사진의 특징점을 같은 행에서 짝지어 시차로 깊이를 구한다. `Frame` 클래스의 스테레오 짝짓기 함수(`ComputeStereoMatches` 꼴, 이름은 버전마다 다를 수 있다)를 찾는다.
 
 - $Z = f b / d$는 어느 줄에 있나? 시차를 픽셀 이하로 다듬는 단계가 있나?
-- "먼 점"과 "가까운 점"을 가르는 깊이 기준(16주차의 기준선 약 40배)은 어디서 정하고, 먼 점은 추적과 BA에서 어떻게 다르게 쓰나?
+- "먼 점"과 "가까운 점"을 가르는 깊이 기준(26주차의 기준선 약 40배)은 어디서 정하고, 먼 점은 추적과 BA에서 어떻게 다르게 쓰나?
 
 <SessionBreak id="s6" />
 
@@ -175,24 +176,24 @@ VINS-Mono는 카메라 하나와 IMU로 도는 VIO다. 노드 두 개로 나뉜�
 
 ### ORB-SLAM3 루프 클로징
 
-`LoopClosing`에서 장소 인식 후보 찾기(BoW, 9주차) → 기하 검증(Sim(3)) → 루프 보정 순서를 찾는다. ORB-SLAM3에서는 루프와 지도 합치기를 같은 틀에서 다루어, 함수 이름이 "공통 영역 찾기"(`DetectCommonRegions…`)처럼 바뀌었다.
+`LoopClosing`에서 장소 인식 후보 찾기(BoW, 21주차) → 기하 검증(Sim(3)) → 루프 보정 순서를 찾는다. ORB-SLAM3에서는 루프와 지도 합치기를 같은 틀에서 다루어, 함수 이름이 "공통 영역 찾기"(`DetectCommonRegions…`)처럼 바뀌었다.
 
 노트에 답할 질문:
 
 - 후보가 거짓 루프가 아님을 어떻게 확인하나? 시간 일관성(연속 키프레임) 검사가 있나?
-- 단안에서 왜 SE(3)가 아니라 Sim(3)로 루프를 맞추나? (9주차 체크 질문과 이어진다.)
-- `Optimizer::OptimizeEssentialGraph`는 어떤 엣지로 그래프를 만드나? 9주차 `poseGraph2D`와 무엇이 같고 다른가?
+- 단안에서 왜 SE(3)가 아니라 Sim(3)로 루프를 맞추나? (21주차 체크 질문과 이어진다.)
+- `Optimizer::OptimizeEssentialGraph`는 어떤 엣지로 그래프를 만드나? 21주차 `poseGraph2D`와 무엇이 같고 다른가?
 - 포즈 그래프 뒤의 전체 BA는 왜 별도 스레드에서 도나?
 
 <SessionBreak id="s8" />
 
 ### VINS-Mono 사전적분과 IMU 팩터
 
-`vins_estimator/src/factor/` 폴더의 `integration_base.h`에서 `IntegrationBase`를 읽는다. 14주차의 `preintegrate`, `biasJacobians`와 거의 일대일로 대응한다.
+`vins_estimator/src/factor/` 폴더의 `integration_base.h`에서 `IntegrationBase`를 읽는다. 24주차의 `preintegrate`, `biasJacobians`와 거의 일대일로 대응한다.
 
-- `midPointIntegration`: 14a 중점법으로 $\Delta R$(쿼터니언), $\Delta v$, $\Delta p$를 한 걸음 나아간다. 같은 함수 안에서 15×15 야코비안과 공분산도 전파한다.
+- `midPointIntegration`: 24a 중점법으로 $\Delta R$(쿼터니언), $\Delta v$, $\Delta p$를 한 걸음 나아간다. 같은 함수 안에서 15×15 야코비안과 공분산도 전파한다.
 - `propagate`: 측정이 하나 올 때마다 위 함수를 부른다.
-- `evaluate`: 두 키프레임 상태로 잔차 15개를 만든다. 바이어스가 바뀌었으면 야코비안으로 1차 보정한 사전적분 값을 쓴다(14주차 손 유도).
+- `evaluate`: 두 키프레임 상태로 잔차 15개를 만든다. 바이어스가 바뀌었으면 야코비안으로 1차 보정한 사전적분 값을 쓴다(24주차 손 유도).
 - `repropagate`: 바이어스가 많이 바뀌면 처음부터 다시 적분한다.
 
 `imu_factor.h`의 `IMUFactor`는 이 잔차를 Ceres 비용 함수로 감싼 것이다. ORB-SLAM3의 사전적분은 `src/ImuTypes.cc`의 `IMU::Preintegrated`에 있으니 둘을 비교해도 좋다.
@@ -200,7 +201,7 @@ VINS-Mono는 카메라 하나와 IMU로 도는 VIO다. 노드 두 개로 나뉜�
 노트에 답할 질문:
 
 - 우리 `preintegrate`는 오일러(구간 시작 측정)였다. VINS는 중점법이다. 식 한 줄씩 대응시켜 적는다.
-- 상태 오차 15개의 순서는? 우리 13주차 ESKF의 9개 $[\delta\theta, \delta p, \delta v]$에 무엇이 더해졌나?
+- 상태 오차 15개의 순서는? 우리 23주차 ESKF의 9개 $[\delta\theta, \delta p, \delta v]$에 무엇이 더해졌나?
 - VINS의 회전 오차는 좌섭동인가 우섭동인가? 우리 규약(좌섭동)과 다르면 식의 어디가 달라지는지 적는다.
 - 바이어스 보정이 1차 근사로 충분하지 않다고 판단하는 기준은?
 
@@ -218,14 +219,14 @@ VINS-Mono는 카메라 하나와 IMU로 도는 VIO다. 노드 두 개로 나뉜�
 
 - 특징점을 3D 점이 아니라 역깊이 하나로 두는 이유는? 우리 BA의 점 3개 변수와 비교한다.
 - 주변화에서 쓰는 Schur complement를 8b의 Schur와 비교한다. 같은 식인데 목적이 무엇이 다른가?
-- 주변화 사전 정보의 선형화 점은 고정된다(FEJ 문제와 이어진다). 그래서 생길 수 있는 문제를 한 줄로 적는다(16주차).
+- 주변화 사전 정보의 선형화 점은 고정된다(FEJ 문제와 이어진다). 그래서 생길 수 있는 문제를 한 줄로 적는다(26주차).
 - 시각-관성 정렬은 무엇을 미지수로 놓고 푸나? 단안 VO의 스케일 문제가 여기서 어떻게 풀리나?
 
 <SessionBreak id="s10" />
 
 ## 실습: 내 데이터로 ORB-SLAM3 단안 실행 (JetBot)
 
-**아래 절차는 아직 이 PC에서 검증하지 않았다.** Docker 빌드와 설정 파일 형식은 11d의 "ORB-SLAM3 직접 돌려 보기"와 12a의 선택 세션 "ORB-SLAM3 Docker 절차 검증"에서 먼저 확인한다. 빌드가 한 단위를 넘겨 막히면 그만두고, 리딩 노트에 "실행 못 함과 이유"를 적는다.
+**아래 절차는 아직 이 PC에서 검증하지 않았다.** Docker 빌드와 설정 파일 형식은 11d의 "ORB-SLAM3 직접 돌려 보기"와 22a의 선택 세션 "ORB-SLAM3 Docker 절차 검증"에서 먼저 확인한다. 빌드가 한 단위를 넘겨 막히면 그만두고, 리딩 노트에 "실행 못 함과 이유"를 적는다.
 
 JetBot이 막히면 저장소의 `docs/DATA.md` §4에 적힌 대안을 쓴다. iPhone 0.5× 초광각 영상을 프레임으로 뽑거나, 공개 데이터(TUM RGB-D, IMU까지 보려면 EuRoC)로 같은 절차를 따른다.
 

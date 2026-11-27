@@ -1,12 +1,12 @@
-/** 15주차 — 내가 직접 구현하는 파일. AI는 시그니처·힌트·TODO만 작성한다. */
+/** 25주차 — 내가 직접 구현하는 파일. AI는 시그니처·힌트·TODO만 작성한다. */
 import type { IcpOptions, IcpResult, Vec3 } from "../types";
 
 // 읽기만 함수: 정답을 그대로 내보낸다 (LESSON_TEMPLATE §2)
 //   nearestNeighbors: 최근접 점 찾기 (전수 탐색),  icpPointToPlane: 점-평면 ICP (7a 가우스-뉴턴)
-export { icpPointToPlane, nearestNeighbors } from "../reference/w15";
+export { icpPointToPlane, nearestNeighbors } from "../reference/w25";
 
 // 도우미·이전 주차 함수는 이렇게 가져온다 (정답 구현을 쓴다, ARCHITECTURE §3)
-//   import { nearestNeighbors } from "../reference/w15";
+//   import { nearestNeighbors } from "../reference/w25";
 //   import { alignUmeyama } from "@core/prev/w11";
 
 /**

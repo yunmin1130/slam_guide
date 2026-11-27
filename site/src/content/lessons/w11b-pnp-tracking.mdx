@@ -88,7 +88,7 @@ ORB-SLAM의 `PoseOptimization`이 같은 일을 하는데, 거기서는 다듬�
 
 OpenCV `solvePnPRansac`은 DLT 대신 최소 3~4점으로 푸는 방법을 표본에 쓴다. P3P(원근 3점 문제)는 점 3개로 자세 후보를 구하고, EPnP(효율적 PnP)는 점들을 제어점 4개의 가중합으로 나타내 한 번에 푼다. 표본이 작을수록 RANSAC 반복이 적게 필요하고, 평면 장면에서도 잘 된다(DLT는 점들이 한 평면 위면 퇴화한다).
 
-그 뒤 LM으로 다듬는 순서는 같다. 12주차 C++ 포팅에서 `solvePnPRansac`을 쓴다.
+그 뒤 LM으로 다듬는 순서는 같다. 선택 22주차 C++ 포팅에서 `solvePnPRansac`을 쓴다.
 
 <SessionBreak id="s3" />
 

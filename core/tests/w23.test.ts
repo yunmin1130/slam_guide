@@ -1,5 +1,5 @@
 /**
- * 13주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
+ * 23주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
  *   describe(구현) > describe("<함수명>") > it("기본|경계|수치: …")
  * - 오차 전이 F는 명목 상태를 조금 흔든 두 궤적의 차이(유한 차분)로 따로 만들어 P 전파와 비교한다.
  * - 회전 오차는 좌섭동: 참 R = Exp(δθ)·R (CURRICULUM 7주차 규약).
@@ -11,8 +11,8 @@ import { IMPL, loadImpl } from "./loadImpl";
 import { createRng } from "./rng";
 import type { EskfNoise, EskfState, Mat3, Vec3 } from "../types";
 
-type W13 = typeof import("../reference/w13");
-const m = await loadImpl<W13>("w13");
+type W23 = typeof import("../reference/w23");
+const m = await loadImpl<W23>("w23");
 
 const G: Vec3 = [0, 0, -9.81];
 const I3: Mat3 = [

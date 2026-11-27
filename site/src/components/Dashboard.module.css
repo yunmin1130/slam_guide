@@ -137,6 +137,20 @@
   line-height: 1;
   color: var(--ink-faint);
 }
+/* 아직 페이지가 없는 레슨: 흐리게, 점선으로 */
+.planned {
+  border-bottom-style: dashed;
+}
+/* 흐리게 하되 본문 대비(4.5:1)는 지킨다 */
+.planned .rowTitle {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.listNote {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
 .rowMain {
   display: grid;
   gap: var(--space-1);

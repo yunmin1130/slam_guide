@@ -3,9 +3,10 @@
  * 레슨 메타는 빌드 시점에 props로, 진도는 브라우저에서 storage.ts로 읽는다 (useProgress).
  */
 import { useEffect, useState } from "react";
+import { buildRoadmap, type PlannedLesson } from "../lib/roadmap";
+import type { Progress } from "../lib/storage";
 import { useProgress } from "../lib/useProgress";
 import {
-  compareLessons,
   DEVICE_LABEL,
   detectDevice,
   nextSessions,
@@ -17,6 +18,8 @@ import styles from "./Dashboard.module.css";
 
 interface DashboardProps {
   lessons: LessonMeta[];
+  /** 커리큘럼에는 있지만 아직 페이지가 없는 레슨 (roadmap.ts PLANNED) */
+  planned: readonly PlannedLesson[];
 }
 
 const DEVICES: Device[] = ["phone", "pad", "pc"];
@@ -41,7 +44,52 @@ function formatDate(iso: string | undefined): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
-export default function Dashboard({ lessons }: DashboardProps) {
+function LessonRow({ lesson, progress }: { lesson: LessonMeta; progress: Progress | null }) {
+  const state = progress?.lessons[lesson.key];
+  const done =
+    state?.status === "done"
+      ? lesson.sessions.length
+      : (state?.checked.filter((id) => lesson.sessions.some((s) => s.id === id)).length ?? 0);
+  const status = state?.status ?? "todo";
+  const visited = formatDate(state?.lastVisited);
+  return (
+    <li>
+      <a className={styles.row} href={lesson.href}>
+        <span className={styles.week}>{lesson.key.slice(1)}</span>
+        <span className={styles.rowMain}>
+          <span className={styles.rowTitle}>{lesson.title}</span>
+          <span className={styles.rowMeta}>
+            {lesson.units}단위 · 세션 {done}/{lesson.sessions.length}
+            {progress && ` · ${STATUS_TEXT[status]}`}
+            {visited && ` · ${visited}`}
+          </span>
+          <span className={styles.bar} aria-hidden="true">
+            <span style={{ width: `${(done / lesson.sessions.length) * 100}%` }} />
+          </span>
+        </span>
+      </a>
+    </li>
+  );
+}
+
+/** 아직 페이지가 없는 레슨: 링크 없이 자리만 보여 준다 */
+function PlannedRow({ lessonKey, planned }: { lessonKey: string; planned: PlannedLesson }) {
+  return (
+    <li>
+      <div className={`${styles.row} ${styles.planned}`}>
+        <span className={styles.week}>{lessonKey.slice(1)}</span>
+        <span className={styles.rowMain}>
+          <span className={styles.rowTitle}>{planned.title}</span>
+          <span className={styles.rowMeta}>
+            {planned.units}단위 · {planned.form} · 준비 중
+          </span>
+        </span>
+      </div>
+    </li>
+  );
+}
+
+export default function Dashboard({ lessons, planned }: DashboardProps) {
   const { progress, error } = useProgress();
   // 서버 렌더링 때는 기기를 모른다 → null이면 자리만 잡아 둔다
   const [device, setDevice] = useState<Device | null>(null);
@@ -54,7 +102,7 @@ export default function Dashboard({ lessons }: DashboardProps) {
 
   const ready = progress !== null && device !== null;
   const next = ready ? nextSessions(lessons, progress, device) : null;
-  const ordered = [...lessons].sort(compareLessons);
+  const roadmap = buildRoadmap(lessons, planned);
 
   return (
     <div className={styles.dash}>
@@ -102,7 +150,11 @@ export default function Dashboard({ lessons }: DashboardProps) {
             </p>
           )}
 
-          {ready && !next?.overall && <p className={styles.placeholder}>모든 세션을 끝냈어.</p>}
+          {ready && !next?.overall && (
+            <p className={styles.placeholder}>
+              {planned.length > 0 ? "만든 레슨의 세션은 다 끝냈어. 남은 건 준비 중인 레슨이야." : "모든 세션을 끝냈어."}
+            </p>
+          )}
         </div>
 
         {device !== null && device !== "pc" && !standalone && (
@@ -119,35 +171,31 @@ export default function Dashboard({ lessons }: DashboardProps) {
           레슨
         </h2>
         <ol className={styles.list}>
-          {ordered.map((lesson) => {
-            const state = progress?.lessons[lesson.key];
-            const done =
-              state?.status === "done"
-                ? lesson.sessions.length
-                : (state?.checked.filter((id) => lesson.sessions.some((s) => s.id === id)).length ?? 0);
-            const status = state?.status ?? "todo";
-            const visited = formatDate(state?.lastVisited);
-            return (
-              <li key={lesson.key}>
-                <a className={styles.row} href={lesson.href}>
-                  <span className={styles.week}>{lesson.key.slice(1)}</span>
-                  <span className={styles.rowMain}>
-                    <span className={styles.rowTitle}>{lesson.title}</span>
-                    <span className={styles.rowMeta}>
-                      {lesson.units}단위 · 세션 {done}/{lesson.sessions.length}
-                      {progress && ` · ${STATUS_TEXT[status]}`}
-                      {visited && ` · ${visited}`}
-                    </span>
-                    <span className={styles.bar} aria-hidden="true">
-                      <span style={{ width: `${(done / lesson.sessions.length) * 100}%` }} />
-                    </span>
-                  </span>
-                </a>
-              </li>
-            );
-          })}
+          {roadmap.core.map((row) =>
+            row.kind === "lesson" ? (
+              <LessonRow key={row.key} lesson={row.lesson} progress={progress} />
+            ) : (
+              <PlannedRow key={row.key} lessonKey={row.key} planned={row.planned} />
+            ),
+          )}
         </ol>
       </section>
+
+      {roadmap.optional.length > 0 && (
+        <section aria-labelledby="optional-heading">
+          <h2 id="optional-heading" className={styles.listHeading}>
+            선택 레슨
+          </h2>
+          <p className={styles.listNote}>
+            이직 목표(센서 시뮬레이션·3D 재구성)에는 필요 없는 SLAM 뒤쪽 절반이다. 이직 뒤나 여유가 생기면 본다.
+          </p>
+          <ol className={styles.list}>
+            {roadmap.optional.map((lesson) => (
+              <LessonRow key={lesson.key} lesson={lesson} progress={progress} />
+            ))}
+          </ol>
+        </section>
+      )}
     </div>
   );
 }

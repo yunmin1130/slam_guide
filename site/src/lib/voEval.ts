@@ -88,7 +88,7 @@ export function matToQuat(R: Mat3): [number, number, number, number] {
 
 /**
  * 추정 궤적을 TUM 궤적 파일 형식으로: 줄마다 "시각 tx ty tz qx qy qz qw" (T_wc, 스케일은 VO 그대로).
- * 12주차 evo(evo_ape tum gt.txt est.txt -as)로 같은 ATE를 다시 계산할 수 있다.
+ * 22주차 evo(evo_ape tum gt.txt est.txt -as)로 같은 ATE를 다시 계산할 수 있다.
  */
 export function toTumTrajectory(times: readonly number[], poses: readonly (SE3 | null)[]): string {
   const f = (v: number): string => v.toFixed(6);

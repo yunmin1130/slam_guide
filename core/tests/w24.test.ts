@@ -1,5 +1,5 @@
 /**
- * 14주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
+ * 24주차 테스트. 제목 구조는 강제 규칙이다 (LESSON_TEMPLATE §4):
  *   describe(구현) > describe("<함수명>") > it("기본|경계|수치: …")
  * - 원운동은 해석해(위치·속도·자세)가 있어서 적분 오차를 정확히 잴 수 있다.
  * - 사전적분은 손코딩 함수(integrateIMU)에 기대지 않으려고, 비교용 오일러 적분을 테스트 안에서 따로 돌린다.
@@ -7,13 +7,13 @@
  */
 import { describe, expect, it } from "vitest";
 import { expSO3, logSO3 } from "../reference/w03";
-import { preintegrate as refPreintegrate } from "../reference/w14";
+import { preintegrate as refPreintegrate } from "../reference/w24";
 import { IMPL, loadImpl } from "./loadImpl";
 import { createRng, type Rng } from "./rng";
 import type { ImuBias, ImuSample, Mat3, NavState, Vec3 } from "../types";
 
-type W14 = typeof import("../reference/w14");
-const m = await loadImpl<W14>("w14");
+type W24 = typeof import("../reference/w24");
+const m = await loadImpl<W24>("w24");
 
 const G: Vec3 = [0, 0, -9.81];
 const I3: Mat3 = [

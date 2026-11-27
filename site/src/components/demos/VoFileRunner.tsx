@@ -1,7 +1,7 @@
 /**
  * 11d "TUM으로 VO 돌리기": datasets/tum_tracks.py가 만든 트랙 JSON을 열어 내 vo를 돌리고 정답과 비교한다 (M1 리포트).
  * - 파일은 브라우저 안에서만 읽는다 (저장·업로드 안 함). vo는 워커에서 돌린다 (lib/voClient.ts).
- * - 결과: 궤적 그림, ATE·RPE, TUM 궤적 파일 내려받기 (12주차 evo로 다시 계산할 수 있게).
+ * - 결과: 궤적 그림, ATE·RPE, TUM 궤적 파일 내려받기 (22주차 evo로 다시 계산할 수 있게).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AteResult, RpeResult, SE3, Vec3 } from "@core/types";

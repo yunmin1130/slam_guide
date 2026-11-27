@@ -5,7 +5,7 @@
 ## 1. 파일 위치와 이름
 
 - 위치: `site/src/content/lessons/`
-- 이름: `w{주차 두 자리}-{영문 슬러그}.mdx` (예: `w04-pinhole-camera.mdx`)
+- 이름: `w{주차 두 자리}-{영문 슬러그}.mdx` (예: `w04a-pinhole-camera.mdx`)
 - 과제 함수 위치는 주차로 정해진다: `core/{mine,reference}/w{NN}.ts`, `core/tests/w{NN}.test.ts` (ARCHITECTURE §3)
 - 파트가 여러 개인 주차(7a/7b, 11a~d 등)는 **파트마다 MDX 파일(페이지) 하나**로 나눈다 (2026-11-01 결정). 그래서 한 페이지에 데모(core 함수를 쓰고 토글이 있는 것)는 최대 하나다. 개념 그림(§3 ①)은 개수 제한이 없다.
   - 이름: `w07a-{슬러그}.mdx`, `w07b-{슬러그}.mdx`. frontmatter에는 `week: 7` 그대로 두고 `part: a`를 붙인다.
@@ -28,6 +28,7 @@ read_only: [undistort, unprojectFisheye]  # 읽기만 함수 (mine은 reference 
 deliverables: []            # 함수가 아닌 산출물 (리딩 노트, 실험 스크립트 등)
 demo: ProjectionDemo        # 없으면 생략
 jetbot: true                # JetBot 실습 포함 여부
+track: core                 # 생략하면 core. optional = 선택 레슨 (21~28주차, 대시보드의 "선택 레슨" 구역)
 units: 2                    # 예상 단위 (1단위 ≈ 5시간, CURRICULUM 표와 일치)
 sessions:                   # 45분 안팎 세션. id는 진도 저장(checked)에 쓴다. 지운 id는 다시 쓰지 않는다 (예전 진도가 엉뚱한 세션에 붙지 않게)
   - { id: s1, device: phone, title: "개념: 핀홀 투영" }
@@ -48,7 +49,7 @@ sessions:                   # 45분 안팎 세션. id는 진도 저장(checked)�
 - `units` × 5시간 ≈ 세션 수 × 45분이 되도록 세션을 잡는다. 손코딩 함수 하나는 최소 "구현 → 디버그" 세션 2개다.
 - `device`는 `phone | pad | pc`. 대시보드는 **지금 쓰는 기기에서 할 수 있는 다음 세션**을 보여준다 (폰으로 들어왔는데 다음 할 일이 PC 손코딩이면 폰 세션을 대신 제시).
 - `tasks`와 `read_only`의 이름은 `core/mine/w{NN}.ts`의 함수명과 정확히 일치해야 한다. `read_only` 함수는 mine에서 **reference를 re-export**한다 (ARCHITECTURE §5). TODO 스텁으로 두면 그 함수를 부르는 mine 함수가 깨진다.
-- 17주차 리딩 노트, 18주차 캡스톤 실험 스크립트처럼 함수가 아닌 산출물은 `tasks`가 아니라 `deliverables`에 적는다.
+- 27주차 리딩 노트, 28주차 캡스톤 실험 스크립트처럼 함수가 아닌 산출물은 `tasks`가 아니라 `deliverables`에 적는다.
 - 진도(`status`, 완료 세션)는 frontmatter가 아니라 저장 계층(ARCHITECTURE §7)에 둔다.
 - 대시보드는 이 메타데이터를 모아 자동 생성된다. "다음 세션"은 `sessions` 순서에서 아직 완료하지 않은 항목 중 현재 기기에 맞는 첫 항목이다.
 

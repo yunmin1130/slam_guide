@@ -3,18 +3,22 @@
 import Base from "../layouts/Base.astro";
 import Dashboard from "../components/Dashboard";
 import { getLessons, toLessonMeta } from "../lib/lessons";
+import { PLANNED } from "../lib/roadmap";
 
 const lessons = (await getLessons()).map(toLessonMeta);
-const totalUnits = lessons.reduce((sum, l) => sum + l.units, 0);
+const core = lessons.filter((l) => l.track === "core");
+const coreUnits = core.reduce((sum, l) => sum + l.units, 0) + PLANNED.reduce((sum, p) => sum + p.units, 0);
 ---
 
 <Base title="SLAM 학습">
   <header class="hero">
-    <span class="eyebrow">손으로 짜는 Visual SLAM</span>
+    <span class="eyebrow">카메라 기하에서 3D 재구성·센서 시뮬레이션까지</span>
     <h1>오늘 할 세션 하나만.</h1>
-    <p class="lede">레슨 {lessons.length}개 · {totalUnits}단위. 수학은 직접 짜고, 그림은 사이트가 그린다.</p>
+    <p class="lede">
+      핵심 레슨 {core.length + PLANNED.length}개(준비 중 {PLANNED.length}개) · {coreUnits}단위. 수학은 직접 짜고, 그림은 사이트가 그린다.
+    </p>
   </header>
-  <Dashboard client:load lessons={lessons} />
+  <Dashboard client:load lessons={lessons} planned={PLANNED} />
 </Base>
 
 <style>
