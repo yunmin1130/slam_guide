@@ -15,7 +15,7 @@ sessions:
   - { id: s3, device: phone, title: "LA 박스: 거리 척도" }
   - { id: s4, device: pad, title: "손으로 해밍 거리, 비율 검사, KLT 식" }
   - { id: s5, device: pc, title: "과제: ratioTest 구현·테스트 통과" }
-  - { id: s6, device: pc, title: "JetBot: 집 안 주행 녹화, 표준 시퀀스로 변환" }
+  - { id: s6, device: pc, title: "카메라: 방 한 바퀴 녹화, 표준 시퀀스로 변환" }
   - { id: s7, device: phone, title: "체크 질문" }
 ---
 
@@ -55,7 +55,7 @@ $$
 
 1위와 2위가 비슷하면 "둘 중 어느 것인지 모르는" 애매한 점이라 버린다. 로우의 실험에서 $r = 0.8$은 틀린 짝의 약 90%를 버리면서 맞는 짝은 5% 남짓만 잃었다. 남은 틀린 짝은 5주차 RANSAC이 걸러낸다.
 
-양쪽 방향으로 매칭해서 서로가 서로의 1위인 짝만 남기는 교차 검사(cross check)도 자주 같이 쓴다. 비율 검사가 "확실한가"를 본다면, 교차 검사는 "서로 동의하는가"를 본다.
+양쪽 방향으로 매칭해서 서로가 서로의 1위인 짝만 남기는 교차 검사(cross check)도 자주 같이 쓴다. 비율 검사가 "확실한가"를 본다면, 교차 검사는 "서로 동의하는가"를 본다. COLMAP의 매칭도 비율 검사(기본 0.8)와 교차 검사를 쓴다.
 
 ### KLT: 디스크립터 없이 따라가기
 
@@ -71,7 +71,7 @@ $$
 
 왼쪽 $2 \times 2$ 행렬은 해리스 코너의 그 행렬이다. 고윳값이 둘 다 커야 풀리므로, KLT가 잘 따라가는 점이 곧 코너다(Shi–Tomasi "좋은 특징점"). 움직임이 크면 피라미드의 가장 작은 층에서 먼저 $d$를 구하고, 그 $d$를 2배 해서 한 단계 큰 층의 시작값으로 쓴다.
 
-VINS-Mono 같은 VIO(시각-관성 오도메트리, visual-inertial odometry, 선택 24주차)는 KLT로 빠르게 따라가고, ORB-SLAM은 ORB 디스크립터로 맞춘다. 디스크립터는 오래 떨어진 프레임(루프 클로저, 선택 21주차)에서도 짝을 찾을 수 있다는 장점이 있다.
+VINS-Mono 같은 VIO(시각-관성 오도메트리, visual-inertial odometry, 선택 24주차)는 KLT로 빠르게 따라가고, ORB-SLAM은 ORB 디스크립터로 맞춘다. 디스크립터는 오래 떨어진 프레임(루프 클로저, 선택 21주차)에서도 짝을 찾을 수 있다는 장점이 있다. 사진 여러 장으로 장면을 복원하는 SfM(structure from motion, COLMAP 등)은 사진 사이 움직임이 커서 KLT가 아니라 디스크립터 매칭을 쓴다.
 
 <SessionBreak id="s2" />
 
@@ -81,6 +81,8 @@ VINS-Mono 같은 VIO(시각-관성 오도메트리, visual-inertial odometry, �
   **기하학적 의미:** L2는 공간에서의 직선 거리, 코사인은 두 방향 사이의 각도만 본다. 크기를 1로 맞춘 벡터에서는 $\lVert a - b \rVert^2 = 2 - 2\,a \cdot b$라 둘이 같은 순서를 준다. 해밍 거리는 비트를 하나씩 바꿔 가며 같아질 때까지의 걸음 수다.
 
   **SLAM에서:** ORB 같은 바이너리 디스크립터는 해밍 거리를 쓴다. XOR 한 번과 1인 비트 세기(popcount)로 끝나 아주 빠르다. SIFT와 신경망으로 학습한 디스크립터(SuperPoint 등)는 L2나 코사인을 쓴다. 선택 21주차 BoW는 디스크립터를 단어로 묶을 때 같은 거리를 쓴다.
+
+  **3DGS·SfM에서:** COLMAP은 SIFT 디스크립터(128차원)를 RootSIFT로 정규화하고, 단위 벡터 사이의 거리(L2와 같은 순위)로 짝을 찾는다. 0주차에 돌린 COLMAP의 매칭 단계가 이것이다.
 
   **이전 레슨:** [1주차 내적과 노름](../w01-vectors/)
 </LABox>
@@ -136,11 +138,11 @@ VINS-Mono 같은 VIO(시각-관성 오도메트리, visual-inertial odometry, �
 
 <SessionBreak id="s5" />
 
-### JetBot 실습: 집 안 주행 데이터셋 만들기
+### 카메라 실습: 방 한 바퀴 영상을 표준 시퀀스로 바꾸기
 
-11주차 VO와 캡스톤에 쓸 주행 영상을 찍기 시작한다. 이번 주에는 한두 개만 찍어 표준 시퀀스 폴더로 바꿔 둔다.
+방을 한 바퀴 돌며 찍은 영상 하나를 표준 시퀀스 폴더로 바꾸고, 이번 주에 배운 매칭이 내 영상에서 어떻게 나오는지 확인한다. JetBot이 없으면 5주차처럼 아이폰 0.5× 초광각으로 찍고 `calib-iphone.json`을 쓴다. 아래 명령은 JetBot(선택) 기준이고, 아이폰으로 찍을 때 바꿀 것은 이 절 끝에 있다.
 
-**녹화.** 4주차 녹화 명령([DATA 문서 §4](https://github.com/yunmin1130/slam_guide/blob/main/docs/DATA.md#4-jetbot-수집-규칙))으로 `location=home-square-slow-01.mp4`처럼 이름을 붙여 찍는다. 무늬가 많은 방에서 바닥에 테이프로 1m×1m 사각형을 붙이고, JetBot을 천천히 한 바퀴 돌려 출발점으로 돌아온다(손으로 밀어도 된다). 녹화가 끝나면 mp4를 PC로 옮긴다(`scp`나 Jupyter 파일 목록에서 내려받기).
+**녹화.** JetBot(선택)이면 4주차 녹화 명령([DATA 문서 §4](https://github.com/yunmin1130/slam_guide/blob/main/docs/DATA.md#4-jetbot-수집-규칙))으로 `location=home-square-slow-01.mp4`처럼 이름을 붙여 찍는다. 무늬가 많은 방에서 바닥에 테이프로 1m×1m 사각형을 붙이고, 카메라를 천천히 한 바퀴 돌려 출발점으로 돌아온다(JetBot이면 손으로 밀어도 된다). 녹화가 끝나면 mp4를 PC로 옮긴다(`scp`나 Jupyter 파일 목록에서 내려받기).
 
 이름은 `{장소}-{경로}-{조건}-{번호}`(소문자·숫자)다. 평가 방법은 출발점으로 돌아오기만 하면 `return-to-start`, 사각형 모서리를 줄자로 쟀으면 `measured-square`다(DATA §4). 이번처럼 1m를 재서 테이프를 붙였으면 `measured-square`를 쓴다.
 
@@ -162,7 +164,7 @@ python datasets/jetbot_to_std.py
 - 30fps 영상이면 기본(3장마다 1장)으로 10fps가 된다. `timestamps.txt`의 간격이 0.1초(100000000)인가?
 - 같은 영상의 30번과 40번 프레임으로 5주차 대응점 스크립트를 돌려 본다(`--video`에 같은 mp4, `--frames 30 40`). 대응점이 몇 개인가? `--ratio 0.6`을 붙이면 몇 개로 줄어드나? 스크립트는 OpenCV로 같은 비율 검사를 한다.
 
-**JetBot이 아직 준비되지 않았으면:** 4주차처럼 아이폰 0.5× 초광각(렌즈 보정 끄기)으로 같은 경로를 찍는다. 아이폰은 보통 60fps라 `--every 6`이어야 10fps가 된다.
+**아이폰으로 찍을 때:** 4주차에 `calib-iphone.json`을 만든 것과 같은 0.5× 초광각(렌즈 보정 끄기)·같은 해상도로 같은 경로를 찍는다. 아이폰은 보통 60fps라 `--every 6`이어야 10fps가 된다.
 
 ```text
 python datasets/jetbot_to_std.py

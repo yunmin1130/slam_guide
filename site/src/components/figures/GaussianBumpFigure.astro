@@ -1,0 +1,140 @@
+---
+/**
+ * 4b주차 정적 그림: 2D 가우시안의 등고선 (1σ, 2σ) 두 가지.
+ * 왼쪽: Σ = diag(4, 1) — 반축 2와 1. 가운데 (82, 104), 18px/1.
+ * 오른쪽: Σ = (1/25)[[52, 36], [36, 73]] — 같은 타원을 (0.6, 0.8) 방향으로 돌린 것. 가운데 (240, 104), 18px/1.
+ * y축은 위가 +라서 SVG에서는 부호를 뒤집는다 ((0.6, 0.8) 방향 = rotate(−53.13°)). 픽셀 좌표(v 아래)와 반대라는 것은 본문이 말한다.
+ * 색: 파랑 = 첫째 고유벡터(긴 축), 보라 = 둘째 고유벡터(짧은 축). 2주차 그림과 같은 규칙.
+ * 글자는 viewBox 13 이상 (393px 화면에서 약 14.7px). 타원 선 위에 걸치는 글자는 배경색 테두리(halo)로 읽히게 한다.
+ */
+---
+
+<figure class="gb-figure" aria-label="2D 가우시안 두 개의 등고선. 왼쪽은 가로 반축 2, 세로 반축 1인 타원. 오른쪽은 같은 타원을 (0.6, 0.8) 방향으로 돌린 것. 1시그마 타원 위의 가중치는 0.61, 2시그마 타원 위는 0.14">
+  <svg viewBox="0 0 320 184" aria-hidden="true">
+    <text class="head" x="82" y="20" text-anchor="middle">Σ = diag(4, 1)</text>
+    <text class="head" x="240" y="20" text-anchor="middle">돌린 타원</text>
+
+    <!-- 왼쪽: 축에 나란한 타원 -->
+    <line class="grid" x1="6" y1="104" x2="158" y2="104"></line>
+    <line class="grid" x1="82" y1="36" x2="82" y2="172"></line>
+    <ellipse class="s2" cx="82" cy="104" rx="72" ry="36"></ellipse>
+    <ellipse class="s1" cx="82" cy="104" rx="36" ry="18"></ellipse>
+    <line class="ax1" x1="82" y1="104" x2="118" y2="104"></line>
+    <line class="ax2" x1="82" y1="104" x2="82" y2="86"></line>
+    <circle class="pt" cx="82" cy="104" r="3.5"></circle>
+    <circle class="pt" cx="118" cy="104" r="3.5"></circle>
+    <circle class="pt" cx="154" cy="104" r="3.5"></circle>
+    <circle class="pt" cx="82" cy="86" r="3.5"></circle>
+    <text class="val" x="76" y="116" text-anchor="end">1</text>
+    <text class="val" x="124" y="124">0.61</text>
+    <text class="val" x="152" y="96" text-anchor="end">0.14</text>
+    <text class="val" x="88" y="62">0.61</text>
+    <line class="lead" x1="86" y1="65" x2="83" y2="83"></line>
+
+    <!-- 오른쪽: (0.6, 0.8) 방향으로 돌린 타원 -->
+    <line class="grid" x1="168" y1="104" x2="314" y2="104"></line>
+    <line class="grid" x1="240" y1="36" x2="240" y2="172"></line>
+    <ellipse class="s2" cx="240" cy="104" rx="72" ry="36" transform="rotate(-53.13 240 104)"></ellipse>
+    <ellipse class="s1" cx="240" cy="104" rx="36" ry="18" transform="rotate(-53.13 240 104)"></ellipse>
+    <line class="ax1" x1="240" y1="104" x2="261.6" y2="75.2"></line>
+    <line class="ax2" x1="240" y1="104" x2="225.6" y2="93.2"></line>
+    <circle class="pt" cx="240" cy="104" r="3.5"></circle>
+    <circle class="pt" cx="261.6" cy="75.2" r="3.5"></circle>
+    <circle class="pt" cx="225.6" cy="93.2" r="3.5"></circle>
+    <text class="lab1" x="314" y="66" text-anchor="end">(1.2, 1.6)</text>
+    <text class="lab2" x="218" y="150" text-anchor="end">(−0.8, 0.6)</text>
+    <line class="lead" x1="212" y1="138" x2="224" y2="97"></line>
+  </svg>
+  <figcaption>
+    진한 타원 = 중심에서 1σ(가중치 0.61), 바깥 타원 = 2σ(가중치 0.14). 파랑 = 긴 축(첫째 고유벡터), 보라 = 짧은 축(둘째 고유벡터). 왼쪽에서는 (2, 0)과 (0, 1)이 같은 값 0.61이다. 오른쪽은 왼쪽 타원을 돌렸을 뿐이라, 두 축 끝 점의 가중치도 똑같이 0.61이다.
+  </figcaption>
+</figure>
+
+<style>
+  .gb-figure {
+    --c-1: #2d63c8;
+    --c-2: #8a46c4;
+    --c-g: #d96a12;
+    --s2-fill: 12%;
+    --s2-stroke: 55%;
+    margin: var(--space-4) 0 var(--space-6);
+    display: grid;
+    gap: var(--space-2);
+  }
+  @media (prefers-color-scheme: dark) {
+    /* 어두운 배경에서는 바깥 2σ 채움이 진한 갈색으로 묻혀서 더 밝게 섞는다 */
+    .gb-figure {
+      --c-1: #82a9f5;
+      --c-2: #c79bf2;
+      --c-g: #f5a05a;
+      --s2-fill: 26%;
+      --s2-stroke: 80%;
+    }
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 300px;
+    background: var(--paper-sunken);
+    border-radius: var(--radius-sm);
+  }
+  .head {
+    fill: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .grid {
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .s2 {
+    fill: color-mix(in srgb, var(--c-g) var(--s2-fill), transparent);
+    stroke: color-mix(in srgb, var(--c-g) var(--s2-stroke), transparent);
+    stroke-width: 1.2;
+  }
+  .s1 {
+    fill: color-mix(in srgb, var(--c-g) 28%, transparent);
+    stroke: var(--c-g);
+    stroke-width: 2.5;
+  }
+  .ax1 {
+    stroke: var(--c-1);
+    stroke-width: 3;
+  }
+  .ax2 {
+    stroke: var(--c-2);
+    stroke-width: 3;
+  }
+  .lead {
+    stroke: var(--ink-soft);
+    stroke-width: 1;
+  }
+  .pt {
+    fill: var(--ink);
+  }
+  /* 타원 선 위에 걸쳐도 읽히게 배경색 테두리 */
+  .val,
+  .lab1,
+  .lab2 {
+    font-size: 13px;
+    font-weight: 700;
+    paint-order: stroke;
+    stroke: var(--paper-sunken);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+  .val {
+    fill: var(--ink);
+  }
+  .lab1 {
+    fill: var(--c-1);
+  }
+  .lab2 {
+    fill: var(--c-2);
+  }
+  figcaption {
+    font-size: var(--text-sm);
+    color: var(--ink-soft);
+  }
+</style>

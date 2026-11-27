@@ -95,6 +95,20 @@ const initialSource = mineText === undefined ? "" : normalizeNewlines(mineText);
     box-shadow: none;
     border-style: dashed;
   }
+  /* 카드 → 접기 → 코드로 세 번 들여 쌓이면 폰(393px)에서 코드 폭이 290px까지 줄어 줄이 잘게 쪼개진다.
+     읽기 카드는 안쪽 여백을 줄여 코드에 폭을 돌려준다 */
+  @media (max-width: 480px) {
+    .task[data-readonly] {
+      padding: var(--space-3) var(--space-2);
+    }
+    .task[data-readonly] .fold-body {
+      padding: 0 var(--space-1) var(--space-2);
+    }
+    .task[data-readonly] .fold-body :global(pre) {
+      padding-left: var(--space-2);
+      padding-right: var(--space-2);
+    }
+  }
   .task-head {
     display: grid;
     grid-template-columns: 1fr auto;

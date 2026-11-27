@@ -1,10 +1,10 @@
 /**
- * 특징점 트랙 JSON 읽기 (11d "TUM으로 VO 돌리기"). datasets/tum_tracks.py가 만든 파일, 형식은 DATA §2 tracks.
+ * 특징점 트랙 JSON 읽기 (11d 실행기). datasets/colmap_tracks.py(내 사진의 COLMAP 결과)나 tum_tracks.py(TUM RGB-D)가 만든 파일, 형식은 DATA §2 tracks.
  * 외부 입력이라 모양을 엄격히 확인하고, 틀리면 무엇이 틀렸는지 한국어로 알려주는 예외를 던진다.
  */
 import type { Feature, Intrinsics, Mat3, SE3 } from "@core/types";
 
-/** tum_tracks.py와 같은 상한 (폰 메모리·계산 시간) */
+/** colmap_tracks.py·tum_tracks.py와 같은 상한 (폰 메모리·계산 시간) */
 export const MAX_FRAMES = 2000;
 export const MAX_FEATURES = 2000;
 /** 파일 전체 특징점 수 상한 (객체로 펼치면 수백 MB가 되지 않게). 800프레임 × 300개 = 24만 */
@@ -21,8 +21,10 @@ export interface TracksFile {
   /** 프레임 시각 (초) */
   readonly times: readonly number[];
   readonly frames: readonly (readonly Feature[])[];
-  /** 프레임마다 정답 자세 T_world_cam (없으면 null) */
+  /** 프레임마다 비교할 자세 T_world_cam (없으면 null). TUM은 모션캡처 정답, COLMAP 파일은 COLMAP이 구한 자세 */
   readonly groundtruth: readonly (SE3 | null)[];
+  /** groundtruth의 출처. colmap이면 정답이 아니라 기준이고 길이 단위가 미터가 아니다 */
+  readonly reference: "groundtruth" | "colmap";
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -92,7 +94,7 @@ export function parseTracks(text: string): TracksFile {
     throw new Error("트랙 파일이 올바른 JSON이 아니다");
   }
   if (!isObject(data)) throw new Error("트랙 파일의 최상위가 객체가 아니다");
-  if (data.format !== FORMAT) throw new Error(`트랙 파일이 아니다 (format이 "${FORMAT}"이어야 한다, datasets/tum_tracks.py로 만든다)`);
+  if (data.format !== FORMAT) throw new Error(`트랙 파일이 아니다 (format이 "${FORMAT}"이어야 한다, datasets/colmap_tracks.py나 tum_tracks.py로 만든다)`);
   if (data.version !== VERSION) throw new Error(`모르는 트랙 파일 버전이다 (${String(data.version)})`);
   const camera = parseCamera(data.camera);
   const { frames, groundtruth } = data;
@@ -112,5 +114,6 @@ export function parseTracks(text: string): TracksFile {
     times,
     frames: frames.map((f: unknown, k) => parseFeatures((f as Record<string, unknown>).features, k)),
     groundtruth: groundtruth.map((g: unknown, k) => parsePose(g, k)),
+    reference: data.source === "colmap" ? "colmap" : "groundtruth",
   };
 }

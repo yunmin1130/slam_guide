@@ -1,0 +1,1021 @@
+---
+week: 13
+title: 코드 리딩과 작은 수정
+summary: 실제 3DGS 렌더러(gsplat CUDA 래스터라이저 또는 3DGRT)를 4b주차 수식에 대응시키며 읽고, 작은 수정 하나를 전후 수치와 함께 커밋해 최근 GPU 작업의 근거로 남긴다
+prereq: [w04b, w12]
+la_box: []
+tasks: []
+read_only: []
+deliverables:
+  - "리딩 노트: 렌더러 단계별 파일·함수와 4b주차 수식 대응표, 질문과 답"
+  - "수정 커밋: 내 포크의 작은 변경 하나 (diff, 전후 PSNR·시간)"
+  - "README 한 문단: 무엇을 왜 바꿨고 어떻게 검증했나"
+jetbot: false
+units: 3
+sessions:
+  - { id: s1, device: phone, title: "개념: 왜 읽고 고치나, 래스터라이저 다섯 단계" }
+  - { id: s3, device: phone, title: "개념: 3DGRT·3DGUT, 트랙 고르기" }
+  - { id: s5, device: pc, title: "준비: 포크, 개발용 환경, 소스 빌드 확인" }
+  - { id: s15, device: pc, title: "준비: 기준선 3회와 노트 시작" }
+  - { id: s6, device: pc, title: "트랙 B 판정 ①~③: 설치하고 학습 시작" }
+  - { id: s16, device: pc, title: "트랙 B 판정 ④: 다음 날 결과 확인" }
+  - { id: s7, device: pc, title: "리딩 1: 투영, 블러 항, 컬링" }
+  - { id: s8, device: pc, title: "리딩 2: 타일 분할, 키, 정렬" }
+  - { id: s9, device: pc, title: "리딩 3: 타일별 알파 합성 (순방향)" }
+  - { id: s10, device: pc, title: "리딩 4: 역방향 패스" }
+  - { id: s11, device: phone, title: "수정: 후보 고르기와 가설" }
+  - { id: s12, device: pc, title: "수정 ⓪: 리셋 버그 재현과 수정" }
+  - { id: s17, device: pc, title: "수정 ⓪: 측정 실행" }
+  - { id: s13, device: pc, title: "수정 ⓪: 판정과 커밋 정리" }
+  - { id: s18, device: pc, title: "수정 ②: 조기 종료 값 상수화" }
+  - { id: s19, device: pc, title: "수정 ②: 측정 실행" }
+  - { id: s20, device: pc, title: "수정 ②: 판정과 커밋" }
+  - { id: s14, device: phone, title: "14주차 연결과 체크 질문" }
+---
+
+## 개념
+
+이번 주를 마치면 "3DGS 렌더러 코드를 직접 읽고 고쳐 봤다"를 커밋 링크로 보여 줄 수 있다. 새 함수를 손코딩하지 않는다. 산출물은 리딩 노트, 작은 수정 커밋 하나, README 한 문단이다.
+
+목적은 CUDA 경력의 공백을 메우는 것이다. 옛 연구 논문의 CUDA 경험은 "최근에 무엇을 했나"라는 질문에 약하다. 공개 렌더러에 수정을 넣고 전후 수치를 잰 기록은 그 질문에 바로 답이 된다.
+
+### 큰 코드를 읽는 법
+
+입구 하나에서 출발해 프레임 한 장이 그려질 때까지의 길만 따라간다. 처음 보는 함수는 이름과 입출력만 적고 넘어가며, 4b주차 수식과 이어지는 곳에서만 깊이 읽는다. 나중에 선택 27주차(ORB-SLAM3 리딩)에서도 같은 방법을 쓴다.
+
+노트에는 질문을 먼저 적고 코드에서 답을 찾는다. 아래 리딩 절마다 질문을 2~3개씩 준다. 답에는 파일 이름과 줄 번호를 같이 적는다.
+
+<strong>주의:</strong> 파일 이름과 함수 이름은 버전마다 바뀐다. 이 레슨의 경로는 아래 커밋에서 직접 읽어 확인한 것이다. 내가 받은 커밋에서 이름이 다르면 함수 이름으로 전체 검색한다.
+
+- gsplat 태그 `v1.5.3`: 커밋 `937e299`, 2025-07-04. 이 레슨의 기준이다.
+- gsplat `main`: 커밋 `512d366`, 2026-09-19. 바뀐 점 비교용.
+- 3dgrut: 커밋 `dfd3d54`, 2026-11-06. 트랙 B용.
+
+gsplat과 3dgrut의 라이선스는 Apache-2.0이다. 원조 3DGS 래스터라이저(diff-gaussian-rasterization 저장소)는 비상업 연구용 라이선스라 비교용으로 읽기만 한다. 수정 커밋은 gsplat이나 3dgrut 포크에 남긴다.
+
+### 한 프레임의 길 (gsplat)
+
+입구는 `gsplat/rendering.py`의 `rasterization()`이다. 이 함수가 CUDA 연산 네 개를 차례로 부른다. 이름은 `gsplat/cuda/_wrapper.py`에 있는 파이썬 쪽 함수다.
+
+1. `fully_fused_projection`: 가우시안마다 2D 평균, 2D 공분산의 역행렬, 반지름, 깊이를 구한다.
+2. `isect_tiles`: 가우시안이 닿는 타일마다 (키, 가우시안 번호) 쌍을 만들고 정렬한다.
+3. `isect_offset_encode`: 정렬된 목록에서 타일마다 시작 위치를 찾는다.
+4. `rasterize_to_pixels`: 타일 안의 픽셀마다 앞에서부터 알파 합성한다.
+
+학습할 때는 4번과 1번의 역방향 커널이 거꾸로 불린다. 손실의 기울기가 픽셀에서 2D 값으로, 다시 3D 가우시안으로 내려간다.
+
+### 다섯 단계와 4b주차
+
+4b주차에서 손으로 본 식은 하나였다. 3D 공분산 $\Sigma$를 카메라로 돌리고($W$), 투영의 야코비안($J$)으로 눌러 2D 공분산을 만든다.
+
+$$
+\Sigma' = J\,W\,\Sigma\,W^\top J^\top
+$$
+
+코드는 이 식 앞뒤에 "빨리 그리기 위한 장치"를 붙인 것이다. 아래 표가 이번 주 리딩의 지도다.
+
+| 단계 | 4b주차의 무엇 | 그래픽스에서 닮은 것 |
+| --- | --- | --- |
+| 투영 | $J W \Sigma W^\top J^\top$ | 정점 셰이더 |
+| 컬링 | (없음) | 절두체·작은 삼각형 컬링 |
+| 타일 분할 | (없음) | 타일 기반 라이트 비닝 |
+| 정렬 | 깊이 순서 | 반투명 정렬 |
+| 합성 | 알파 합성 | 앞→뒤 블렌딩 |
+
+다섯 단계는 위의 CUDA 연산 네 개에 이렇게 담긴다. 투영과 컬링은 1번 하나가, 타일 분할과 정렬은 2번 하나가, 합성은 4번이 한다. 3번은 정렬된 목록에 타일 경계를 적어 두는 보조 단계다.
+
+**타일 분할.** 화면을 16×16 픽셀 타일로 나누고, 타원마다 닿는 타일 목록을 만든다. 이것을 타일 분할(비닝, binning)이라 한다. 타일 기반 디퍼드 렌더링에서 광원을 타일에 나눠 담는 것과 같은 발상이고, 픽셀은 자기 타일에 담긴 가우시안만 보면 된다.
+
+**정렬.** 반투명 물체는 순서대로 겹쳐야 한다. 3DGS는 픽셀마다 정렬하지 않고, (타일 번호, 깊이)를 한 정수 키로 묶어 화면 전체를 한 번에 기수 정렬(radix sort)한다. 정렬이 끝나면 같은 타일의 가우시안이 깊이 순서로 붙어 있다.
+
+**정렬은 근사다.** 깊이는 가우시안 중심의 값 하나라, 크고 길쭉한 가우시안 둘이 엇갈리면 픽셀마다 실제 앞뒤가 다를 수 있다. 카메라를 돌리다 두 중심의 깊이가 뒤바뀌는 순간 색이 툭 바뀌는 현상을 팝핑(popping)이라 한다. 리딩 2에서 이 키를 코드로 본다.
+
+**합성.** 타일 하나가 CUDA 스레드 블록 하나, 픽셀 하나가 스레드 하나다. 픽셀은 앞에서부터 색을 쌓다가 남은 투과율(transmittance) $T$가 거의 0이 되면 멈춘다. 불투명 물체의 깊이 테스트와 비슷한 효과를 내는 조기 종료다.
+
+### 숫자로 보기 ① 키 정렬
+
+타일 두 개와 가우시안 세 개를 놓는다. A는 깊이 2이고 타일 0과 1에 걸친다. B는 깊이 1이고 타일 1에만, C는 깊이 3이고 타일 0에만 있다.
+
+<figure style="margin: 1rem 0 1.5rem;">
+  <svg viewBox="0 0 320 214" role="img" aria-label="타일 0과 타일 1, 가우시안 A·B·C, 정렬 전과 정렬 후의 (타일, 이름, 깊이) 목록" style="display: block; width: 100%; height: auto; max-height: 300px; background: var(--paper-sunken); border-radius: 6px;">
+    <rect x="20" y="22" width="130" height="86" style="fill: var(--paper); stroke: var(--ink-soft); stroke-width: 1.5;" />
+    <rect x="150" y="22" width="130" height="86" style="fill: var(--paper); stroke: var(--ink-soft); stroke-width: 1.5;" />
+    <text x="26" y="17" style="fill: var(--ink); font-size: 12px; font-weight: 700;">타일 0</text>
+    <text x="156" y="17" style="fill: var(--ink); font-size: 12px; font-weight: 700;">타일 1</text>
+    <ellipse cx="70" cy="84" rx="26" ry="13" style="fill: #2d63c8; fill-opacity: 0.35; stroke: #2d63c8; stroke-width: 1.5;" />
+    <ellipse cx="150" cy="58" rx="44" ry="17" style="fill: #d2402c; fill-opacity: 0.35; stroke: #d2402c; stroke-width: 1.5;" />
+    <ellipse cx="236" cy="86" rx="24" ry="13" style="fill: #2f9a48; fill-opacity: 0.35; stroke: #2f9a48; stroke-width: 1.5;" />
+    <text x="56" y="88" style="fill: var(--ink); font-size: 11px;">C 3</text>
+    <text x="137" y="62" style="fill: var(--ink); font-size: 11px;">A 2</text>
+    <text x="223" y="90" style="fill: var(--ink); font-size: 11px;">B 1</text>
+    <text x="8" y="140" style="fill: var(--ink-soft); font-size: 11px;">정렬 전</text>
+    <rect x="62" y="126" width="54" height="22" style="fill: var(--paper); stroke: var(--ink-soft);" />
+    <rect x="120" y="126" width="54" height="22" style="fill: var(--paper); stroke: var(--ink-soft);" />
+    <rect x="178" y="126" width="54" height="22" style="fill: var(--paper); stroke: var(--ink-soft);" />
+    <rect x="236" y="126" width="54" height="22" style="fill: var(--paper); stroke: var(--ink-soft);" />
+    <text x="71" y="141" style="fill: var(--ink); font-size: 11px;">0·A·2</text>
+    <text x="129" y="141" style="fill: var(--ink); font-size: 11px;">1·A·2</text>
+    <text x="187" y="141" style="fill: var(--ink); font-size: 11px;">1·B·1</text>
+    <text x="245" y="141" style="fill: var(--ink); font-size: 11px;">0·C·3</text>
+    <text x="8" y="176" style="fill: var(--ink-soft); font-size: 11px;">정렬 후</text>
+    <rect x="62" y="162" width="54" height="22" style="fill: var(--paper); stroke: #2d63c8; stroke-width: 1.5;" />
+    <rect x="120" y="162" width="54" height="22" style="fill: var(--paper); stroke: #2d63c8; stroke-width: 1.5;" />
+    <rect x="178" y="162" width="54" height="22" style="fill: var(--paper); stroke: #2f9a48; stroke-width: 1.5;" />
+    <rect x="236" y="162" width="54" height="22" style="fill: var(--paper); stroke: #2f9a48; stroke-width: 1.5;" />
+    <text x="71" y="177" style="fill: var(--ink); font-size: 11px;">0·A·2</text>
+    <text x="129" y="177" style="fill: var(--ink); font-size: 11px;">0·C·3</text>
+    <text x="187" y="177" style="fill: var(--ink); font-size: 11px;">1·B·1</text>
+    <text x="245" y="177" style="fill: var(--ink); font-size: 11px;">1·A·2</text>
+    <text x="62" y="204" style="fill: var(--ink-soft); font-size: 11px;">타일 0은 0번부터</text>
+    <text x="178" y="204" style="fill: var(--ink-soft); font-size: 11px;">타일 1은 2번부터</text>
+  </svg>
+  <figcaption style="font-size: var(--text-sm); color: var(--ink-soft);">칸 하나가 (타일 번호·가우시안·깊이)다. A는 두 타일에 걸쳐 두 번 들어간다. 타일 번호가 키의 위쪽, 깊이가 아래쪽이라 한 번 정렬하면 타일별로 묶이고 그 안에서 깊이순이 된다.</figcaption>
+</figure>
+
+정렬 후 목록에서 타일 0의 시작 위치는 0번, 타일 1은 2번이다. 3번 연산(`isect_offset_encode`)이 만드는 `isect_offsets`가 바로 이 시작 위치 표 [0, 2]다. 타일 1의 픽셀은 2번부터 끝까지, 곧 B → A 순서로 합성한다.
+
+### 숫자로 보기 ② 조기 종료
+
+한 픽셀에 $\alpha = 0.9$인 가우시안이 계속 겹친다고 하자. 하나를 지날 때마다 $T$에 $(1 - 0.9) = 0.1$이 곱해진다.
+
+| 지난 가우시안 수 | $T$ |
+| --- | --- |
+| 0 | 1 |
+| 1, 2, 3 | 0.1, 0.01, 0.001 |
+| 4 | 0.0001 |
+
+gsplat 커널은 다음 $T$가 0.0001 이하가 되면 멈춘다. 그래서 넷째에서 멈추고, 그 뒤에 몇 개가 더 겹쳐 있든 읽지 않는다. 넷째를 합성에 넣는지는 리딩 3의 질문이다(값이 경계에 딱 걸려 실수 오차에 따라 하나 차이가 날 수 있다).
+
+### 숫자로 보기 ③ 역방향에서 T 되살리기
+
+$\alpha = 0.5$인 가우시안 셋을 지나면 끝에 남는 $T$는 $0.5^3 = 0.125$다. 순방향은 이 마지막 값만 저장한다.
+
+역방향은 뒤에서부터 거슬러 오며 $1/(1 - 0.5) = 2$를 곱한다. 0.125 → 0.25(셋째 앞) → 0.5(둘째 앞) → 1(첫째 앞)이다.
+
+가우시안마다 앞의 $T$를 저장하지 않아도 모두 되살아난다. 리딩 4에서 이 곱셈을 코드로 찾는다.
+
+<SessionBreak id="s1" />
+
+### 래스터라이저가 못 하는 것
+
+위 구조에는 가정이 하나 깔려 있다. "가우시안을 투영하면 화면에서도 타원이다"라는 가정이다. $J$는 가우시안 중심 한 점에서 구한 접선(1차 근사)이라, 투영이 그 근처에서 거의 직선적일 때만 맞는다.
+
+왜곡이 큰 렌즈에서는 타원이 바나나처럼 휜다. 중심에서 구한 $J$ 하나로는 이 모양을 표현할 수 없다.
+
+롤링셔터(rolling shutter)는 더 어렵다. 화면 행마다 카메라 자세가 달라서 "카메라 하나로 투영"이라는 전제가 깨진다.
+
+### 3DGRT: 가우시안을 레이트레이싱
+
+3DGRT(3D Gaussian Ray Tracing)는 투영을 하지 않는다. 픽셀마다 광선을 쏘고, 광선이 만나는 가우시안을 가까운 순서로 모아 합성한다. BVH와 광선 순회는 익숙한 영역이다.
+
+- **프록시 지오메트리(proxy geometry):** 가우시안은 삼각형이 아니다. 그래서 가우시안마다 그것을 감싸는 작은 다면체(정이십면체 등)를 만들어 BVH에 넣는다.
+- **k개씩 모으기:** 광선 한 번에 가까운 교차 k개를 any-hit 프로그램에서 거리순으로 모은다. 그것을 합성한 뒤 마지막 거리부터 다시 쏜다. 투과율이 임계값 아래로 내려가면 멈춘다.
+- **OptiX:** NVIDIA의 GPU 레이트레이싱 API다. BVH 구축과 순회를 RT 코어에 맡긴다.
+
+OptiX의 프로그램 두 종류를 구분해 둔다. any-hit은 순회 도중 후보 교차를 만날 때마다(순서 보장 없이) 불리고, closest-hit은 순회가 끝난 뒤 가장 가까운 교차 하나에 대해 한 번 불린다. 3DGRT는 any-hit에서 교차를 직접 모아 정렬한다.
+
+광선은 픽셀마다 따로 만들므로 카메라 모델에 제약이 없다. 왜곡은 광선 방향을 바꾸면 되고, 롤링셔터는 행마다 광선 원점과 방향을 바꾸면 된다. 반사·굴절·그림자 같은 2차 광선도 같은 장면에 다시 쏘면 된다.
+
+대가는 속도와 하드웨어다. 저장소 README는 3DGRT가 레이트레이싱 전용 하드웨어를 요구하고 3DGS보다 느리다고 적는다.
+
+### 3DGUT: 래스터라이저에 남으면서 고치기
+
+3DGUT(3D Gaussian Unscented Transform)는 래스터라이저 구조를 유지하고 투영 한 단계만 바꾼다. $J$로 선형화하지 않고, 가우시안에서 대표점(sigma point) 7개(3차원이라 2×3+1)를 뽑는다. 대표점을 정확한 카메라 모델로 각각 투영한 뒤, 그 점들로 2D 평균과 공분산을 다시 맞춘다.
+
+대표점마다 왜곡 식과 셔터 시각을 그대로 적용할 수 있다. 그래서 왜곡과 롤링셔터를 래스터라이저 속도로 다룬다. gsplat에 통합되어 있고, 14주차 캡스톤이 쓰려는 길이 이것이다.
+
+## 트랙 고르기
+
+읽을 렌더러를 하나만 고른다. 둘 다 읽으면 3단위를 넘긴다.
+
+| | 트랙 A: gsplat | 트랙 B: 3DGRT |
+| --- | --- | --- |
+| 읽는 것 | CUDA 커널 4~5개 | OptiX 프로그램, BVH |
+| 경력과의 연결 | 타일 분할, 정렬 | 레이트레이싱, BVH |
+| 위험 | 낮다 (0·12주차에 돌렸다) | 빌드·VRAM 미확인 |
+
+**추천:** 트랙 B 판정을 PC 세션 두 개(90분) 안에 끝낸다. 판정을 통과하면 B, 막히면 바로 A로 간다. 고민에 시간을 쓰지 않는다.
+
+A를 골라도 손해가 아니다. 14주차 캡스톤은 gsplat 위에서 돌아가므로 A에서 읽은 코드가 그대로 쓰인다. B는 면접에서 "레이트레이싱 경력이 3DGS에 어떻게 이어지나"를 보여 주기에 가장 좋지만, 돌아가지 않으면 보여 줄 것이 없다.
+
+### 트랙 B 판정 규칙
+
+규칙은 하나다. 첫 PC 세션 안에 ③까지 가지 못하면 A로 간다. ③까지 갔으면 학습을 켜 두고, 다음 날 둘째 세션에서 ④를 확인한다.
+
+1. 도구가 있다: CUDA Toolkit, Visual Studio Build Tools(C++ 워크로드)
+2. 3dgrut 설치 스크립트가 오류 없이 끝난다
+3. 내 장면(0주차 방)으로 학습이 12GB 안에서 시작된다
+4. 학습이 끝까지 가고, 렌더링 결과가 나온다
+
+**확인한 것.** 3dgrut README는 2025년 7월에 Windows 지원을 추가했다고 적고, PowerShell 설치 스크립트를 준다. 지원 CUDA는 11.8, 12.4, 12.6, 12.8(기본), 13.0(실험)이다.
+
+Windows 스크립트에는 CUDA 버전 인자가 없고, `CUDA_HOME`이나 PATH의 `nvcc`에서 버전을 읽는다. 이 PC의 CUDA Toolkit은 0주차에서 맞춘 12.4라 지원 목록에 든다.
+
+<strong>아직 이 PC에서 검증하지 않았다.</strong> 확인할 것은 셋이다. 설치 스크립트가 이 PC에서 끝나는지, RTX 4070 Ti 12GB로 학습이 되는지(README에 필요 VRAM이 없다), WSL2에서 OptiX가 도는지(README에 WSL 언급이 없다)다.
+
+WSL2는 대안으로 기대하지 않는다.
+
+<SessionBreak id="s3" />
+
+## 준비
+
+이 절은 트랙과 상관없이 한다. 트랙 B가 막히면 바로 A로 넘어가야 하고, 기준선은 14주차에서도 다시 쓴다.
+
+### 포크하고 커밋 고정하기
+
+0주차의 `C:\tools\gsplat`은 그대로 둔다. 0·12·14주차가 쓰는 환경을 망가뜨리지 않기 위해, 포크는 다른 폴더에 받는다.
+
+1. GitHub에서 `nerfstudio-project/gsplat`을 내 계정으로 포크한다.
+2. 포크를 서브모듈까지 받는다. 수학 라이브러리 glm이 서브모듈이다. (URL 줄은 앞 줄에 이어진 한 줄이다.)
+
+   ```text
+   cd C:\tools
+   git clone --recursive
+     https://github.com/<내 계정>/gsplat
+     gsplat-fork
+   cd gsplat-fork
+   ```
+
+3. 0주차와 같은 1.5.3 태그에서 작업 브랜치를 만든다.
+
+   ```text
+   git checkout -b w13-mod v1.5.3
+   git submodule update --init --recursive
+   git log -1
+   ```
+
+4. 포크에 태그가 없다는 오류가 나면 원저장소에서 태그를 받고 3번을 다시 한다.
+
+   ```text
+   git remote add upstream
+     https://github.com/nerfstudio-project/gsplat
+   git fetch upstream --tags
+   ```
+
+5. `git log -1`의 커밋 해시를 리딩 노트 맨 위에 적는다. 줄 번호는 모두 이 커밋 기준이다.
+
+**왜 v1.5.3인가.** 0주차에 설치한 버전이고, 이 레슨의 파일 지도가 이 태그 기준이다. CUDA 소스도 20여 개로 작다. `main`은 센서 모델, 라이다, 희소 타일 등이 더해져 파일이 몇 배로 늘었다.
+
+### 리딩 노트 틀
+
+지금 노트를 만든다. 아래를 복사해 저장소 밖의 마크다운 파일로 시작하고, 기준선과 리딩 답을 여기에 채운다.
+
+```text
+# 13주차 리딩 노트
+
+## 고정한 것
+- 저장소 / 태그 / 커밋 해시:
+- GPU / 드라이버 / CUDA:
+- 기준선: PSNR __ dB
+- 장당 시간 3회: __ / __ / __ ms
+- 중앙값: __ ms
+
+## 대응표
+| 단계 | 파일:줄 | 4b주차의 무엇 |
+| 투영 | | J W Σ Wᵀ Jᵀ |
+| 블러 항 | | |
+| 컬링 | | |
+| 타일 분할·키 | | |
+| 정렬 | | |
+| 합성 | | 알파 합성 |
+| 역방향 | | |
+
+## 질문과 답 (리딩 1~4)
+- 질문:
+  답 (파일:줄):
+
+## 수정
+- 고른 후보와 가설:
+- 바꾼 파일:
+- 전후 수치:
+- 한계:
+
+## 못 한 것, 막힌 곳
+```
+
+### 개발용 환경 만들기
+
+소스에서 빌드하면 설치된 gsplat이 내 클론으로 바뀐다. 0주차 환경 `gsplat`을 그대로 쓰면 빌드가 실패했을 때 0·12·14주차까지 같이 망가진다. 그래서 환경을 복제해 따로 쓴다.
+
+```text
+conda create -n gsplat-dev --clone gsplat
+conda activate gsplat-dev
+pip uninstall gsplat
+```
+
+마지막 줄은 0주차에 받은 빌드된 gsplat을 지운다. 남아 있으면 파이썬이 내 클론 대신 그것을 읽어, 고친 코드가 반영되지 않는다.
+
+### 소스에서 빌드하기
+
+빌드는 PowerShell이 아니라 "x64 Native Tools Command Prompt for VS 2022"(x64 네이티브 도구 명령 프롬프트, 0주차에 설치한 VS Build Tools 2022가 시작 메뉴에 만든 cmd 창)에서 한다. 컴파일러를 켜는 `vcvars64.bat`은 환경 변수를 자기를 실행한 cmd 창에 남기는 방식이다. PowerShell에서 실행하면 잠깐 뜬 cmd 안에서만 설정되고 끝나면 사라진다.
+
+이 창은 처음부터 컴파일러가 켜진 상태로 열린다. 컴파일러와 CUDA가 보이는지 먼저 확인한다.
+
+```text
+where cl
+where nvcc
+nvcc --version
+```
+
+`cl`과 `nvcc`의 경로가 나와야 하고, `nvcc` 버전은 0주차의 CUDA Toolkit 12.4여야 한다. 그다음 개발 환경에서 내 포크를 설치한다.
+
+```text
+conda activate gsplat-dev
+cd C:\tools\gsplat-fork
+set BUILD_NO_CUDA=1
+pip install --no-build-isolation -e ".[dev]"
+```
+
+`BUILD_NO_CUDA=1`의 뜻은 v1.5.3의 `docs/DEV.md`와 `setup.py`에서 확인했다. 설치할 때는 CUDA 코드를 컴파일하지 않고, 처음 `import gsplat`을 할 때 컴파일한다. 이렇게 실행 시점에 컴파일하는 방식을 JIT(Just-In-Time) 컴파일이라 한다.
+
+`--no-build-isolation`은 pip이 설치 준비를 따로 만든 빈 환경이 아니라 지금 환경(`gsplat-dev`)에서 하게 한다. v1.5.3에는 `pyproject.toml`이 없고, `setup.py`는 CUDA를 컴파일할 때만 torch를 불러온다. 그래서 `BUILD_NO_CUDA=1`일 때는 없어도 될 것으로 읽힌다.
+
+하지만 아래처럼 컴파일까지 하는 설치로 바꿀 때는 꼭 필요하다(0주차의 `requirements.txt` 설치와 같은 이유). 그래서 두 경우 모두 붙여 둔다.
+
+JIT의 장점은 고친 파일만 다시 컴파일한다는 것이다. 그래서 고치고 돌려 보기를 빠르게 오갈 수 있다. `-e`는 편집 가능(editable) 설치라 파이썬 쪽 수정도 바로 반영된다.
+
+첫 `import`가 실제로 컴파일을 하므로, gsplat을 쓰는 실행은 모두 이 창에서 한다. 첫 컴파일은 몇 분 걸린다. 설치가 내 포크를 가리키는지는 아래로 확인한다.
+
+```text
+pip show gsplat
+```
+
+출력의 "Editable project location" 줄이 내 포크 폴더(`C:\tools\gsplat-fork`)면 된다. 컴파일된 결과는 PyTorch의 확장 캐시 폴더에 생긴다. 창을 열 때마다 gsplat을 쓰기 전에 아래 줄을 실행해 두면 그 폴더를 내가 정할 수 있다.
+
+```text
+set TORCH_EXTENSIONS_DIR=C:\tools\torch_ext
+```
+
+<strong>아직 이 PC에서 검증하지 않았다.</strong> 확인할 것: 이 창에서 `conda activate`가 되는지(안 되면 Anaconda Prompt에서 `conda init cmd.exe`를 한 번 하고 창을 다시 연다), Windows에서 JIT 컴파일이 끝나는지, 캐시 폴더가 어디에 생기는지.
+
+JIT이 끝내 안 되면 `set BUILD_NO_CUDA=` (값 비우기)로 변수를 지우고 같은 `pip install` 줄을 다시 실행해, 설치할 때 전체를 컴파일하는 방식으로 바꾼다. 이 방식은 CUDA를 고칠 때마다 다시 설치해야 한다.
+
+**빌드가 끝내 안 되면** 30분 안에 멈춘다. `conda activate gsplat`으로 0주차 환경에 돌아가, 아래 수정 후보 중 파이썬만 쓰는 것(⓪, ③④⑤)을 고른다. 리딩은 빌드 없이도 할 수 있다.
+
+<SessionBreak id="s5" />
+
+### 기준선 남기기
+
+코드를 하나도 고치기 전에 "지금 결과"를 저장한다. 수정 뒤에 이것과 비교한다. 12주차의 기준 실행(`exp01_baseline`)이 학습해 둔 장면을 학습 없이 평가만 다시 돌린다.
+
+같은 Native Tools 창에서 0주차의 `$R`과 같은 폴더를 cmd 변수로 잡는다. cmd에서는 `%R%`로 읽고, 줄 끝의 `^`가 "다음 줄에 이어진다"는 뜻이다.
+
+```text
+set R=C:\내\저장소\datasets\raw\room01
+set CK=%R%\gsplat\exp01_baseline\ckpts
+cd C:\tools\gsplat-fork\examples
+python simple_trainer.py default ^
+  --ckpt "%CK%\ckpt_29999_rank0.pt" ^
+  --data_dir %R% ^
+  --data_factor 4 ^
+  --result_dir "%R%\gsplat\w13_base" ^
+  --disable_viewer
+```
+
+- `--ckpt`: 이것을 주면 학습하지 않고 평가만 한다. 이어서 카메라가 장면을 도는 영상도 만든다.
+- `--data_factor 4`: 12주차 기준 실행과 같은 값을 준다. 다르면 점수를 비교할 수 없다.
+- `--result_dir`: 포크 밖, 데이터 폴더 아래에 둔다. 결과 파일이 포크의 커밋에 섞이지 않게 하기 위해서다.
+- `--disable_viewer`: 빼면 평가가 끝난 뒤 뷰어를 띄우고 멈추지 않는다.
+
+<strong>아직 이 PC에서 검증하지 않았다.</strong> 확인할 것: 12주차 결과 폴더와 체크포인트 파일 이름이 위와 같은지(다르면 `ckpts` 폴더에 있는 이름을 쓴다), 이 명령이 끝까지 가는지.
+
+결과 폴더에서 두 가지를 챙긴다.
+
+- `stats\val_step29999.json`: 테스트 사진의 `psnr`, `ssim`, `lpips`와 `ellipse_time`
+- `renders\`: 테스트 사진마다 실제 사진과 렌더링을 나란히 붙인 그림
+
+`ellipse_time`은 이름이 같아도 뜻이 다르다. 0·12주차에서 본 `train`으로 시작하는 파일에서는 학습 시작부터 흐른 시간(초)이었다. 평가 파일(`val`)에서는 테스트 사진 한 장을 렌더링하는 데 걸린 평균 시간(초)이다.
+
+### 기준선 3회와 노트
+
+같은 명령을 결과 폴더만 `w13_base2`, `w13_base3`로 바꿔 두 번 더 돌린다. 세 번의 장당 시간과 그 중앙값을 노트에 적는다. 이 레슨에서 시간은 언제나 "3회 이상 돌린 중앙값"으로 쓴다.
+
+세 번의 PSNR은 소수 둘째 자리까지 같아야 한다. 같은 장면을 같은 카메라로 렌더링하기 때문이다. 12주차 노트의 기준 실행 PSNR과도 소수 둘째 자리까지 비교하고, 다르면 버전이나 옵션이 다른 것이니 원인부터 찾는다.
+
+세 번의 시간 중 가장 빠른 것과 가장 느린 것의 차이가 이 PC의 "시간 흔들림 폭"이다. 수정 뒤 시간 차이가 이 폭 안이면 "차이를 확인하지 못했다"로 적는다. 테스트 사진 한 장을 "고정 시점"으로 정해 그 그림을 따로 복사해 둔다.
+
+<SessionBreak id="s15" />
+
+### 트랙 B 판정 ①~③
+
+A만 할 사람은 이 절과 다음 절을 건너뛰고 두 세션을 완료로 표시한다. 시간 상한은 두 세션 합쳐 90분이다.
+
+**① 도구.** 0주차에서 설치한 CUDA Toolkit 12.4와 Visual Studio Build Tools가 있으면 된다. PowerShell에서 `nvcc --version`으로 확인한다.
+
+**② 설치.** 3dgrut을 포크해 다른 폴더에 받는다. OptiX 헤더(`optix-dev`)와 tiny-cuda-nn이 서브모듈이라 `--recursive`가 필요하다. 설치 스크립트는 저장소 안에 `.venv`라는 별도 파이썬 환경을 만들므로 conda 환경을 건드리지 않는다.
+
+```text
+cd C:\tools
+git clone --recursive
+  https://github.com/<내 계정>/3dgrut
+cd 3dgrut
+$env:CUDA_HOME = "C:\Program Files\
+  NVIDIA GPU Computing Toolkit\CUDA\v12.4"
+.\install_env_uv.ps1
+.venv\Scripts\Activate.ps1
+```
+
+(`git clone`과 `$env:CUDA_HOME`은 각각 실제로 한 줄이다. 경로 안에 줄바꿈이나 공백을 넣지 않는다.) `CUDA_HOME`은 Toolkit이 여러 개 깔렸을 때 12.4를 고르게 하려고 준다. README의 Windows 절에 있는 방법이다.
+
+**③ 학습 시작.** 0주차 방 장면으로 바로 학습을 시작한다. COLMAP 장면용 설정은 `configs\apps` 폴더의 `colmap_3dgrt.yaml`이다.
+
+```text
+python train.py
+  --config-name apps/colmap_3dgrt.yaml
+  path=C:\내\저장소\datasets\raw\room01
+  out_dir=runs experiment_name=w13_grt
+  dataset.downsample_factor=4
+```
+
+(실제로는 한 줄이다.) 진행 막대가 올라가고 `nvidia-smi`에서 VRAM이 12GB 안에 머물면 ③ 통과다. 학습을 켜 둔 채 세션을 끝낸다.
+
+메모리 부족으로 죽으면 한 번만 더 시도한다. 그래도 안 되거나 ②에서 막히면 노트에 "어디서 막혔고 오류 마지막 줄이 무엇이었나"를 세 줄로 적고 A로 간다. 이 기록도 산출물이다.
+
+<strong>아직 이 PC에서 검증하지 않았다.</strong> 3dgrut의 COLMAP 읽기 코드를 보면 `downsample_factor=4`일 때 `images_4` 폴더를 읽는다. 0주차의 `images_4`에는 원본 크기 사진을 복사해 두었다는 점에 주의한다.
+
+gsplat처럼 3dgrut도 `.jpg`면 스스로 줄인 사본을 만드는 코드가 있지만, 실제로 줄여서 쓰는지는 학습 시작 로그의 `Downscaling images` 줄과 VRAM으로 확인한다.
+
+<SessionBreak id="s6" />
+
+### 트랙 B 판정 ④
+
+다음 날 학습 폴더(`runs` 아래)를 본다. 학습이 끝났고 `ckpt_last.pt`가 있으면, README의 렌더링 명령으로 테스트 사진을 그린다.
+
+```text
+python render.py
+  --checkpoint <학습 폴더>\ckpt_last.pt
+  --out-dir runs\w13_grt_eval
+```
+
+그림이 나오면 판정 통과, 트랙 B로 간다. 학습이 중간에 죽었거나 그림이 깨지면 A로 간다. 어느 쪽이든 결과를 노트에 세 줄로 적는다.
+
+<Details summary="트랙 B를 골랐다면: 리딩 지도 (리딩 1~4 대신)">
+
+네 세션에 아래 네 묶음을 하나씩 읽는다. 경로는 3dgrut `dfd3d54` 기준이고, 모두 `threedgrt_tracer` 폴더 아래에 있다.
+
+**1. 프록시 지오메트리.** `src/particlePrimitives.cu`에서 가우시안마다 감싸는 다면체의 정점과 삼각형을 만드는 커널을 찾는다. 예를 들면 이 커널이다.
+
+```text
+computeGaussianEnclosing
+  OctaHedronKernel
+```
+
+(실제 이름은 붙여 쓴 한 단어다.)
+
+- 다면체의 크기는 가우시안의 무엇으로 정하나? 불투명도가 낮은 가우시안은 더 작게 감싸나?
+- 어떤 모양들을 고를 수 있나? `src/optixTracer.cpp`에서 `primitiveTypeStr`을 검색한다.
+
+**2. 광선 생성과 반복.** `src\kernels\cuda` 폴더의 `referenceOptix.cu`에서 `__raygen__rg`를 읽는다. `while` 루프가 투과율이 `minTransmittance`보다 큰 동안 광선을 다시 쏜다.
+
+- 한 번 쏠 때 교차를 몇 개 모으나? `pipelineParameters.h`의 `MaxNumHitPerTrace`를 본다.
+- 다음 광선은 어디서부터 시작하나? 같은 가우시안을 두 번 세지 않게 하는 장치는?
+
+**3. any-hit 정렬.** 같은 파일의 `__anyhit__ah`를 읽는다. 새 교차를 거리순 버퍼에 끼워 넣고, 대부분의 교차를 `optixIgnoreIntersection()`으로 무시한다.
+
+- 왜 closest-hit 하나만 받지 않고 any-hit에서 직접 모으나?
+- 무시하지 않고 받아들이는 경우는 언제이고, 그것이 순회 범위를 어떻게 줄이나?
+
+**4. 역방향.** 같은 폴더의 `referenceBwdOptix.cu`와 `tracer.py`의 `_Autograd`를 읽는다.
+
+- 역방향은 광선을 다시 쏘나, 순방향이 저장한 것을 읽나?
+- gsplat 래스터라이저의 역방향(뒤→앞)과 순서가 같은가?
+
+설정값은 3dgrut의 `configs/render/3dgrt.yaml`에 있다. `min_transmittance`, `primitive_type`, `enable_hitcounts`를 찾아 둔다.
+
+</Details>
+
+<SessionBreak id="s16" />
+
+## 리딩 (트랙 A)
+
+경로는 포크의 v1.5.3 기준이고, CUDA 소스는 모두 `gsplat\cuda\` 아래에 있다. VS Code로 포크 폴더를 열고 전체 검색(Ctrl+Shift+F)을 쓴다.
+
+**세션 규칙.** 리딩 세션 하나는 노트의 대응표 한 줄과 질문의 답(파일:줄)으로 끝난다. 질문 하나에 15분을 넘기면 "못 찾음, 본 곳: …"이라고 적고 다음 질문으로 간다. 막힌 질문은 다 읽은 뒤에 다시 본다.
+
+`main`을 고정했다면 이름이 조금 다르다. 순방향 합성 커널 파일 이름에 `SerialBatch`가 붙었고, 픽셀 루프의 본체는 아래 `.cuh` 파일로 옮겨졌다. 임계값 `ALPHA_THRESHOLD`는 v1.5.3에서도 `include\Common.h`에 있다.
+
+```text
+v1.5.3:
+  RasterizeToPixels3DGSFwd.cu
+main:
+  RasterizeToPixels3DGSSerialBatchFwd.cu
+  RasterizeToPixels3DGSDevice.cuh
+```
+
+### 리딩 1: 투영, 블러 항, 컬링
+
+읽을 곳은 파일 둘이다.
+
+```text
+csrc/ProjectionEWA3DGSFused.cu
+  projection_ewa_3dgs_fused_fwd_kernel
+include/Utils.cuh
+  covarW2C     W Σ Wᵀ
+  persp_proj   J, J(·)Jᵀ
+  add_blur     블러 항
+```
+
+파일 이름의 EWA는 Elliptical Weighted Average(타원 가중 평균) 스플래팅의 약자다. $J W \Sigma W^\top J^\top$ 꼴의 투영은 이 2001년 기법에서 왔다. Fused는 좌표 변환·투영·컬링을 커널 하나에 합쳤다는 뜻이고, 이름에 Packed가 붙은 파일은 0주차의 `--packed`를 켰을 때 쓰는 판이다.
+
+커널은 가우시안 하나당 스레드 하나로 돈다. 순서는 이렇다. 중심을 카메라 좌표로 옮긴다 → 깊이로 거른다 → 공분산을 카메라 좌표로 돌린다(`covarW2C`) → 투영한다(`persp_proj`) → 블러 항을 더한다(`add_blur`) → 반지름을 구하고 화면 밖이면 버린다.
+
+**$J$를 4b주차 숫자로 확인하기.** `persp_proj` 안에서 `mat3x2 J = mat3x2(...)` 줄을 찾는다. glm의 `mat3x2`는 "열 3개, 행 2개"짜리, 곧 수학으로는 4b주차의 2×3 행렬이다. glm은 열 우선(column-major)이라 괄호 안의 숫자 여섯 개를 첫째 열 두 개, 둘째 열 두 개, 셋째 열 두 개 순서로 채운다.
+
+코드의 여섯 값은 `fx*rz, 0`, `0, fy*rz`, `-fx*tx*rz2, -fy*ty*rz2`다(`rz`는 $1/z$, `rz2`는 $1/z^2$). 4b주차의 예시 $P = (1, 2, 4)$, $f_x = f_y = 80$을 넣는다. 화면 안의 점이라 `tx`, `ty`는 자르기(clamp) 없이 $x$, $y$ 그대로다.
+
+- 첫째 열: $80/4 = 20$, $0$
+- 둘째 열: $0$, $20$
+- 셋째 열: $-80 \cdot 1/16 = -5$, $-80 \cdot 2/16 = -10$
+
+열을 세워 놓으면 4b주차에서 손으로 구한 $J = [20, 0, -5;\ 0, 20, -10]$과 같다. 그다음 아래 줄이 $J \Sigma_c J^\top$ 그대로인지 본다.
+
+```text
+cov2d = J * cov3d * glm::transpose(J);
+```
+
+**블러 항.** `add_blur`는 2D 공분산의 대각에 `eps2d`(기본 0.3)를 더한다. 타원이 한 픽셀보다 작아져 픽셀 사이로 빠지는 것을 막는 저역 통과(low-pass) 장치다. 같은 함수가 더하기 전후의 행렬식 비율로 `compensation`도 계산한다.
+
+**컬링.** 반지름에 0을 쓰고 `return`하는 곳이 버리는 자리다. 깊이 범위, 행렬식, 불투명도, `radius_clip`, 화면 밖 이렇게 다섯 군데다.
+
+노트에 답할 질문:
+
+- `tx`, `ty`를 화면 범위 근처로 자르는(clamp) 이유는 무엇인가? 화면 밖 멀리 있는 가우시안에서 $J$의 셋째 열이 어떻게 되는지 생각해 본다.
+- 블러 항 0.3을 더하면 작은 가우시안이 실제보다 크고 진하게 보인다. `compensation`은 이것을 어떻게 보정하고, 어떤 옵션(`rasterize_mode`)일 때 쓰이나?
+- 반지름은 표준편차의 몇 배인가? 불투명도가 낮으면 반지름을 더 줄이는 식을 찾는다.
+
+<SessionBreak id="s7" />
+
+### 리딩 2: 타일 분할, 키, 정렬
+
+세 함수가 모두 `csrc/IntersectTile.cu`에 있다.
+
+- `intersect_tile_kernel`: 타일 목록과 키
+- `radix_sort_double_buffer`: 정렬
+- `intersect_offset_kernel`: 타일별 시작 위치
+
+`intersect_tile_kernel`은 두 번 불린다. 첫 번째는 가우시안마다 닿는 타일 수만 센다. 그 수를 누적합해 출력 배열의 자리를 정한 뒤, 두 번째에 실제 (키, 번호) 쌍을 쓴다.
+
+길이가 제각각인 출력을 GPU에서 만들 때 흔히 쓰는 패턴이다. 앞의 그림에서 A가 두 칸, B와 C가 한 칸씩 차지한 것이 이 "타일 수"다.
+
+키는 64비트 정수 하나다. 위쪽에 이미지 번호와 타일 번호, 아래쪽 32비트에 깊이를 넣는다. 주석 `image id | tile id | depth`를 찾는다.
+
+깊이는 `float`의 비트를 그대로 정수로 읽어 넣는다.
+
+정렬은 CUB의 기수 정렬 함수(`SortPairs`)다. CUB는 CUDA Toolkit에 들어 있는 NVIDIA의 병렬 알고리즘 라이브러리다. 정렬 뒤 `intersect_offset_kernel`이 이웃한 키의 타일 번호가 바뀌는 자리를 찾아, 그림의 [0, 2] 같은 시작 위치 표를 채운다.
+
+노트에 답할 질문:
+
+- 타원이 닿는 타일을 구할 때 타원 자체가 아니라 무엇으로 어림하나? 길고 비스듬한 타원에서는 얼마나 낭비가 생기나?
+- 양수 `float`의 비트를 정수로 읽어도 크기 순서가 유지되는 이유는? 깊이가 음수면 어떻게 되나?
+- 키의 깊이가 중심의 깊이 하나라는 것을 코드에서 확인한다. 앞에서 본 팝핑이 이 줄 때문에 생긴다는 것을 한 줄로 적는다.
+
+<SessionBreak id="s8" />
+
+### 리딩 3: 타일별 알파 합성 (순방향)
+
+커널 하나를 처음부터 끝까지 읽는다. 300줄 남짓이다.
+
+```text
+csrc/RasterizeToPixels3DGSFwd.cu
+  rasterize_to_pixels_3dgs_fwd_kernel
+```
+
+스레드 블록 하나가 타일 하나, 스레드 하나가 픽셀 하나다. 블록의 스레드들이 협력해 가우시안을 한 묶음(블록 크기만큼)씩 공유 메모리(shared memory)로 읽어 온다. 그다음 각 스레드가 그 묶음을 앞에서부터 자기 픽셀에 합성한다.
+
+픽셀 루프 안에서 숫자 세 개를 찾는다.
+
+- `min(0.999f, …)`: 알파의 상한
+- `ALPHA_THRESHOLD` (1/255): 이보다 작은 기여는 건너뛴다
+- `next_T <= 1e-4f`: 앞의 "숫자로 보기 ②"의 조기 종료
+
+4b주차는 원조 구현의 값(알파 상한 0.99)을 소개했다. gsplat v1.5.3의 이 커널은 0.999를 쓴다. `main`은 다시 0.99로 바꾸고 상수에 이름을 붙였다.
+
+커널의 마지막 부분은 색 말고도 두 가지를 저장한다. `render_alphas`(1 − 최종 투과율)와 `last_ids`(마지막으로 기여한 가우시안의 목록 위치)다. 이 둘이 리딩 4의 열쇠다.
+
+`conics`도 여기서 처음 쓰인다. 2D 공분산의 역행렬 $\begin{bmatrix} a & b \\ b & c \end{bmatrix}$에서 서로 다른 숫자 셋 $(a, b, c)$만 담은 것이다. 픽셀과 중심의 차이 $(d_x, d_y)$로 `sigma` $= \tfrac12(a d_x^2 + c d_y^2) + b\,d_x d_y$를 구하고, $\alpha = o \cdot e^{-\text{sigma}}$로 쓴다.
+
+노트에 답할 질문:
+
+- 스레드마다 가우시안을 전역 메모리에서 직접 읽지 않고 블록이 함께 공유 메모리로 옮기는 이유는?
+- `__syncthreads_count(done)`은 무엇을 세고, 타일 전체가 일찍 끝나는 조건은 무엇인가?
+- 투과율 임계값을 넘는 그 가우시안은 합성에 들어가나, 빠지나? 주석의 "exclusive"가 무슨 뜻인지 코드로 확인한다.
+
+**선택: 원조 구현과 비교.** 시간이 남으면 원조 구현의 같은 부분(`renderCUDA`)을 브라우저로 본다. 클론할 필요 없다. [diff-gaussian-rasterization의 forward.cu](https://github.com/graphdeco-inria/diff-gaussian-rasterization/blob/59f5f77e3ddbac3ed9db93ec2cfe99ed6c5d121d/cuda_rasterizer/forward.cu)를 열고, 구조가 거의 같으니 다른 곳만 노트에 적는다.
+
+<SessionBreak id="s9" />
+
+### 리딩 4: 역방향 패스
+
+순방향과 같은 타일·묶음 구조인데 순서가 반대다. 뒤에서 앞으로 간다.
+
+```text
+csrc/RasterizeToPixels3DGSBwd.cu
+  rasterize_to_pixels_3dgs_bwd_kernel
+```
+
+순방향은 픽셀마다 거쳐 간 투과율을 전부 저장하지 않았다. 저장한 것은 최종 투과율과 마지막 위치뿐이다.
+
+역방향은 최종 투과율에서 시작해 `1/(1 − alpha)`를 곱하며 거슬러 오른다. 앞의 "숫자로 보기 ③"의 0.125 → 0.25 → 0.5 → 1이 코드의 `T *= ra` 줄이다.
+
+한 가우시안의 불투명도를 바꾸면 그 뒤에 있는 모든 가우시안의 기여가 바뀐다. 그래서 "나보다 뒤에서 쌓인 색"이 필요하다. 코드의 `buffer`가 그것이고, 뒤에서부터 오기 때문에 한 번의 훑기로 구해진다.
+
+여러 픽셀이 같은 가우시안에 기울기를 더하므로 쓰기가 겹친다. GPU는 스레드 32개를 워프(warp)라는 한 묶음으로 같이 실행한다. `warpSum`으로 워프 안의 32개 값을 먼저 합치고, `gpuAtomicAdd`로 한 번만 더하는 부분을 찾는다.
+
+2D 기울기를 3D로 내리는 일은 투영 쪽 역방향이 맡는다. 이번에는 이름과 입출력만 노트에 적는다.
+
+```text
+csrc/ProjectionEWA3DGSFused.cu
+  projection_ewa_3dgs_fused_bwd_kernel
+include/Utils.cuh
+  persp_proj_vjp
+```
+
+VJP(vector-Jacobian product)는 "출력 쪽 기울기에 야코비안을 곱해 입력 쪽 기울기를 얻는 것"이다. 입력은 2D 평균·`conics`의 기울기이고, 출력은 3D 위치·크기·회전 등의 기울기다.
+
+노트에 답할 질문:
+
+- 역방향이 순방향에서 넘겨받는 것은 정확히 무엇인가? 픽셀당 몇 바이트인가?
+- 투과율을 저장하지 않고 나눗셈으로 되살리면 어떤 수치 문제가 생길 수 있나? 순방향 커널의 `double`에 대한 주석과 알파 상한을 연결해 설명한다.
+- `v_means2d_abs`는 무엇이고 어디에 쓰이나? (12주차의 가우시안 늘리기 기준과 이어진다.)
+
+<SessionBreak id="s10" />
+
+## 작은 수정
+
+### 고르기
+
+하나만 고른다. <strong>처음이면 ⓪부터</strong> 한다. ⓪은 파이썬 한 줄 수정이라 빌드가 안 되어도 할 수 있고, 세 세션(s12, s17, s13) 안에 커밋 하나를 먼저 확보한다.
+
+그다음 CUDA를 고친 근거로 ②를 한다(s18~s20). ①은 구현 세션이 세 개 더 필요해서 이 레슨의 세션에 들어가지 않는다. ②까지 커밋한 뒤 시간이 남으면 이어서 한다.
+
+**먼저 확인할 것: 이미 있는 기능.** 떠올리기 쉬운 수정 몇 개는 이미 구현되어 있다. 모르고 다시 만들면 면접에서 설명이 궁색해진다.
+
+- 누적 투과율 출력: 이미 있다. `rasterization()`이 돌려주는 알파가 1 − 최종 투과율이다.
+- 기대 깊이 출력: 이미 있다. `render_mode="ED"`다.
+- 픽셀별 기여 가우시안 수: v1.5.3에는 없고 `main`에는 있다.
+- 조기 종료 값의 상수화: `main`에는 `TRANSMITTANCE_THRESHOLD`로 이미 뽑혀 있다. ②의 값어치는 상수화가 아니라 측정에 있다.
+- 리셋 버그(⓪): `main`에서는 이미 고쳐졌다. ⓪의 값어치는 "실제 버그를 찾아 재현하고 영향을 쟀다"에 있다.
+- 3DGRT의 광선별 교차 수: 이미 있다(`enable_hitcounts`).
+
+**트랙 A 후보** (난이도: 하·중·상)
+
+- **⓪ 불투명도 리셋 버그 고치기** (하, 파이썬): 실제 버그를 재현하고 고쳐 영향을 잰다. 빌드가 필요 없다.
+- **② 조기 종료 값 실험** (하, CUDA): 속도와 품질의 맞바꿈을 숫자로 보인다.
+- **① 기여 가우시안 수 커널** (중, CUDA): 커널 추가부터 파이썬 바인딩까지 한 줄기를 보인다.
+- **③ 타일 점유 히스토그램** (하, 파이썬): 타일 분할 구조를 이해했음을 보인다.
+- **④ 깊이 분산 출력** (중, 파이썬): 임의 채널 합성을 활용한다.
+- **⑤ 왜곡에서 선형화 보기** (중, 파이썬): 14주차의 동기를 그림으로 보인다.
+
+**트랙 B 후보**
+
+- **⑥ 최소 투과율 실험** (하): 종료 조건과 광선 수의 관계.
+- **⑦ 프록시 모양 비교** (중): BVH 품질과 순회 비용.
+- **⑧ 교차 수 k 바꾸기** (상): any-hit 정렬 코드 수정.
+
+트랙 B를 골랐어도 ⓪은 같이 할 수 있다. 0주차 환경만 있으면 되기 때문이다.
+
+고른 뒤 노트의 "수정" 칸에 후보와 가설을 적는다. 가설은 숫자로 쓴다. 결과를 본 뒤에 지은 설명은 가설이 아니다(12주차 규칙 그대로).
+
+### 측정의 공통 규칙
+
+- 시간은 GPU 동기화 뒤에 잰다. 첫 실행은 버리고, 3회 이상 돌린 중앙값을 쓴다.
+- 품질은 12주차처럼 테스트 사진의 PSNR·SSIM·LPIPS로 잰다. PSNR은 소수 둘째 자리까지 적는다.
+- 수치마다 조건을 같이 적는다: GPU, 해상도, 가우시안 수, 커밋 해시.
+- "바뀌면 안 되는 것"을 먼저 확인하고, 그다음에 "바뀌어야 하는 것"을 본다.
+- 차이가 기준선의 흔들림 폭 안이면 "차이를 확인하지 못했다"로 적는다. 그것도 결과다.
+
+<SessionBreak id="s11" />
+
+### ⓪ 불투명도 리셋 버그
+
+12주차에서 "1.5.3 코드에서는 불투명도 리셋이 실행되지 않는 것으로 읽힌다"고 했다. 이번에는 그것을 직접 재현하고, 고치고, 영향을 잰다.
+
+**버그.** v1.5.3의 `strategy\default.py`(195번째 줄)에 리셋 조건이 이렇게 적혀 있다.
+
+```text
+if step % self.reset_every == 0 & step > 0:
+```
+
+파이썬에서 `&`는 비교 연산자(`==`, `>`)보다 먼저 계산된다. 그래서 이 줄은 아래처럼 읽히고, 이어진 비교라 "앞의 `==` 비교 그리고 `0 > 0`"이 된다. `0 > 0`이 늘 거짓이라 리셋이 한 번도 일어나지 않는다.
+
+```text
+step % 3000 == (0 & step) > 0
+```
+
+**내력.** 커밋 기록에서 확인한 것이다. 이 줄은 2025-06-24의 커밋 `af7cf33`(PR #735, "리셋이 0번째 반복에서 일어나는 문제" 수정)에서 들어왔고, 2025-07-04의 v1.5.3에 실렸다. 2025-08-22의 커밋 `6e8c837`(PR #776, "Fix bit-wise and")이 `and`로 고쳤다.
+
+리셋이 제대로 돌면 3,000·6,000·9,000·12,000번째에 0.01보다 진한 불투명도를 모두 0.01로 내린다. 15,000번째부터는 밀도 조절과 함께 멈춘다(그 전에 함수가 끝난다).
+
+#### 재현 (s12)
+
+먼저 파이썬만으로 조건이 늘 거짓인지 본다. 아무 창에서나 된다.
+
+```text
+python -c "s=3000;print(s%3000==0&s>0)"
+```
+
+`False`가 나오면 코드 읽기가 맞다. 다음은 실제 학습에서 리셋이 안 일어나는 것을 본다. 기준선 때 `R`을 잡아 둔 cmd 창에서, 0주차 환경(`gsplat`)으로 짧게 학습하며 리셋 직전·직후의 체크포인트를 남긴다.
+
+```text
+conda activate gsplat
+cd C:\tools\gsplat\examples
+python simple_trainer.py default ^
+  --data_dir %R% --data_factor 4 ^
+  --result_dir "%R%\gsplat\w13_reset_bug" ^
+  --max_steps 3500 ^
+  --save_steps 3000 3002 ^
+  --disable_viewer
+```
+
+`--save_steps 3000 3002`를 주면 2,999번째와 3,001번째 반복의 체크포인트가 생긴다. 학습 스크립트가 반복 번호를 0부터 세고 "저장 값 − 1"번째에서 저장하기 때문이다. 아래 스크립트로 두 체크포인트에서 0.01보다 진한 가우시안의 비율을 본다.
+
+```text
+import torch
+D = r"<R>\gsplat\w13_reset_bug\ckpts"
+for s in [2999, 3001]:
+    p = D + rf"\ckpt_{s}_rank0.pt"
+    sp = torch.load(p)["splats"]
+    o = torch.sigmoid(sp["opacities"])
+    print(s, (o > 0.011).float().mean())
+```
+
+(`<R>`은 내 데이터 폴더 경로로 바꾼다.) 버그가 있으면 두 비율이 거의 같다. 리셋이 일어났다면 3,001번째에서 비율이 0 가까이로 떨어진다.
+
+12주차에서 본 신호도 같이 본다. 진행 막대의 `loss=` 숫자가 3,000번째에서 튀지 않으면 리셋이 꺼진 것이다.
+
+#### 수정 (s12)
+
+포크의 작업 브랜치(`w13-mod`)에서 고친다. 두 방법 중 하나를 쓴다.
+
+- 손으로 한 줄: `&`를 `and`로 바꾼다.
+- 고친 커밋을 그대로 가져오기: 준비 4번처럼 `upstream`을 더해 두었다면 아래를 실행한다.
+
+```text
+git fetch upstream
+git cherry-pick 6e8c837
+```
+
+어느 쪽이든 `git diff v1.5.3`이 한 줄이어야 한다. 고친 뒤 같은 재현 명령을 고친 코드로 돌려, 3,001번째 비율이 떨어지는지 본다.
+
+고친 코드로 돌리는 환경은 이렇다. 빌드가 된 사람은 `gsplat-dev`(포크를 가리킨다)에서 포크의 `examples`로 돌린다. 빌드가 안 된 사람은 0주차 환경을 하나 더 복제(`gsplat-fix`)해, 그 환경에 설치된 파일의 같은 줄을 고쳐 측정한다.
+
+```text
+conda create -n gsplat-fix --clone gsplat
+conda activate gsplat-fix
+pip show -f gsplat
+```
+
+`pip show -f`가 보여 주는 설치 위치(Location)와 파일 목록에서 `gsplat\strategy\default.py`를 찾아 195번째 줄 근처의 같은 조건을 고친다. 커밋은 어느 경우든 포크에 한다.
+
+<strong>아직 이 PC에서 검증하지 않았다.</strong> 확인할 것: 체크포인트가 2,999·3,001번째에 생기는지(파일 이름으로 확인), 체크포인트의 불투명도가 리셋 직후 상태를 담는지. 비율이 기대와 다르면 저장 시점과 리셋 시점의 순서부터 학습 스크립트에서 확인한다.
+
+<SessionBreak id="s12" />
+
+#### 측정 (s17)
+
+**가설(예시).** 리셋을 켜면 30,000번째의 가우시안 수가 10% 이상 줄고, 테스트 PSNR 차이는 잡음 폭 안이다. 떠다니는 조각은 뷰어에서 눈에 띄게 줄어든다. 내 생각이 다르면 숫자를 바꿔 적되, 돌리기 전에 적는다.
+
+"고치기 전" 쪽은 12주차의 기준 실행 두 번(`exp01_baseline`, `exp02_baseline_repeat`)에 한 번을 더해 3회로 만든다. 설정이 같은 1.5.3 기본값이라 그대로 쓸 수 있다. "고친 뒤" 쪽은 같은 명령을 고친 환경에서 결과 폴더만 바꿔 3회 돌린다(`w13_reset_fix1`~`3`).
+
+학습 한 번이 12주차에서 잰 만큼 걸리므로, 켜 두고 다른 일을 한다. 세 번이 하루에 안 끝나면 다음 날로 넘긴다.
+
+<SessionBreak id="s17" />
+
+#### 판정과 커밋 (s13)
+
+- 7,000번째와 30,000번째 평가의 테스트 PSNR·SSIM·LPIPS, `num_GS`를 양쪽 3회씩 표로 만든다.
+- 양쪽의 평균 차이를 잡음 폭(같은 쪽 3회의 최대 − 최소)과 비교한다. 잡음 폭 안이면 "차이를 확인하지 못했다"로 정직하게 적는다.
+- 뷰어로 양쪽 결과를 같은 자리에서 보고, 떠다니는 조각이 줄었는지 캡처 두 장을 붙인다.
+
+**보여 주는 법.** 이것은 새 기여가 아니라 "실제 버그를 찾아 재현하고 영향을 쟀다"는 이야기다. README에 원저장소가 이미 고쳤다는 것(PR #776)을 먼저 밝히고, 내 일은 재현 방법과 전후 숫자라고 쓴다. 면접에서는 "릴리스 버전을 쓸 때 이런 문제를 어떻게 알아채고 확인하나"의 사례로 말한다.
+
+### 커밋과 README 정리
+
+⓪과 ② 모두 이 목록으로 정리한다. 면접관이 보는 것은 링크 하나다. 30초 안에 "무엇을, 왜, 결과는"이 읽혀야 한다.
+
+- [ ] 브랜치가 고정한 태그에서 갈라졌고, 커밋 해시가 README에 있다
+- [ ] diff가 작다. 포매터가 건드린 줄이나 무관한 수정이 없다
+- [ ] 커밋 메시지 첫 줄이 한 일을 말한다 (예는 아래)
+- [ ] 전후 수치 표가 있다 (PSNR, 장당 시간, 측정 조건)
+- [ ] 전후 그림 또는 차이 이미지가 한 장 있다
+- [ ] 가설과 판정, 한계가 한두 줄씩 있다
+- [ ] 데이터셋, 체크포인트, 결과 폴더, 회사 코드·데이터가 커밋에 없다
+- [ ] 원저장소의 LICENSE 파일을 그대로 두었다
+
+커밋 메시지 첫 줄의 예는 이렇다.
+
+```text
+fix: 불투명도 리셋 조건의 & 를 and 로
+feat: 조기 종료 투과율을 상수로 분리
+```
+
+README 문단은 네 문장이면 된다. 무엇을 바꿨나, 왜 궁금했나, 어떻게 검증했나, 결과가 무엇인가.
+
+원저장소에 PR을 보낼지는 선택이다. ⓪과 ②의 상수화는 `main`에 이미 있어 보낼 이유가 없다. 내 포크의 브랜치와 README로 충분하다.
+
+<SessionBreak id="s13" />
+
+### ② 조기 종료 값 실험
+
+순방향 커널의 `next_T <= 1e-4f`를 바꾸면 얼마나 빨라지고 화질은 얼마나 잃는가를 잰다. 수정은 작지만 "왜 이 값인가"에 숫자로 답하게 된다. 빌드(준비 절)가 된 경우에만 한다.
+
+**가설(예시).** 값을 1e-2로 키우면 장당 시간이 5% 이상 줄고, PSNR은 0.1&nbsp;dB보다 적게 떨어진다. 내 생각이 다르면 숫자를 바꿔 적되, 돌리기 전에 적는다.
+
+**판정 규칙.** 시간 차이가 기준선의 흔들림 폭 안이면 "차이를 확인하지 못했다"로 적는다. 그것도 결과다. PSNR은 소수 둘째 자리까지 비교한다.
+
+구현(s18):
+
+1. `#define ALPHA_THRESHOLD`를 전체 검색해 정의가 있는 파일을 찾는다. v1.5.3에서는 `include\Common.h`의 54번째 줄이다.
+2. 그 줄 바로 아래에 새 상수를 둔다. 이름은 `main`과 같게 `TRANSMITTANCE_THRESHOLD`, 값은 `1e-4f`로 시작한다.
+3. `1e-4f`를 전체 검색한다. v1.5.3에서는 두 곳뿐이다: 순방향 합성 커널, 그리고 3DGUT용 커널(파일 이름 아래). 두 곳 모두 새 상수로 바꾼다.
+
+   ```text
+   RasterizeToPixelsFromWorld3DGSFwd.cu
+   ```
+
+4. 역방향 커널에는 이 숫자가 없다. 역방향은 순방향이 저장한 `last_ids`까지만 훑으므로 순방향의 결정을 그대로 따른다. 코드로 확인해 노트에 적는다.
+5. 기준선 명령을 한 번 돌린다. 값이 1e-4 그대로이므로 PSNR이 기준선과 소수 둘째 자리까지 같아야 한다. 다르면 상수를 뽑다가 무언가 바꾼 것이다.
+
+<strong>주의:</strong> `Common.h`는 여러 커널이 같이 쓰는 헤더다. 이것을 고치면 다음 실행 때 많은 `.cu` 파일이 다시 컴파일되어 몇 분 걸린다. 값을 바꿀 때마다 그만큼 기다린다고 계획한다.
+
+<SessionBreak id="s18" />
+
+측정(s19):
+
+1. 값을 1e-2, 1e-3, 1e-5로 바꿔 가며 기준선 명령을 각 3회 돌린다. 결과 폴더 이름에 값을 넣는다(예: `w13_t1e-2_1`).
+2. 값마다 PSNR, SSIM, 장당 시간(3회 중앙값)을 표로 만든다.
+3. 1e-2 결과와 기준선의 고정 시점 그림으로 차이 이미지(절댓값 × 20)를 만든다. 차이가 어디에 몰리는지 한 줄로 적는다.
+
+값을 키우면 시간이 줄고 PSNR이 내려가는 방향이어야 한다. 반대로 나오면 측정이 흔들린 것이니 반복 횟수를 5회로 늘린다.
+
+<SessionBreak id="s19" />
+
+판정과 커밋(s20): 가설과 결과를 나란히 적고, 위 "커밋과 README 정리" 목록대로 커밋한다. 이 실험은 이미 학습된 장면을 다른 값으로 렌더링한 것이라, 이 값으로 다시 학습하면 결과가 다를 수 있다. README에 이 한계를 적는다.
+
+<SessionBreak id="s20" />
+
+### ① 기여 가우시안 수 커널 (② 다음에, 재구현 후 비교)
+
+픽셀마다 "합성에 실제로 들어간 가우시안이 몇 개인가"를 정수 이미지로 내놓는다. 그래픽스의 오버드로(overdraw) 시각화와 같다. `main`에 같은 기능이 있으므로 산출물은 "v1.5.3에 직접 만들고 `main`의 구현과 비교했다"이다.
+
+PC 세션 세 개로 나눈다. 먼저 내 것을 만들고, 다 만든 뒤에 `main`의 아래 파일을 브라우저로 읽어 비교한다.
+
+```text
+main:
+  RasterizeNumContributingGaussians.cu
+```
+
+**세션 1: 커널.** 순방향 합성 커널 파일을 복사해 새 `.cu` 파일을 `csrc` 폴더에 만든다. 색 관련 입력과 누적을 지우고, 색을 더하던 자리에 카운터 증가를 둔다. 출력은 `int32` 이미지 하나이고, 건너뛰는 조건과 끝내는 조건은 원본과 똑같이 둔다.
+
+새 파일이 빌드에 들어가는지 확인한다. v1.5.3의 `setup.py`와 JIT 빌드 코드(`gsplat\cuda\_backend.py`)는 둘 다 `csrc` 폴더의 `*.cu`를 모두 모아 컴파일한다(코드에서 확인). 그래서 `csrc`에 두기만 하면 된다.
+
+**세션 2: 바인딩.** 기존 함수 이름(아래 첫 줄)을 전체 검색하면 다섯 군데가 나온다. 같은 자리마다 내 함수를 하나씩 더한다.
+
+```text
+rasterize_to_pixels_3dgs_fwd
+  csrc/Rasterization.h
+  csrc/Rasterization.cpp
+  include/Ops.h
+  ext.cpp        (m.def 줄)
+  _wrapper.py    (파이썬 함수)
+```
+
+**세션 3: 실행 스크립트.** `rendering.py`는 고치지 않는다. `examples` 폴더에 스크립트를 하나 만들어, `rasterization()`이 돌려주는 `meta`로 내 함수를 따로 부른다. 뼈대는 이렇다(의사코드).
+
+```text
+ckpt = torch.load(경로)
+sp = ckpt["splats"]
+means = sp["means"]
+quats = sp["quats"]
+scales = exp(sp["scales"])
+opac = sigmoid(sp["opacities"])
+colors = cat(sp["sh0"], sp["shN"])
+
+parser = Parser(R, factor=4,
+  normalize=True, test_every=8)
+data = Dataset(parser, "val")[0]
+viewmat = inv(data["camtoworld"])
+K = data["K"]
+H, W = data["image"] 크기
+
+img, alpha, meta = rasterization(
+  means, quats, scales, opac,
+  colors, viewmat[None], K[None],
+  W, H, sh_degree=3)
+
+count = 내_함수(
+  meta["means2d"], meta["conics"],
+  meta["opacities"],
+  meta["isect_offsets"],
+  meta["flatten_ids"],
+  W, H, meta["tile_size"])
+```
+
+v1.5.3 코드에서 확인한 것: 체크포인트의 `splats` 안에 `means`, `quats`, `scales`, `opacities`, `sh0`, `shN`이 있다. 크기는 로그(log), 불투명도는 로짓(logit)으로 저장되어 학습 스크립트가 `exp`와 `sigmoid`를 씌워 쓴다. `Parser`와 `Dataset`은 `examples\datasets` 폴더의 `colmap.py`에 있고, 학습 스크립트는 `normalize_world_space`(기본 켜짐)를 `normalize`로 넘긴다.
+
+<strong>아직 이 PC에서 검증하지 않았다.</strong> 위 의사코드는 실행해 보지 않았다. 텐서를 GPU로 옮기는 줄, 배치 차원, `meta` 안 값의 모양은 학습 스크립트의 `rasterize_splats`와 `eval`을 옆에 띄워 놓고 맞춘다.
+
+검증:
+
+- 기준선 명령을 다시 돌려 PSNR과 고정 시점 그림이 수정 전과 같은지 본다. 기존 경로를 건드리지 않았으니 달라지면 안 된다.
+- 알파가 0인 픽셀은 개수가 0이어야 한다. 개수는 그 타일에 담긴 가우시안 수(`isect_offsets`의 이웃 차이)를 넘을 수 없다.
+- 개수 이미지를 컬러맵으로 저장한다. 가장 많이 겹치는 곳이 장면의 어디인지 한 줄로 적는다.
+- 내 커널과 색 커널의 시간을 비교한다. 동기화를 앞뒤에 두고 100번 돌린 평균을 1회로 쳐서 3회 중앙값을 쓴다.
+
+### ③~⑧ 나머지 후보 (계획만)
+
+**③ 타일 점유 히스토그램.** `meta["isect_offsets"]`의 이웃 차이가 타일별 가우시안 수다. 히스토그램과 화면 지도를 그리고, `tile_size`를 8·16·32로 바꿔 장당 시간을 비교한다. 검증은 타일별 수의 합이 `flatten_ids`의 길이와 같은지다.
+
+**④ 깊이 분산.** 색 대신 (깊이, 깊이²) 두 채널을 넣어 합성하면 픽셀별 평균과 제곱 평균이 나온다. 분산은 둘의 차로 구하고, 분산이 큰 곳은 표면이 흐릿하게 재구성된 곳이다. 검증은 평균 채널이 `render_mode="ED"` 결과와 맞는지다.
+
+**⑤ 선형화가 깨지는 곳 보기.** 같은 장면을 어안 모델(`camera_model="fisheye"`)로 두 번 렌더링한다. 한 번은 기본 경로(어안 투영을 $J$로 선형화), 한 번은 `with_ut=True`, `with_eval3d=True`다. 두 그림의 차이가 화면 중심에서 작고 가장자리에서 커지는지 보고, 화각을 넓혀 가며 세 장을 남긴다.
+
+<strong>아직 이 PC에서 검증하지 않았다.</strong> ⑤는 기본 방식으로 학습한 체크포인트를 3DGUT 경로로 렌더링해도 되는지 확인이 필요하다. gsplat 문서는 3DGUT 학습에 MCMC 방식만 지원한다고 적는다.
+
+핀홀에서 두 경로의 결과가 거의 같은지부터 본다.
+
+**⑥ 최소 투과율 (B).** 3dgrt 설정의 `min_transmittance`(0.001)를 바꿔 가며 FPS와 PSNR을 잰다. ②의 레이트레이싱판이다. 3DGUT 설정은 0.0001로 값이 다르다는 점도 적는다.
+
+**⑦ 프록시 모양 (B).** `primitive_type`을 바꿔 BVH 구축 시간, FPS, PSNR을 비교한다. 꼭 맞게 감쌀수록 헛교차가 줄고, 삼각형이 많을수록 BVH가 커진다.
+
+**⑧ k 바꾸기 (B).** `MaxNumHitPerTrace`(16)를 바꾼다. any-hit의 비교·교환 줄이 16에 맞춰 손으로 펼쳐져 있어 같이 고쳐야 한다. 페이로드 크기가 바뀌므로 가장 위험하다.
+
+## 14주차와의 연결
+
+14주차 캡스톤은 재구성한 장면을 "왜곡과 롤링셔터가 있는 가상 카메라"로 다시 찍는다. 이번 주에 읽은 것으로 왜 기본 래스터라이저가 그 일을 못 하는지 코드 위치로 말할 수 있다.
+
+- 투영이 $J$ 하나로 선형화되어 있다(`persp_proj`). 왜곡이 크면 타원 가정이 깨진다.
+- 타일 목록이 "타원의 반지름"으로 만들어진다. 휜 모양은 닿는 타일부터 틀린다.
+- 커널이 카메라 자세 하나를 받는다. 행마다 자세가 다른 롤링셔터를 넣을 자리가 없다.
+
+캡스톤이 쓸 길은 gsplat 안의 3DGUT 경로다. `rasterization()`에 `with_ut=True`, `with_eval3d=True`를 준다. 왜곡은 `radial_coeffs` 등으로, 롤링셔터는 `rolling_shutter`와 `viewmats_rs`로 준다.
+
+이번 주에 읽은 파일 옆에 그 구현이 있다.
+
+```text
+csrc/ProjectionUT3DGSFused.cu
+  리딩 1의 자리: 대표점 투영
+csrc/
+  RasterizeToPixelsFromWorld3DGSFwd.cu
+  리딩 3의 자리: 픽셀마다 광선으로
+  가우시안을 3D에서 평가
+include/Cameras.cuh
+  왜곡 모델, 셔터 자세 보간
+```
+
+타일 분할과 정렬(리딩 2)은 그대로 쓴다. 3DGUT가 "래스터라이저에 남는다"는 말의 뜻이 이것이다.
+
+트랙 B를 끝냈다면 캡스톤에서 3DGRT를 비교 대상으로 쓸 수 있다. 다만 캡스톤의 기본 경로는 gsplat으로 둔다. 3DGUT 경로가 이 PC에서 왜곡·롤링셔터 렌더링까지 도는지는 14주차에서 먼저 확인한다.
+
+### 출처와 검증 상태
+
+**커밋에서 읽어 확인한 것** (2026-11-27~28, 저장소를 받아 코드와 문서를 읽음. 실행은 하지 않았다):
+
+- gsplat v1.5.3(`937e299`): 함수 흐름(`rasterization` → 연산 네 개), `persp_proj`의 `mat3x2 J`와 `J * cov3d * transpose(J)`, `covarW2C`, `add_blur`(0.3), 컬링 다섯 곳, 키 주석과 `SortPairs`, 순방향의 0.999·1/255·1e-4, `render_alphas`·`last_ids`, 역방향의 `T *= ra`·`buffer`·`warpSum`·`gpuAtomicAdd`. [gsplat 저장소](https://github.com/nerfstudio-project/gsplat/tree/v1.5.3)
+- gsplat v1.5.3 빌드: `docs/DEV.md`의 `BUILD_NO_CUDA=1`(설치 때 컴파일 생략, 첫 실행 때 JIT), `pyproject.toml`이 없고 `setup.py`는 컴파일할 때만 torch를 부름, `setup.py`와 `_backend.py`가 `csrc/*.cu`를 모두 모음, `docs/INSTALL_WIN.md`의 vcvars 절차. `1e-4f`가 두 파일에만 있음, `ALPHA_THRESHOLD`가 `include/Common.h` 54번째 줄에 있음.
+- gsplat 리셋 버그: v1.5.3의 `strategy/default.py` 195번째 줄 조건, 들어온 커밋 `af7cf33`(PR #735, 2025-06-24), 고친 커밋 `6e8c837`(PR #776, 2025-08-22), 리셋 값 0.01(`prune_opa`의 2배), 저장 시점(`save_steps` − 1). 조건이 거짓인 것은 파이썬으로 계산해 확인했다.
+- gsplat v1.5.3 예제: `--ckpt`를 주면 평가만 함, `stats/val_step….json`의 `ellipse_time`이 장당 렌더링 시간, 체크포인트 `splats`의 키 이름과 log·logit 저장, `Parser`·`Dataset`의 인자.
+- gsplat v1.5.3 3DGUT: 대표점 7개(`2 * 3 + 1`), `with_ut`·`with_eval3d`·`rolling_shutter` 인자. [docs/3dgut.md](https://github.com/nerfstudio-project/gsplat/blob/main/docs/3dgut.md)
+- gsplat `main`(`512d366`): 파일 이름 변경, `TRANSMITTANCE_THRESHOLD`·`MAX_ALPHA`(0.99) 상수, 기여 가우시안 수 기능.
+- 3dgrut(`dfd3d54`): README의 Windows 지원·지원 CUDA·RT 코어 권장, `install_env_uv.ps1`이 `CUDA_HOME`이나 `nvcc`로 버전을 읽음, `__raygen__rg`·`__anyhit__ah`, `MaxNumHitPerTrace` 16, 프록시 모양 종류, `configs/render`의 값, COLMAP 읽기가 `images_<배율>` 폴더를 씀. [3dgrut 저장소](https://github.com/nv-tlabs/3dgrut)
+- 원조 구현(`59f5f77`): 블러 0.3, 반지름 3배, 알파 상한 0.99, 비상업 라이선스. [diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization)
+
+**이 PC에서 돌려 보지 않은 것:**
+
+- Native Tools 창에서의 `conda activate`, JIT 빌드 성공 여부, 확장 캐시 폴더 위치.
+- 기준선 명령 전체, 12주차 체크포인트 파일 이름, 평가 시간의 흔들림 폭.
+- ⓪의 재현 절차(체크포인트 파일 이름, 리셋 직후 불투명도 비율)와 `gsplat-fix` 환경에서 설치 파일을 고치는 방법.
+- ⓪·②의 가설 숫자(10%, 5%, 0.1&nbsp;dB)는 어림으로 잡은 것이다.
+- ①의 실행 스크립트 의사코드.
+- ⑤에서 기본 체크포인트를 3DGUT 경로로 렌더링할 수 있는지.
+- 3dgrut: 설치 스크립트 완료, 12GB로 학습, WSL2의 OptiX, `images_4`(원본 크기 사본)를 실제로 줄여 쓰는지, `render.py` 출력.
+
+## 체크 질문
+
+<CheckQuestion q="3DGS 래스터라이저가 (타일 번호, 깊이) 키로 정렬하는 이유는 무엇이고, 이 정렬이 근사이기 때문에 생기는 화면 결함은 무엇인가?" kind="개념">
+  알파 합성은 순서에 따라 결과가 달라지므로 픽셀마다 가우시안을 앞에서 뒤로 겹쳐야 한다. 타일 번호를 키의 위쪽에, 깊이를 아래쪽에 두면 한 번의 기수 정렬로 "타일별로 묶이고 그 안에서 깊이순"인 목록이 나온다. 픽셀마다 따로 정렬하는 것보다 훨씬 싸다.
+
+  근사인 까닭은 깊이가 가우시안 중심의 값 하나이기 때문이다. 크고 길쭉한 가우시안 둘이 엇갈려 있으면 픽셀에 따라 실제 앞뒤가 다른데, 정렬은 화면 전체에 같은 순서를 쓴다. 카메라를 돌릴 때 두 중심의 깊이가 뒤바뀌는 순간 색이 툭 바뀌는 팝핑(popping)이 보인다.
+
+  레이트레이싱(3DGRT)은 광선마다 교차 거리로 순서를 정하므로 이 문제가 줄어든다.
+</CheckQuestion>
+
+<CheckQuestion q="왜 기본 래스터라이저의 투영은 왜곡이 큰 카메라에서 깨지나? 3DGUT와 3DGRT는 각각 이것을 어떻게 피하나?" kind="왜">
+  2D 공분산을 가우시안 중심 한 점에서 구한 야코비안으로 만들기 때문이다. 이것은 투영 함수를 그 점의 접선으로 바꾼 1차 근사다. 왜곡이 크거나 가우시안이 크면 그 범위 안에서 투영이 휘어, 타원이 아닌 모양을 타원으로 그리게 된다.
+
+  그 결과 화면 가장자리에서 모양과 위치가 어긋나고, 닿는 타일 목록도 틀린다.
+
+  3DGUT는 가우시안에서 대표점 7개를 뽑아 정확한 카메라 모델로 각각 투영하고, 그 점들로 2D 평균과 공분산을 다시 맞춘다. 미분이 필요 없어서 어떤 카메라 식이든 넣을 수 있고, 타일 분할·정렬·합성 구조는 그대로다.
+
+  3DGRT는 투영 자체를 하지 않는다. 픽셀마다 카메라 모델로 광선을 만들고 가우시안과의 교차를 3D에서 구한다. 대신 BVH와 레이트레이싱 하드웨어가 필요하고 더 느리다.
+</CheckQuestion>
+
+<CheckQuestion q="학습 중 GPU 메모리가 빠듯하다. 역방향 패스가 순방향에서 꼭 넘겨받아야 하는 것은 무엇이고, 픽셀마다 거쳐 간 가우시안의 투과율을 전부 저장하지 않아도 되는 이유는 무엇인가?" kind="실무">
+  픽셀당 두 값이면 된다. 최종 투과율(코드에서는 1에서 뺀 알파로 저장)과 마지막으로 기여한 가우시안의 목록 위치다. 여기에 순방향의 입력이던 2D 평균, `conics`, 색, 불투명도와 타일별 정렬 목록을 다시 읽는다.
+
+  투과율은 (1 − 알파)를 앞에서부터 곱한 값이다. 그래서 최종값에서 시작해 뒤에서 앞으로 가며 1/(1 − 알파)를 곱하면 각 가우시안 앞의 투과율이 되살아난다(0.125 → 0.25 → 0.5 → 1). 뒤쪽에서 쌓인 색도 같은 훑기에서 누적하므로, 저장량이 겹친 가우시안 수와 상관없이 픽셀당 상수가 된다.
+
+  대가는 수치 오차다. 알파가 1에 가까우면 나눗셈이 불안정해지므로 알파에 상한을 두고, 투과율이 임계값 아래로 내려간 가우시안은 순방향에서 이미 뺀다. 메모리가 정말 문제라면 해상도, 가우시안 수, 0주차의 `--packed`를 먼저 본다.
+</CheckQuestion>
+
+<SessionBreak id="s14" />

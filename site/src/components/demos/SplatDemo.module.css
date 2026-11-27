@@ -1,0 +1,259 @@
+/* 4b주차 3DGS 데모. 버튼·결과 표는 다른 데모와 같은 모양으로 맞춘다 */
+.demo {
+  display: grid;
+  /* 긴 배지·범례가 칸을 화면보다 넓히지 못하게 (393px에서 가로 넘침 방지) */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  margin: var(--space-4) 0 var(--space-6);
+  /* 색: 주황 = 가우시안과 선형화가 예측한 폭, 분홍 = 실제 실루엣, 청록 = 카메라·화각 */
+  --sd-gauss: #d96a12;
+  --sd-true: #c2417a;
+  --sd-cam: #12897f;
+}
+@media (prefers-color-scheme: dark) {
+  .demo {
+    --sd-gauss: #f5a05a;
+    --sd-true: #f28cb8;
+    --sd-cam: #4fd8c9;
+  }
+}
+
+.title {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.panel {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+/* 패널 하나 (① 또는 ②). sticky 그림은 이 section 안에서만 붙어 있다 */
+.section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+/* 슬라이더를 움직이는 동안 결과 그림이 화면 위에 남게 (폰에서 데모가 길어 그림이 밀려나지 않게) */
+.sticky {
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 2;
+  padding: var(--space-2) 0;
+  background: var(--paper);
+  box-shadow: 0 6px 8px -8px rgb(0 0 0 / 0.35);
+}
+.image {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 캡션까지 합쳐 그림 영역이 400px 안에 들게 (LESSON_TEMPLATE §3 ③) */
+  max-height: 300px;
+  margin-inline: auto;
+}
+.ground {
+  fill: var(--paper-sunken);
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+.sensor {
+  fill: var(--paper-sunken);
+  stroke: var(--ink-soft);
+  stroke-width: 2;
+}
+.label {
+  fill: var(--ink-soft);
+  font-size: 11px;
+}
+.fov {
+  stroke: var(--sd-cam);
+  stroke-width: 1.5;
+  fill: none;
+}
+.plane {
+  stroke: var(--sd-cam);
+  stroke-width: 3;
+}
+.camera {
+  fill: var(--sd-cam);
+}
+.footprint {
+  stroke: var(--sd-gauss);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.ray {
+  stroke: var(--sd-gauss);
+  stroke-width: 1.5;
+  fill: none;
+}
+.centerRay {
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.trueRay {
+  stroke: var(--sd-true);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  fill: none;
+}
+.gaussFill {
+  fill: color-mix(in srgb, var(--sd-gauss) 30%, transparent);
+  stroke: var(--sd-gauss);
+  stroke-width: 2;
+}
+.sigma3 {
+  fill: color-mix(in srgb, var(--sd-gauss) 14%, transparent);
+  stroke: color-mix(in srgb, var(--sd-gauss) 45%, transparent);
+  stroke-width: 1;
+}
+.sigma2 {
+  fill: color-mix(in srgb, var(--sd-gauss) 16%, transparent);
+  stroke: color-mix(in srgb, var(--sd-gauss) 60%, transparent);
+  stroke-width: 1;
+}
+.sigma1 {
+  fill: color-mix(in srgb, var(--sd-gauss) 30%, transparent);
+  stroke: var(--sd-gauss);
+  stroke-width: 2.5;
+}
+.axis {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+}
+.principal {
+  stroke: var(--ink-soft);
+  stroke-width: 1.5;
+}
+
+.caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+/* 범례 항목은 한 덩어리로 줄바꿈한다 */
+.lgGauss,
+.lgTrue,
+.lgCam {
+  white-space: nowrap;
+}
+.lgGauss::before,
+.lgTrue::before,
+.lgCam::before {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 0;
+  margin-right: 0.3em;
+  vertical-align: 0.3em;
+}
+.lgGauss::before {
+  border-top: 3px solid var(--sd-gauss);
+}
+.lgTrue::before {
+  border-top: 2px dashed var(--sd-true);
+}
+.lgCam::before {
+  border-top: 3px solid var(--sd-cam);
+}
+
+/* 알파 합성 띠: 배경은 두 테마 모두 검정 (3DGS 기본 배경) */
+.stripBack {
+  fill: #000;
+}
+/* 띠의 양 끝은 검정이라 다크 배경에서 경계가 사라진다 → 칸 위에 테두리 */
+.stripFrame {
+  fill: none;
+  stroke: var(--ink-faint);
+  stroke-width: 1;
+}
+.probe {
+  stroke: #fff;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-2);
+}
+/* 키보드(Tab)로 슬라이더에 갈 때 sticky 그림 뒤로 숨지 않게 (WCAG 2.4.11). 그림 높이(약 220~260px) 만큼 띄운다 */
+.controls :is(input, button) {
+  scroll-margin-top: 280px;
+}
+.button {
+  justify-self: start;
+  min-height: var(--touch);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+.button:hover {
+  background: var(--paper-sunken);
+}
+.button:active {
+  transform: translateY(1px);
+}
+.button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.readout {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  font-size: var(--text-sm);
+}
+.values {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+.values dt {
+  font-weight: 600;
+}
+.values dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.swatch {
+  display: inline-block;
+  width: 1.1em;
+  height: 1.1em;
+  margin-right: 0.4em;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  vertical-align: -0.2em;
+}
+.muted {
+  margin: 0;
+  color: var(--ink-soft); /* ink-faint는 paper-raised 위 대비가 4.5:1에 못 미친다 */
+}
+.error {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--fail-bg);
+  color: var(--fail);
+}

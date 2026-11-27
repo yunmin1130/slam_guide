@@ -1,0 +1,133 @@
+---
+/**
+ * 4b주차 정적 그림: 픽셀 하나의 광선이 가우시안 세 개를 앞에서부터 지나가는 모습.
+ * 본문 예시와 같은 숫자다: α = 0.5, 0.5, 1 → 직전 투과율 T = 1, 0.5, 0.25 → 기여 α·T = 0.5, 0.25, 0.25, 끝에 남는 T = 0.
+ * 광선의 굵기가 T에 비례한다 (12px = 1).
+ * 글자는 viewBox 13 이상 (393px 화면에서 약 14.7px). 줄 배치: α(맨 위) → 가우시안과 광선 → T(가우시안 아래) → 기여.
+ */
+---
+
+<figure class="ac-figure" aria-label="광선이 빨강(알파 0.5), 초록(알파 0.5), 파랑(알파 1)을 차례로 지난다. 남은 빛 T는 1, 0.5, 0.25, 0으로 줄고, 기여는 0.5, 0.25, 0.25다">
+  <svg viewBox="0 0 320 172" aria-hidden="true">
+    <!-- 맨 위: 가우시안마다 α -->
+    <text class="note" x="100" y="20" text-anchor="middle">α = 0.5</text>
+    <text class="note" x="170" y="20" text-anchor="middle">α = 0.5</text>
+    <text class="note" x="240" y="20" text-anchor="middle">α = 1</text>
+
+    <!-- 광선: 굵기 = 남은 빛 T -->
+    <line class="beam" x1="34" y1="62" x2="100" y2="62" stroke-width="12"></line>
+    <line class="beam" x1="100" y1="62" x2="170" y2="62" stroke-width="6"></line>
+    <line class="beam" x1="170" y1="62" x2="240" y2="62" stroke-width="3"></line>
+    <line class="beam-off" x1="240" y1="62" x2="304" y2="62"></line>
+    <path class="cam" d="M12 50 L34 62 L12 74 Z"></path>
+
+    <!-- 가우시안 세 개 (앞에서부터) -->
+    <ellipse class="g-red" cx="100" cy="62" rx="9" ry="26"></ellipse>
+    <ellipse class="g-green" cx="170" cy="62" rx="9" ry="26"></ellipse>
+    <ellipse class="g-blue" cx="240" cy="62" rx="9" ry="26"></ellipse>
+
+    <!-- 가우시안 아래: 구간마다 남은 빛 T (가우시안과 겹치지 않는 줄) -->
+    <text class="t" x="66" y="112" text-anchor="middle">T = 1</text>
+    <text class="t" x="135" y="112" text-anchor="middle">T = 0.5</text>
+    <text class="t" x="205" y="112" text-anchor="middle">T = 0.25</text>
+    <text class="t" x="274" y="112" text-anchor="middle">T = 0</text>
+
+    <!-- 맨 아래: 기여 α·T -->
+    <line class="rule" x1="6" y1="128" x2="314" y2="128"></line>
+    <text class="note" x="6" y="154">기여 α·T</text>
+    <text class="w-red" x="100" y="154" text-anchor="middle">0.5</text>
+    <text class="w-green" x="170" y="154" text-anchor="middle">0.25</text>
+    <text class="w-blue" x="240" y="154" text-anchor="middle">0.25</text>
+  </svg>
+  <figcaption>
+    주황 띠의 굵기가 아직 남은 빛 T다. 가우시안 하나를 지날 때마다 (1 − α)배로 줄어든다. 각 가우시안의 몫은 "자기 α × 자기 앞까지 남은 T"이고, 픽셀 색은 0.5·빨강 + 0.25·초록 + 0.25·파랑이다.
+  </figcaption>
+</figure>
+
+<style>
+  .ac-figure {
+    --c-red: #d2402c;
+    --c-green: #2f9a48;
+    --c-blue: #2d63c8;
+    --c-cam: #12897f;
+    --c-beam: #d96a12;
+    margin: var(--space-4) 0 var(--space-6);
+    display: grid;
+    gap: var(--space-2);
+  }
+  @media (prefers-color-scheme: dark) {
+    .ac-figure {
+      --c-red: #f2796a;
+      --c-green: #6bd083;
+      --c-blue: #82a9f5;
+      --c-cam: #4fd8c9;
+      --c-beam: #f5a05a;
+    }
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 300px;
+    background: var(--paper-sunken);
+    border-radius: var(--radius-sm);
+  }
+  .beam {
+    stroke: var(--c-beam);
+  }
+  .beam-off {
+    stroke: var(--ink-faint);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+  }
+  .cam {
+    fill: var(--c-cam);
+  }
+  .rule {
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .t {
+    fill: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .note {
+    fill: var(--ink-soft);
+    font-size: 13px;
+  }
+  .g-red {
+    fill: color-mix(in srgb, var(--c-red) 55%, transparent);
+    stroke: var(--c-red);
+    stroke-width: 1.5;
+  }
+  .g-green {
+    fill: color-mix(in srgb, var(--c-green) 55%, transparent);
+    stroke: var(--c-green);
+    stroke-width: 1.5;
+  }
+  .g-blue {
+    fill: var(--c-blue);
+    stroke: var(--c-blue);
+    stroke-width: 1.5;
+  }
+  .w-red,
+  .w-green,
+  .w-blue {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .w-red {
+    fill: var(--c-red);
+  }
+  .w-green {
+    fill: var(--c-green);
+  }
+  .w-blue {
+    fill: var(--c-blue);
+  }
+  figcaption {
+    font-size: var(--text-sm);
+    color: var(--ink-soft);
+  }
+</style>

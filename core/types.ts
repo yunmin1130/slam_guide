@@ -448,3 +448,14 @@ export interface IcpResult {
   /** 반복마다 RMSE */
   readonly history: readonly number[];
 }
+
+// ---- 4b주차: 3DGS ----
+
+/** 2×2 행렬, 행 우선: m[행][열]. 2D 공분산 [[a, b], [b, c]] 에 쓴다 */
+export type Mat2 = readonly [Vec2, Vec2];
+
+/** 알파 합성 결과 (4b주차): 픽셀 색과 끝까지 남은 투과율 T (배경은 color + T·배경색 으로 더한다) */
+export interface CompositeResult {
+  readonly color: Vec3;
+  readonly transmittance: number;
+}

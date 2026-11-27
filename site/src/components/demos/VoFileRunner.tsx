@@ -1,7 +1,8 @@
 /**
- * 11d "TUM으로 VO 돌리기": datasets/tum_tracks.py가 만든 트랙 JSON을 열어 내 vo를 돌리고 정답과 비교한다 (M1 리포트).
+ * 11d 실행기: 트랙 JSON을 열어 내 vo(미니 SfM 조립)를 돌리고 기준 자세와 비교한다.
+ * - 트랙 파일은 datasets/colmap_tracks.py(내 사진의 COLMAP 결과, 기준 = COLMAP 자세)나 tum_tracks.py(TUM RGB-D, 기준 = 모션캡처 정답)가 만든다.
  * - 파일은 브라우저 안에서만 읽는다 (저장·업로드 안 함). vo는 워커에서 돌린다 (lib/voClient.ts).
- * - 결과: 궤적 그림, ATE·RPE, TUM 궤적 파일 내려받기 (22주차 evo로 다시 계산할 수 있게).
+ * - 결과: 궤적 그림, ATE·RPE, TUM 형식 궤적 파일 내려받기 (다른 도구로 다시 재 볼 수 있게).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AteResult, RpeResult, SE3, Vec3 } from "@core/types";
@@ -56,7 +57,7 @@ function download(name: string, text: string): void {
 
 function runErrorText(run: RunState): string | null {
   if (run.kind === "error") return run.message;
-  if (run.kind === "timeout") return `${Math.round(VO_TIMEOUT_MS / 60_000)}분 안에 끝나지 않아 멈췄다 (PC에서 열거나 --max-frames를 줄여)`;
+  if (run.kind === "timeout") return `${Math.round(VO_TIMEOUT_MS / 60_000)}분 안에 끝나지 않아 멈췄다 (PC에서 열거나, 트랙 파일을 더 작게 다시 만들어: --max-features 또는 --max-frames)`;
   return null;
 }
 
@@ -102,7 +103,7 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
     if (!f) return;
     try {
       if (f.size > MAX_FILE_BYTES) {
-        throw new Error(`파일이 너무 크다 (${(f.size / 1e6).toFixed(1)}MB, 최대 ${MAX_FILE_BYTES / 1e6}MB). --max-frames를 줄여 다시 만들어`);
+        throw new Error(`파일이 너무 크다 (${(f.size / 1e6).toFixed(1)}MB, 최대 ${MAX_FILE_BYTES / 1e6}MB). --max-features나 --max-frames를 줄여 다시 만들어`);
       }
       const parsed = parseTracks(await f.text());
       if (id === readId.current) setFile(parsed);
@@ -140,7 +141,12 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
     }
   }, [result, file, fns, delta]);
   const ev = evaluation?.ev ?? null;
-  const who = kind === "mine" ? "내 구현" : "정답";
+  // "정답"이라 하지 않는다: COLMAP 파일에서는 비교 대상(COLMAP 기준)과 헷갈린다
+  const who = kind === "mine" ? "내 구현" : "기준 구현";
+  // COLMAP 파일은 비교 대상이 정답이 아니라 기준이고, 길이 단위도 미터가 아니라 COLMAP이 정한 임의 단위다
+  const colmap = file?.reference === "colmap";
+  const refWord = colmap ? "COLMAP 기준" : "정답";
+  const unit = colmap ? "단위" : "m";
   const runError = runErrorText(run);
   const fallbackText = kind === "mine" ? fallbackNote(result?.fallbacks) : null;
   const failed = !!runError || !!evaluation?.error;
@@ -154,7 +160,7 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
       <ImplToggle statuses={statuses} value={kind} onChange={changeKind} />
 
       <label className={styles.file}>
-        트랙 파일 (datasets/tum_tracks.py로 만든 .json)
+        트랙 파일 (datasets/colmap_tracks.py 또는 tum_tracks.py로 만든 .json)
         <input type="file" accept=".json,application/json" onChange={(e) => {
             const input = e.currentTarget;
             void onFile(input.files?.[0]).finally(() => (input.value = "")); // 같은 파일을 다시 골라도 다시 읽게
@@ -170,7 +176,7 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
         </label>
         <div className={styles.row}>
           <button type="button" className={`${styles.button} ${styles.primary}`} disabled={!file || run.kind === "running"} onClick={start}>
-            VO 실행
+            실행
           </button>
           {run.kind === "running" && (
             <button
@@ -188,9 +194,9 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
       </div>
 
       {ev ? (
-        <TrajectoryView gt={ev.gtCenters} est={ev.estAligned} keyframes={kfIdx} unit="m" />
+        <TrajectoryView gt={ev.gtCenters} est={ev.estAligned} keyframes={kfIdx} unit={unit} />
       ) : (
-        <TrajectoryPlaceholder message={!file ? "트랙 파일을 열어 줘" : run.kind === "running" ? "VO 계산 중…" : result ? "그릴 궤적이 없다 (추적 3프레임 미만)" : "VO 실행을 눌러 줘"} />
+        <TrajectoryPlaceholder message={!file ? "트랙 파일을 열어 줘" : run.kind === "running" ? "계산 중…" : result ? "그릴 궤적이 없다 (추적 3프레임 미만)" : "실행을 눌러 줘"} />
       )}
 
       <div className={styles.readout}>
@@ -198,12 +204,12 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
           {!file && !fileError && <p className={styles.muted}>트랙 파일을 열면 여기에 결과가 나온다</p>}
           {file && run.kind === "idle" && (
             <p className={styles.muted}>
-              {file.name}: {file.frames.length}프레임, 정답 자세 {file.groundtruth.filter(Boolean).length}개. "VO 실행"을 눌러
+              {file.name}: {file.frames.length}프레임, {refWord} 자세 {file.groundtruth.filter(Boolean).length}개. "실행"을 눌러
             </p>
           )}
           {file && run.kind === "running" && (
             <p className={styles.muted}>
-              {who} VO 계산 중… 프레임 {run.frame}/{file.frames.length} (300프레임에 PC 약 10초, 폰은 몇 배)
+              {who} 계산 중… 프레임 {run.frame}/{file.frames.length} (300프레임에 PC 약 10초, 폰은 몇 배)
             </p>
           )}
           {run.kind === "cancelled" && <p className={styles.muted}>취소했다</p>}
@@ -228,7 +234,7 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
         )}
         {failed && kind === "mine" && (
           <button type="button" className={styles.button} onClick={() => changeKind("reference")}>
-            정답으로 보기
+            기준 구현으로 보기
           </button>
         )}
         {result && file && (
@@ -247,16 +253,16 @@ export default function VoFileRunner({ week, statuses }: VoFileRunnerProps) {
             <dd>
               {result.keyframeFrames.length}개 · {result.mapPoints.length}개
             </dd>
-            <dt>ATE (Sim(3) 정렬, 정답 있는 {ev?.frames.length ?? 0}프레임)</dt>
+            <dt>ATE (Sim(3) 정렬, {refWord} 자세가 있는 {ev?.frames.length ?? 0}프레임)</dt>
             <dd>
               {ev
-                ? `RMSE ${fmt(ev.ate.rmse)} m · 중앙값 ${fmt(ev.ate.median)} · 최대 ${fmt(ev.ate.max)} · 이동 거리 ${fmt(ev.pathLength, 2)} m의 ${fmt((100 * ev.ate.rmse) / ev.pathLength, 2)}%`
+                ? `RMSE ${fmt(ev.ate.rmse)} ${unit} · 중앙값 ${fmt(ev.ate.median)} · 최대 ${fmt(ev.ate.max)} · 이동 거리 ${fmt(ev.pathLength, 2)} ${unit}의 ${fmt((100 * ev.ate.rmse) / ev.pathLength, 2)}%`
                 : "–"}
             </dd>
-            <dt>RPE (Δ = {delta}프레임 ≈ 1초, 정답이 빠진 프레임은 건너뛰고 셈)</dt>
-            <dd>{ev?.rpe ? `이동 ${fmt(ev.rpe.transRmse)} m · 회전 ${fmt(ev.rpe.rotRmseDeg, 2)}°` : "–"}</dd>
+            <dt>RPE (Δ = {delta}프레임{colmap ? ", 이웃한 사진끼리" : " ≈ 1초"}, {refWord} 자세가 빠진 프레임은 건너뛰고 셈)</dt>
+            <dd>{ev?.rpe ? `이동 ${fmt(ev.rpe.transRmse)} ${unit} · 회전 ${fmt(ev.rpe.rotRmseDeg, 2)}°` : "–"}</dd>
             <dt>정렬 스케일 s</dt>
-            <dd>{ev ? `${fmt(ev.ate.align.s, 4)} (VO 1단위 = s 미터)` : "–"}</dd>
+            <dd>{ev ? `${fmt(ev.ate.align.s, 4)} (내 1단위 = ${colmap ? "COLMAP의 s 단위" : "s 미터"})` : "–"}</dd>
             <dt>계산 시간</dt>
             <dd>{(result.ms / 1000).toFixed(1)}초</dd>
           </dl>

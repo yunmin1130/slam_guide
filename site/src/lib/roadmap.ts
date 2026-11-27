@@ -15,14 +15,7 @@ export interface PlannedLesson {
 }
 
 /** 레슨을 만들면 여기서 지운다 (같은 키가 둘이면 buildRoadmap이 빌드를 멈춘다) */
-export const PLANNED: readonly PlannedLesson[] = [
-  { week: 0, title: "도구 먼저: 폰 사진 → COLMAP → 3DGS 학습", units: 2, form: "노트" },
-  { week: 4, part: "b", title: "3DGS 원리: 가우시안, 화면 투영, 알파 합성", units: 2, form: "레슨" },
-  { week: 9, title: "COLMAP 구조 파악", units: 1, form: "노트" },
-  { week: 12, title: "3DGS 학습 실험: 옵션별 품질 비교", units: 1, form: "노트" },
-  { week: 13, title: "코드 리딩과 작은 수정 (3DGRT 또는 gsplat)", units: 3, form: "노트" },
-  { week: 14, title: "캡스톤: 미니 센서 시뮬레이터", units: 6, form: "레슨" },
-];
+export const PLANNED: readonly PlannedLesson[] = [];
 
 export type RoadmapRow =
   | { kind: "lesson"; key: string; lesson: LessonMeta }

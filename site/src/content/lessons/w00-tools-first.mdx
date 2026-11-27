@@ -1,0 +1,751 @@
+---
+week: 0
+title: 도구 먼저 - 내 방을 3DGS로
+summary: 수학 없이 폰으로 방을 찍고, COLMAP으로 카메라 위치와 점 구름을 구하고, gsplat으로 3DGS 장면을 학습해 뷰어로 돌려 본다
+prereq: []
+la_box: []
+tasks: []
+read_only: []
+deliverables:
+  - "방 사진 50~150장 (datasets/raw/room01/images/)"
+  - "COLMAP 결과 (datasets/raw/room01/colmap/sparse/0/)"
+  - "첫 3DGS 장면 (datasets/raw/room01/gsplat/)"
+  - "기록: 사진 수, 등록된 사진 수, 학습 시간, 최대 VRAM, 관찰 3개"
+jetbot: false
+units: 2
+sessions:
+  - { id: s1, device: phone, title: "전체 그림: 사진에서 3D 장면까지" }
+  - { id: s2, device: phone, title: "촬영 규칙과 그 이유" }
+  - { id: s3, device: phone, title: "촬영: 내 방 찍기" }
+  - { id: s4, device: pc, title: "설치 ①: 사진 옮기기, git, COLMAP" }
+  - { id: s5, device: pc, title: "설치 ②: Miniconda, PyTorch, gsplat" }
+  - { id: s6, device: pc, title: "설치 ③: Build Tools와 CUDA Toolkit" }
+  - { id: s11, device: pc, title: "설치 ④: 예제 패키지와 도움말 확인, 막히면 WSL2" }
+  - { id: s7, device: pc, title: "COLMAP 실행과 결과 확인" }
+  - { id: s8, device: pc, title: "3DGS 학습" }
+  - { id: s9, device: pc, title: "뷰어로 보고 기록 남기기" }
+  - { id: s10, device: phone, title: "문제 해결, 체크 질문" }
+---
+
+## 개념
+
+이번 주를 마치면 내 방을 찍은 사진으로 만든 3D 장면을 브라우저에서 돌려 볼 수 있다. 수식은 하나도 쓰지 않는다. 도구가 무엇을 받아 무엇을 내놓는지만 눈으로 확인하고, 이론은 뒤 주차에서 "그때 본 것이 이것이었다"는 순서로 배운다.
+
+2주차 레슨과 같은 주에 번갈아 진행한다. 폰 세션은 읽기와 촬영이고, PC 세션은 설치와 실행이다.
+
+### 전체 그림
+
+```text
+① 사진 50~150장
+      ↓
+② COLMAP
+   사진마다 찍은 위치와 방향
+   + 듬성듬성한 3D 점
+      ↓
+③ 3DGS 학습 (gsplat)
+      ↓
+④ 뷰어
+   찍지 않은 자리에서 본 모습
+```
+
+**① 사진.** 같은 방을 자리를 옮겨 가며 찍은 사진 묶음이다. 입력은 이것뿐이다. 카메라가 어디 있었는지는 아무도 적어 두지 않았다.
+
+**② COLMAP.** 사진 여러 장에서 같은 지점을 찾아, 사진마다 카메라가 어디서 어느 쪽을 보고 찍었는지 거꾸로 계산하는 프로그램이다. 이 일을 SfM(Structure from Motion)이라 부른다. 결과는 두 가지다: 사진별 카메라 자세(pose, 위치와 방향)와, 계산에 쓰인 지점들의 3D 좌표인 희소 점 구름(sparse point cloud)이다.
+
+COLMAP이 자세를 구해 낸 사진을 "등록됐다(registered)"고 한다. 지점을 충분히 못 찾은 사진은 자세를 못 구해 등록되지 않고, 뒤 단계에서 빠진다. 그래서 "등록된 사진 수"가 이번 주의 첫 성적표다.
+
+**③ 3DGS 학습.** 3DGS(3D Gaussian Splatting)는 장면을 색과 투명도를 가진 작은 반투명 덩어리(가우시안) 수십만 개로 나타내는 방법이다. COLMAP의 점에서 출발해, "이 덩어리들을 각 카메라 자리에서 그린 그림"이 실제 사진과 같아질 때까지 덩어리의 위치·크기·색을 조금씩 고친다. 이 고치기를 수만 번 반복(step)하는 것이 학습이고, 여기서는 gsplat이라는 라이브러리의 예제 스크립트가 해 준다.
+
+**④ 뷰어.** 학습이 끝난 덩어리들을 마우스로 돌려 보는 화면이다. 사진을 찍지 않은 자리에서 본 모습도 그려진다. 레이트레이서로 치면 ②는 카메라 설정을 사진에서 역산하는 일이고, ③은 장면 데이터를 사진에 맞게 만들어 내는 일이다.
+
+### 어느 주차에서 설명하나
+
+| 여기서 본 것 | 설명하는 주차 |
+| --- | --- |
+| 카메라 한 대의 모델 | [4a주차](../w04a-pinhole-camera/) |
+| COLMAP 안에서 벌어지는 일 | 5~8주차, [9주차](../w09-colmap-structure/) |
+| 3DGS의 덩어리와 그리는 법 | [4b주차](../w04b-3dgs-principles/) |
+| 학습 옵션과 품질 | [12주차](../w12-3dgs-training-experiments/) |
+
+5~8주차는 COLMAP의 부품을 하나씩 직접 만든다. 두 사진 사이의 관계([5주차](../w05-epipolar-ransac/)), 자세와 3D 점 구하기([6주차](../w06-pose-triangulation-pnp/)), 오차를 줄이는 최적화([7a주차](../w07a-gauss-newton/)), 전체를 한꺼번에 다듬기([8b주차](../w08b-bundle-adjustment/)) 순서다. 9주차에서 이번 주 결과 폴더를 다시 열어 그 부품들이 어디 있는지 짚는다.
+
+<SessionBreak id="s1" />
+
+### 촬영 규칙과 그 이유
+
+COLMAP은 "사진 여러 장에 같은 지점이 찍혔다"는 사실에만 기댄다. 아래 규칙은 모두 그 지점을 찾기 쉽게 하거나, 모든 사진이 같은 카메라로 찍혔다는 가정을 지키기 위한 것이다.
+
+**카메라 설정**
+
+- **메인 카메라(1×)만 쓴다.** 초광각(0.5×)은 가장자리가 크게 휘어, 기본 3DGS가 가정하는 단순한 카메라와 맞지 않는다.
+- **영상 말고 사진으로 찍는다.** 영상 프레임은 움직임 때문에 흐리고, 손떨림 보정이 프레임마다 화면을 조금씩 잘라 카메라 특성이 달라진다.
+- **초점과 노출을 고정한다.** 자동 초점은 렌즈를 움직여 사진마다 카메라의 내부 파라미터(intrinsics, 초점거리 같은 카메라 고유 값)를 바꾼다. 자동 노출은 같은 벽을 사진마다 다른 밝기로 찍어 3DGS가 색을 정하지 못하게 한다.
+- **플래시를 끈다.** 플래시는 카메라와 같이 움직이는 조명이라, 같은 지점이 사진마다 다르게 보인다.
+- **가로로 통일해 찍는다.** 세로 사진은 "돌려서 보여 달라"는 정보가 파일에 따로 적혀, 도구마다 다르게 읽을 수 있다.
+
+**움직이는 법**
+
+- **제자리에서 돌지 말고 걸으며 찍는다.** 카메라 위치가 그대로면 가까운 물체와 먼 물체가 화면에서 똑같이 움직여(시차, parallax가 없어) 깊이를 알 수 없다.
+- **이웃 사진끼리 70%쯤 겹치게 찍는다.** 겹치는 부분이 있어야 같은 지점을 두 사진에서 찾을 수 있다. 한 걸음 옮기고 한 장이 대략 이 정도다.
+- **50~150장을 찍는다.** 너무 적으면 사진끼리 이어지지 않고, 너무 많으면 COLMAP과 학습 시간이 길어진다.
+- **높이를 바꿔 두 바퀴 돈다.** 한 지점을 여러 방향에서 봐야 3DGS가 그 지점의 모양을 정할 수 있다. 가슴 높이로 한 바퀴, 머리 위에서 살짝 내려다보며 한 바퀴가 무난하다.
+
+**장면**
+
+- **거울, 창문, 빈 벽을 피한다.** 거울과 유리는 보는 자리마다 다른 것이 비쳐 "같은 지점"이 아니게 되고, 무늬 없는 벽은 찾을 지점이 없다.
+- **움직이는 것을 치운다.** 사람, 반려동물, 켜진 TV는 사진마다 달라져 틀린 짝을 만든다. 찍는 동안 물건도 옮기지 않는다.
+- **밝고 고른 빛에서 찍는다.** 어두우면 셔터가 길어져 사진이 흐려지고, 흐린 사진에서는 지점을 찾기 어렵다. 낮에 커튼을 걷거나 불을 모두 켠다.
+
+<SessionBreak id="s2" />
+
+## 실습 ①: 촬영
+
+iPhone 메뉴 이름은 iOS 버전과 언어 설정에 따라 조금 다를 수 있다. 다르면 비슷한 이름을 찾는다.
+
+### 찍기 전에 (5분)
+
+1. **사진 형식을 JPEG로 바꾼다.** 설정 → 카메라 → 포맷에서 "높은 호환성"(Most Compatible)을 고른다. Apple 안내에 따르면 이후 사진이 JPEG로 저장된다. 기본 형식(HEIF, 확장자 `.HEIC`)은 뒤 단계의 도구가 못 읽을 수 있다.
+2. **매크로 자동 전환을 끈다.** 설정 → 카메라 → "매크로 제어"를 켜면, 카메라 화면에 꽃 모양 단추가 생기고 이것으로 자동 전환을 끌 수 있다. iPhone 14 Pro는 물체에 아주 가까이 가면 접사를 위해 초광각 카메라로 몰래 바꾸기 때문이다. (이 메뉴 이름은 Apple 공식 문서에서 확인하지 못했다. 메뉴가 없으면 물체에 30cm보다 가까이 가지 않는 것으로 대신한다.)
+3. **방을 정리한다.** 거울은 가리거나 화면에 안 들어오게 동선을 잡는다. 책상 위 물건, 책장처럼 무늬가 많은 곳은 그대로 두는 편이 좋다.
+4. **카메라 앱에서 1×, 플래시 끔, Live Photo 끔**으로 맞춘다.
+
+### 초점·노출 고정
+
+1. 방 한가운데쯤의 물체(2~3m 거리)를 화면에서 길게 누른다.
+2. 화면 위쪽에 노란 글씨로 "AE/AF 잠금"(영문 화면에서는 "AE/AF Lock")이 뜨면 손을 뗀다. AE는 자동 노출, AF는 자동 초점이다.
+3. 화면의 다른 곳을 누르면 잠금이 풀린다. 풀렸으면 같은 물체로 다시 잠근다.
+
+길게 눌러 잠그는 동작은 Apple 문서가 아니라 여러 사용 안내에서 확인한 것이다. 잠금 표시가 안 뜨면 누르는 시간을 2초 넘게 늘려 본다.
+
+### 찍는 순서
+
+1. 벽을 등지고 서서 방 안쪽을 본다. 한 장 찍는다.
+2. 벽을 따라 옆으로 한 걸음 옮겨 한 장 찍는다. 카메라는 계속 방 안쪽을 향한다.
+3. 방을 한 바퀴 돌아 처음 자리로 돌아온다. 처음과 끝 사진이 겹쳐야 한다.
+4. 폰을 머리 위로 들고 살짝 내려다보며 한 바퀴 더 돈다.
+5. 사진 수를 센다. 50장보다 적으면 걸음 폭을 반으로 줄여 한 바퀴 더 찍는다.
+
+찍을 때마다 멈춰서 찍는다. 걸으면서 누르면 흐려진다.
+
+<SessionBreak id="s3" />
+
+## 실습 ②: 환경 설치
+
+> **PC 작업 전체에 대한 안내.** 이 페이지의 PC 절차는 아직 이 PC에서 한 번도 돌려 보지 않았다. 명령, 옵션 이름, 버전, 로그 문구는 2026-11-27~28에 공식 문서와 각 저장소의 코드(gsplat은 v1.5.3 태그)에서 확인했다. 가장 막히기 쉬운 곳은 세 군데로 본다.
+>
+> ① 예제 패키지(`requirements.txt`) 설치: 내 PC에서 CUDA 코드를 컴파일한다.
+>
+> ② 학습 스크립트가 내 데이터를 읽는 부분: 사진 1/4 축소 폴더 처리와, COLMAP 4.2.1 결과 파일 읽기. 코드를 읽고만 정했다.
+>
+> ③ COLMAP 창(GUI)의 항목 이름, 뷰어 화면 구성: 문서에 없어 화면을 보고 맞춰야 한다.
+>
+> 아래에서 이 세 곳은 "(위 상자 ①)"처럼 짧게 가리킨다. 나머지는 공식 문서대로 적었고, 다르게 나오면 그 절의 링크를 먼저 본다.
+
+**시간 상한:** 설치 세션 4개(s4, s5, s6, s11)가 기준이고, 막혀도 설치에 쓰는 시간은 합쳐서 5시간(1단위)을 넘기지 않는다. 넘기면 더 파지 말고 "막히면 WSL2로"로 간다. 설치는 이 과정의 목표가 아니다.
+
+**여러 줄 명령 붙여 넣기:** 이 페이지의 PC 명령은 모두 PowerShell 창에서 친다. 화면 폭 때문에 명령을 여러 줄로 나눴고, 줄 끝의 `` ` ``(백틱)이 "다음 줄에 이어진다"는 뜻이다. 코드 상자 하나를 통째로 복사해 붙여 넣는다. 백틱이 빠지면 첫 줄만 따로 실행되어 엉뚱한 결과가 나온다.
+
+### 사진을 PC로 옮기기
+
+1. 저장소 폴더 아래에 `datasets\raw\room01\images\` 폴더를 만든다. `datasets/raw/`는 git에 올라가지 않는다.
+2. iPhone을 USB 케이블로 PC에 꽂고 잠금을 푼다. 폰에 "이 컴퓨터를 신뢰하겠습니까?"가 뜨면 "신뢰"를 누르고 암호를 넣는다. (Apple 안내는 이때 Microsoft Store의 "Apple Devices" 앱 설치도 권한다.)
+3. 파일 탐색기 → 내 PC → Apple iPhone → Internal Storage → DCIM으로 들어간다. 그 안의 `100APPLE` 같은 폴더에 사진이 있다.
+4. 이번에 찍은 사진만 골라 `images` 폴더에 복사한다.
+5. 확장자가 모두 `.JPG` 또는 `.jpg`인지 본다. `.HEIC`가 섞였으면 그 사진은 빼거나 다시 찍는다.
+6. 흐리게 찍힌 사진은 지운다.
+
+탐색기에서 DCIM이 비어 보이면 폰 잠금을 푼 채로 다시 꽂는다. iCloud 사진의 "저장 공간 최적화"가 켜져 있으면 원본이 폰에 없을 수 있다. 메신저로 보내는 방법은 사진이 다시 압축되므로 쓰지 않는다. (탐색기 경로는 Microsoft 공식 문서가 아니라 여러 사용 안내에서 확인했다.)
+
+### 폴더 모양
+
+이번 주가 끝나면 `room01` 아래는 이렇게 된다. 지금은 `images`만 있으면 된다.
+
+```text
+datasets/raw/room01/
+  images/        ← 원본 사진
+  colmap/
+    database.db
+    sparse/0/    ← COLMAP 결과 원본
+  sparse/0/      ← 학습용 복사본
+  images_4/      ← 학습용 사진 복사본
+  images_4_png/  ← 스크립트가 만든 1/4 사진
+  gsplat/        ← 3DGS 학습 결과
+```
+
+`colmap/sparse/0`이 원본이고, 9·11주차는 이 원본을 쓴다. 바로 아래의 `sparse/0`은 gsplat 스크립트가 찾는 자리에 둔 복사본일 뿐이다. COLMAP을 다시 돌리면 `room01\sparse` 복사본을 지우고 다시 복사한다.
+
+### git 확인
+
+gsplat 예제와 그 패키지 일부를 git으로 받는다. PowerShell에서 확인한다.
+
+```text
+git --version
+```
+
+버전이 나오면 된다. "인식되지 않습니다" 오류가 나면 [git-scm.com](https://git-scm.com/)에서 Windows판을 받아 기본값 그대로 설치하고, PowerShell을 새로 연다.
+
+### COLMAP 설치
+
+COLMAP은 설치 프로그램 없이 압축을 풀어 쓴다. 공식 설치 문서: [colmap.github.io/install.html](https://colmap.github.io/install.html)
+
+1. [COLMAP 릴리스 페이지](https://github.com/colmap/colmap/releases)에서 `colmap-x64-windows-cuda.zip`을 받는다. 이름에 `cuda`가 있는 쪽이 GPU를 쓰는 판이다. (확인한 날의 최신은 4.2.1이었다.)
+2. zip을 오른쪽 클릭 → "압축 풀기"에서 대상 폴더를 `C:\tools\colmap`으로 바꿔 푼다. 이 zip은 맨 위에 `COLMAP.bat`과 `bin` 폴더가 바로 들어 있다.
+3. `C:\tools\colmap\COLMAP.bat` 파일이 있는지 탐색기로 확인한다. 한 단계 더 들어간 곳에 있으면 그 폴더 내용을 `C:\tools\colmap`으로 옮긴다.
+4. `COLMAP.bat`을 더블클릭하면 창(GUI)이 뜬다. 서명되지 않은 파일이라 경고가 나올 수 있다고 공식 문서에 적혀 있다. "Windows의 PC 보호" 파란 창이 뜨면 "추가 정보" → "실행"을 누른다.
+
+PowerShell에는 `colmap`이라는 명령이 없다. 그래서 창을 열 때마다 아래 한 줄로 `colmap`이라는 별명을 만든다. 이 페이지와 9·11주차의 명령은 모두 이 별명을 쓴다.
+
+```text
+Set-Alias colmap C:\tools\colmap\COLMAP.bat
+colmap -h
+```
+
+도움말이 나오면 된다. 창을 닫으면 별명도 사라진다.
+
+<SessionBreak id="s4" />
+
+### 어떤 조합으로 설치하나
+
+gsplat은 GPU에서 도는 코드(CUDA)를 품고 있어서, 파이썬·PyTorch·CUDA 버전이 서로 맞아야 한다. gsplat은 이미 빌드해 둔 설치 파일(wheel)을 Windows용으로도 제공하지만, <strong>일부 조합</strong>만 있다. 그래서 있는 조합에 나를 맞추는 것이 가장 덜 막힌다.
+
+| 항목 | 맞출 값 |
+| --- | --- |
+| 파이썬 | 3.10 |
+| PyTorch | 2.4.1 (CUDA 12.4판) |
+| gsplat | 1.5.3 |
+
+이 표는 [gsplat wheel 목록](https://docs.gsplat.studio/whl/gsplat/)에서 Windows용(`win_amd64`) 중 가장 새 것을 고른 결과다. 목록이 바뀌었으면 거기 있는 조합으로 바꾼다.
+
+### Miniconda 설치와 창 준비
+
+파이썬 환경은 conda(파이썬 버전별 환경을 따로 만드는 도구)로 만든다. conda의 작은 배포판이 Miniconda다. 공식 안내: [Miniconda Windows 설치](https://www.anaconda.com/docs/getting-started/miniconda/install/windows-gui-install)
+
+1. [anaconda.com/download](https://www.anaconda.com/download)에서 Miniconda의 "Windows 64-bit (x86_64)" 그래픽 설치 파일을 받는다.
+2. 설치 중 선택은 공식 권장대로 한다: "Just Me", 설치 경로는 공백·한글이 없는 기본값, "Add to PATH"는 켜지 않는다.
+3. 시작 메뉴에서 "Anaconda Prompt"를 연다. 줄 앞에 `(base)`가 보이면 설치된 것이다.
+4. 그 창에서 아래를 한 번 친다. PowerShell에서도 conda를 쓰게 하는 설정이다.
+
+```text
+conda init powershell
+```
+
+5. 그 창을 닫고 **새 PowerShell**을 연다. 줄 앞에 `(base)`가 보이면 준비 끝이다. 이 페이지의 PC 명령은 모두 이런 PowerShell 창에서 친다.
+
+새 PowerShell에서 "스크립트를 실행할 수 없으므로"로 시작하는 빨간 오류가 나면, PowerShell이 conda 설정 스크립트를 막은 것이다. 아래 한 줄을 치고 창을 다시 연다. (이 오류와 해법은 일반적인 Windows 설정 이야기이고, 이 PC에서 나는지는 확인하지 않았다.)
+
+```text
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+### PyTorch와 gsplat 설치
+
+gsplat용 환경을 만들고 들어간다. 줄 앞이 `(gsplat)`으로 바뀐다.
+
+```text
+conda create -n gsplat python=3.10
+conda activate gsplat
+```
+
+PyTorch를 먼저 넣는다. 명령은 [PyTorch 이전 버전 페이지](https://pytorch.org/get-started/previous-versions/)의 v2.4.1, CUDA 12.4 줄을 백틱으로 나눈 것이다.
+
+```text
+pip install torch==2.4.1 `
+  torchvision==0.19.1 `
+  torchaudio==2.4.1 `
+  --index-url `
+  https://download.pytorch.org/whl/cu124
+```
+
+GPU가 보이는지 확인한다. `True`가 나와야 한다.
+
+```text
+python -c "import torch; print(torch.cuda.is_available())"
+```
+
+`False`가 나오면 아래 순서로 본다.
+
+1. `nvidia-smi`를 친다. 그래픽 카드 이름(RTX 4070 Ti)이 안 나오면 NVIDIA 드라이버부터 새로 깐다.
+2. `pip show torch`를 친다. `Version:` 줄이 `2.4.1+cu124`여야 한다. `+cu124` 없이 `2.4.1`만 있으면 GPU를 못 쓰는 판이 깔린 것이다.
+3. 그 경우 아래로 지우고, 위의 PyTorch 설치 상자를 그대로 다시 붙여 넣는다.
+
+```text
+pip uninstall -y torch torchvision torchaudio
+```
+
+gsplat을 넣는다. 첫 줄은 gsplat이 필요로 하는 패키지이고, 둘째 명령이 빌드된 gsplat이다. 출처: [gsplat README](https://github.com/nerfstudio-project/gsplat), [Windows 설치 문서](https://github.com/nerfstudio-project/gsplat/blob/main/docs/INSTALL_WIN.md)
+
+```text
+pip install ninja numpy jaxtyping rich
+
+pip install gsplat `
+  --index-url `
+  https://docs.gsplat.studio/whl/pt24cu124
+```
+
+**주의:** 그냥 `pip install gsplat`만 치면 빌드되지 않은 판이 깔리고, 처음 실행할 때 내 PC에서 CUDA 코드를 컴파일한다. 위처럼 주소를 붙이면 이 단계를 건너뛴다.
+
+<SessionBreak id="s5" />
+
+### Build Tools와 CUDA Toolkit 설치
+
+다음 세션의 예제 패키지 중 `fused-ssim`과 `fused-bilagrid`는 git에서 받자마자 내 PC에서 CUDA 코드를 컴파일한다(위 상자 ①). 컴파일러 두 가지를 미리 깐다. 둘 다 용량이 커서 내려받기만 수십 분 걸릴 수 있다.
+
+**Visual Studio 2022 Build Tools (C++ 컴파일러)**
+
+1. [Build Tools 2022 설치 파일](https://aka.ms/vs/17/release/vs_BuildTools.exe)을 받아 실행한다. 2026 판이 아니라 2022 판을 쓰는 이유는, CUDA 12.4가 지원하는 컴파일러가 Visual Studio 2022(MSVC 193x)까지이기 때문이다([CUDA 12.4 Windows 설치 안내](https://docs.nvidia.com/cuda/archive/12.4.0/cuda-installation-guide-microsoft-windows/index.html)의 표).
+2. 작업(workload) 목록에서 **"C++를 사용한 데스크톱 개발"**(영문 "Desktop development with C++") 하나만 고르고 설치한다. 이름은 [Microsoft 안내](https://learn.microsoft.com/ko-kr/cpp/build/vscpp-step-0-installation)에서 확인했다.
+
+**CUDA Toolkit 12.4 (GPU 컴파일러)**
+
+1. [CUDA 12.4.0 다운로드 보관 페이지](https://developer.nvidia.com/cuda-12-4-0-download-archive)에서 Windows → x86_64 → 11 → exe (local)를 고른다. 받는 파일은 `cuda_12.4.0_551.61_windows.exe`다.
+2. 실행해서 기본값(빠른 설치)으로 설치한다. Build Tools를 먼저 깔아야 Visual Studio 연동이 같이 설치된다.
+3. **새** PowerShell을 열고 확인한다. 출력 끝 쪽에 `release 12.4`가 보여야 한다.
+
+```text
+nvcc --version
+```
+
+PyTorch가 CUDA 12.4판이라 툴킷도 12.4로 맞췄다. fused-ssim 저장소는 다른 조합(PyTorch cu124 + CUDA 12.6, Windows 11)으로도 시험했다고 적고 있으니, 12.4 설치가 안 되면 12.6도 후보다.
+
+<SessionBreak id="s6" />
+
+### 예제 스크립트 준비
+
+학습 스크립트(`simple_trainer.py`)는 pip 패키지에 없고 저장소의 `examples` 폴더에 있다. 저장소를 받고, 설치한 gsplat과 같은 버전(1.5.3)으로 맞춘다. 최신 코드는 더 새 PyTorch를 요구해서 위 조합과 맞지 않는다.
+
+```text
+cd C:\tools
+git clone https://github.com/nerfstudio-project/gsplat.git
+cd gsplat
+git checkout v1.5.3
+```
+
+이제 예제 패키지를 설치한다(위 상자 ①). 컴파일러가 보이는 창에서 해야 한다.
+
+1. 시작 메뉴에서 "x64 Native Tools Command Prompt for VS 2022"를 연다. 한국어 화면에서는 "x64 Native" 또는 "x64 네이티브 도구 명령 프롬프트"로 검색한다.
+2. 그 창에서 아래를 차례로 친다. 첫 줄로 같은 창 안에서 PowerShell로 바뀐다.
+
+```text
+powershell
+conda activate gsplat
+cd C:\tools\gsplat\examples
+pip install -r requirements.txt `
+  --no-build-isolation
+```
+
+`--no-build-isolation`은 "새 빈 환경이 아니라 지금 환경(이미 깐 PyTorch가 있는 곳)에서 컴파일하라"는 뜻이다. fused-ssim 안내는 이 옵션이 있어야 PyTorch를 찾는다고 적고 있다. gsplat 1.5.3의 README에는 이 옵션이 없지만, 최신 README는 붙인다.
+
+실패하면 빨간 오류의 마지막 20줄을 메모에 복사해 둔다. 오류에 fused-ssim과 fused-bilagrid 중 어느 이름이 나오는지도 적는다. "unsupported Microsoft Visual Studio version"이 보이면 CUDA 12.4와 Build Tools 버전이 안 맞는 것이다(이 경우는 추정이다). 이 세션 안에 못 풀면 더 파지 말고 "막히면 WSL2로"로 간다.
+
+설치가 끝났는지는 도움말로 확인한다. 옵션 목록이 길게 나오면 된 것이다.
+
+```text
+python simple_trainer.py default --help
+```
+
+gsplat README는 Windows 설치를 처음부터 보여 주는 [영상 안내](https://www.youtube.com/watch?v=ACPTiP98Pf8)도 소개한다. 글로 막히면 이것을 본다(내용은 확인하지 않았다).
+
+### 막히면 WSL2로
+
+설치 시간이 합쳐 5시간을 넘으면 gsplat만 WSL2(Windows 안에서 도는 리눅스)의 Ubuntu로 옮긴다. COLMAP은 Windows에서 그대로 쓴다. 결과가 파일이라 어느 쪽에서 만들든 상관없다.
+
+<Details summary="WSL2 경로 (검증하지 않은 개요)">
+  아래는 순서만 적은 것이고, 하나도 확인하지 않았다. 특히 확인할 것: WSL2 안에서 `nvidia-smi`가 GPU를 보여 주는지, 뷰어 주소가 Windows 브라우저에서 열리는지.
+
+  1. 관리자 PowerShell에서 `wsl --install`을 실행하고 재부팅한다. Ubuntu가 깔린다.
+  2. Ubuntu 창에서 `nvidia-smi`를 쳐서 RTX 4070 Ti가 보이는지 확인한다. Windows 쪽 NVIDIA 드라이버가 최신이어야 한다.
+  3. Ubuntu에 Miniconda를 깔고, 위와 똑같이 파이썬 3.10 환경 → PyTorch 2.4.1 → gsplat 순서로 설치한다. 같은 조합의 리눅스용 wheel도 목록에 있다.
+  4. 컴파일러는 `sudo apt install build-essential`로 넣는다. CUDA Toolkit은 NVIDIA의 WSL용 안내를 따라 넣는다.
+  5. Windows의 C 드라이브는 Ubuntu에서 `/mnt/c/`로 보인다. 아래 명령의 데이터 경로만 이 꼴로 바꾸고, 줄 끝 백틱은 `\`로 바꾼다.
+</Details>
+
+WSL2에서도 5시간 안에 안 되면 멈추고 기록에 "어디서 막혔는지"를 적는다. 그 경우 COLMAP 결과까지만으로 이번 주를 닫고, 3DGS 학습은 12주차를 시작하기 전까지 다시 시도한다.
+
+<SessionBreak id="s11" />
+
+## 실습 ③: COLMAP 실행
+
+명령과 옵션 이름은 공식 문서([명령줄 안내](https://colmap.github.io/cli.html), [튜토리얼](https://colmap.github.io/tutorial.html), [FAQ](https://colmap.github.io/faq.html))에서 확인했다. 옵션 이름이 다르다고 나오면 `colmap feature_extractor -h`처럼 `-h`를 붙여 그 버전의 목록을 본다.
+
+COLMAP은 세 단계로 돈다. 이름만 알아 두고, 원리는 뒤 주차에서 배운다.
+
+| 단계 | 하는 일 | 주차 |
+| --- | --- | --- |
+| 특징점 추출 | 사진마다 눈에 띄는 지점을 찾는다 | 10 |
+| 매칭 | 사진 쌍마다 같은 지점을 짝짓는다 | 5, 10 |
+| 매핑 | 카메라 자세와 3D 점을 구한다 | 6~8 |
+
+### 명령줄로 돌리기 (권장)
+
+새 PowerShell을 열고 별명을 만든 뒤, 저장소 폴더(맨 위)로 간다. 따옴표 안은 내 저장소 위치로 바꾼다. 아래 명령의 `datasets/...` 경로는 모두 저장소 맨 위 기준이다.
+
+```text
+Set-Alias colmap C:\tools\colmap\COLMAP.bat
+cd "C:\내\저장소"
+mkdir datasets/raw/room01/colmap/sparse
+```
+
+**1단계: 특징점 추출.**
+
+```text
+colmap feature_extractor `
+  --database_path `
+    datasets/raw/room01/colmap/database.db `
+  --image_path `
+    datasets/raw/room01/images `
+  --ImageReader.single_camera 1
+```
+
+`--ImageReader.single_camera 1`은 "모든 사진을 같은 카메라 하나로 찍었다"고 알려 주는 옵션이다. 이것이 없으면 COLMAP은 사진마다 카메라가 다르다고 보고 초점거리를 사진 수만큼 따로 추정해서 결과가 불안정해진다. COLMAP FAQ도 같은 물리 카메라·같은 설정으로 찍었으면 이 옵션을 쓰라고 하고, 촬영 때 초점을 잠근 이유가 여기서 쓰인다.
+
+**2단계: 매칭.** 모든 사진 쌍을 다 비교한다. 150장 이하에서는 이 방식이 가장 단순하다.
+
+```text
+colmap exhaustive_matcher `
+  --database_path `
+    datasets/raw/room01/colmap/database.db
+```
+
+**잘 돌았는지 보는 법 (1·2단계).** 사진 이름이 하나씩 지나가는 로그가 흐르고, 끝에 `Elapsed time`(걸린 시간) 줄이 찍히면 끝난 것이다. `colmap` 폴더에 `database.db` 파일이 생겨야 한다. 100장 안팎이면 각각 수 분 정도로 예상한다(미검증, 실제 시간을 기록에 적는다).
+
+줄 앞이 `E`나 `F`로 시작하거나 `Check failed`가 보이면 오류다. 대부분 경로 오타이므로 `images` 폴더 경로부터 확인한다. 고친 뒤에는 `database.db`를 지우고 1단계부터 다시 한다.
+
+**3단계: 매핑.** 가장 오래 걸린다. 사진이 한 장씩 등록되는 로그가 흐른다.
+
+```text
+colmap mapper `
+  --database_path `
+    datasets/raw/room01/colmap/database.db `
+  --image_path `
+    datasets/raw/room01/images `
+  --output_path `
+    datasets/raw/room01/colmap/sparse
+```
+
+끝나면 `colmap/sparse/0/` 폴더에 `cameras.bin`, `images.bin`, `points3D.bin`이 생긴다(버전에 따라 파일이 더 있다). 각각 카메라 내부 파라미터, 사진별 자세, 3D 점이다. 파일 안은 9주차에서 연다.
+
+### 창(GUI)으로 돌리기
+
+명령줄이 낯설면 `COLMAP.bat`을 더블클릭해 창에서 한다(위 상자 ③).
+
+1. 메뉴에서 Reconstruction › Automatic Reconstruction을 누른다.
+2. 작업 폴더(workspace)에 `datasets/raw/room01/colmap`, 사진 폴더에 `datasets/raw/room01/images`를 고른다.
+3. 같은 카메라를 공유한다는 뜻의 항목(shared intrinsics 또는 single camera)이 있으면 켠다. 촘촘한 복원(dense) 항목이 있으면 끈다. 이번 주에는 필요 없고 오래 걸린다.
+4. 실행하고 기다린다.
+
+3번의 항목 이름은 공식 문서에서 확인하지 못했다. 창에 보이는 이름대로 고르고, 실제 이름을 기록에 적는다.
+
+### 결과 확인: 등록된 사진 수
+
+성공의 기준은 하나다. 등록된 사진 수가 내가 넣은 사진 수와 거의 같아야 한다.
+
+1. COLMAP 창에서 File › Import model로 `colmap/sparse/0` 폴더를 연다(위 상자 ③).
+2. 화면에 방 모양의 점 구름과, 사진마다 하나씩 작은 카메라 표시가 보인다. 카메라 표시가 내가 걸은 길 모양(방을 한 바퀴)으로 늘어서 있으면 맞다.
+3. 창 아래쪽 상태 표시에서 사진 수와 점 수를 읽어 기록한다. 안 보이면 다음 절의 학습을 시작할 때 터미널에 찍히는 `[Parser]` 줄의 사진 수를 쓴다.
+
+마우스로 돌려 보면서 벽이 평평한지, 책상 같은 큰 물체가 알아볼 만한지도 본다.
+
+### 등록이 많이 빠졌다면
+
+사진의 90% 이상이 등록됐으면 그대로 진행한다. 그보다 적으면 다음을 본다.
+
+- **`sparse` 아래에 `0` 말고 `1`, `2` 폴더도 생겼다.** 사진들이 한 덩어리로 이어지지 못하고 여러 조각으로 따로 복원된 것이다. 이때 `0`이 가장 큰 조각이라는 보장은 없다. 각 폴더를 창에서 하나씩 열어 사진 수를 보고, 가장 큰 것이 `0`이 아니면 폴더 이름을 서로 바꿔 가장 큰 것을 `0`으로 만든다.
+- 근본적으로는 조각 사이를 잇는 자리(보통 방 모서리나 빈 벽 앞)에서 사진을 10~20장 더 찍어 넣고 1단계부터 다시 돌린다.
+- **빠진 사진이 한 구간에 몰려 있다.** 그 구간에서 걸음 폭이 너무 컸거나 제자리에서 돌았다. 그 구간만 촘촘히 다시 찍는다.
+- **여기저기 한 장씩 빠졌다.** 흐린 사진이거나 빈 벽만 찍힌 사진이다. 몇 장이면 무시한다.
+
+다시 돌릴 때는 `colmap` 폴더의 `database.db`와 `sparse` 안을 지우고 시작한다. 예전 결과가 섞이지 않게 하기 위해서다. 다음 절에서 `room01\sparse` 복사본을 만든 뒤라면 그것도 지우고 다시 복사한다.
+
+<SessionBreak id="s7" />
+
+## 실습 ④: 3DGS 학습
+
+옵션 이름과 폴더 규칙은 gsplat v1.5.3의 [예제 문서](https://docs.gsplat.studio/main/examples/colmap.html)와 `examples` 폴더의 코드를 읽어 확인했다.
+
+### 창 준비
+
+새 PowerShell 창은 앞 창의 설정을 모른다. 학습이든 뷰어든 새 창을 열면 먼저 아래 세 줄을 친다. `$R`은 데이터 폴더를 가리키는 변수이고, 따옴표 안은 내 저장소의 실제 위치로 바꾼다.
+
+```text
+conda activate gsplat
+cd C:\tools\gsplat\examples
+$R = "C:\내\저장소\datasets\raw\room01"
+```
+
+### 학습 스크립트가 기대하는 폴더
+
+`simple_trainer.py`는 데이터 폴더 하나를 받고, 그 안에서 `images`, `images_4`, `sparse/0`이라는 이름을 찾는다(위 "폴더 모양" 그림). 우리 COLMAP 결과는 `colmap/sparse/0/`에 있으므로, `sparse` 폴더를 한 단계 위로 <strong>복사</strong>해 준다.
+
+```text
+Copy-Item "$R\colmap\sparse" `
+  "$R\sparse" -Recurse
+```
+
+`[Parser]` 줄의 사진 수는 `sparse/0`만 센다. 앞 절에서 가장 큰 조각을 `0`으로 맞췄는지 다시 본다.
+
+다음은 사진 크기다. 폰 원본은 가로 4000픽셀 안팎이라 그대로 학습하면 느리고 VRAM(GPU 메모리)을 많이 쓴다. 그래서 가로·세로를 1/4로 줄여 쓴다(`--data_factor 4`). 이 옵션은 `images_4` 폴더가 있어야 동작한다.
+
+```text
+Copy-Item "$R\images" `
+  "$R\images_4" -Recurse
+```
+
+코드를 읽어 보면, `images_4` 안의 파일이 `.jpg`일 때 스크립트가 원본을 1/4로 줄인 PNG를 `images_4_png` 폴더에 직접 만들어 쓴다(위 상자 ②). 그래서 `images_4`에는 원본을 그대로 복사해 두기만 하면 된다. 학습을 시작할 때 `Downscaling images by 4x`라는 줄이 찍히고 `images_4_png`가 생기는지 꼭 확인한다.
+
+### COLMAP 파일을 못 읽을 때
+
+gsplat 1.5.3 예제는 COLMAP 결과 파일을 오래된 pycolmap 사본(특정 커밋에 고정된 개인 포크)으로 읽는다(위 상자 ②). 이 코드가 COLMAP 4.2.1이 쓴 `.bin` 파일을 제대로 읽는지는 확인하지 못했다.
+
+학습 시작 직후 `[Parser]` 줄 전에 오류로 멈추거나, `[Parser]`의 사진 수·카메라 수가 엉뚱하면 이것을 의심한다. 그 포크의 코드를 읽어 보면 `.bin`이 없을 때 같은 이름의 `.txt`를 대신 읽는다. 그래서 복사본의 `.bin`을 지우고, COLMAP으로 원본을 글자 형식(TXT)으로 바꿔 그 자리에 넣는다.
+
+```text
+Set-Alias colmap C:\tools\colmap\COLMAP.bat
+Remove-Item "$R\sparse\0\*.bin"
+colmap model_converter `
+  --input_path "$R\colmap\sparse\0" `
+  --output_path "$R\sparse\0" `
+  --output_type TXT
+```
+
+`model_converter`와 세 옵션은 COLMAP 4.2.1 소스에서 확인했다. 이렇게 바꾼 TXT를 그 포크가 끝까지 읽는지는 역시 확인이 필요하다.
+
+### 짧게 한 번 돌려 보기
+
+처음부터 끝까지(3만 번 반복) 돌리지 말고, 7천 번만 반복해 전체가 이어지는지 먼저 본다. 위 "창 준비" 세 줄을 친 창에서 실행한다.
+
+```text
+python simple_trainer.py default `
+  --data_dir $R `
+  --data_factor 4 `
+  --result_dir "$R\gsplat" `
+  --max_steps 7000
+```
+
+- `default`: 원래 3DGS 논문의 방식으로 덩어리를 늘려 가는 설정이다. 다른 방식(`mcmc`)은 12주차에서 소개한다.
+- `--data_dir`: 위에서 맞춘 데이터 폴더.
+- `--data_factor 4`: 사진을 1/4 크기로 쓴다.
+- `--result_dir`: 결과를 둘 폴더.
+- `--max_steps 7000`: 반복 수. 기본값은 30000이다.
+
+시작하면 터미널에 아래 같은 줄이 찍힌다. 앞의 숫자가 등록된 사진 수이고, 카메라 수는 1이어야 한다. 그 뒤 진행 막대가 올라간다.
+
+```text
+[Parser] 112 images, taken by 1 cameras.
+```
+
+스크립트는 사진 8장 중 1장을 학습에 쓰지 않고 빼 둔다. 12주차에서 이 사진들로 "안 본 자리에서도 잘 그리는가"를 잰다.
+
+### 돌아가는 동안 볼 것
+
+학습 중에도 브라우저에서 `http://localhost:8080`을 열면 뷰어가 뜬다(포트 8080은 스크립트 기본값). 처음엔 흐릿한 점 덩어리였다가 반복이 늘수록 또렷해지는 것을 본다.
+
+두 번째 PowerShell 창에서 VRAM을 본다. 1초마다 갱신된다.
+
+```text
+nvidia-smi -l 1
+```
+
+표의 `Memory-Usage`에서 쓴 양이 전체(12GB)에 가까이 붙으면 위험하다. 학습 중에는 덩어리 수가 계속 늘어서 VRAM도 같이 늘어난다.
+
+### VRAM이 모자라면
+
+"CUDA out of memory"라는 오류로 멈추면 아래를 위에서부터 하나씩 해 본다.
+
+1. **다른 프로그램을 끈다.** 브라우저 탭과 게임 런처도 VRAM을 쓴다.
+2. **사진을 더 줄인다.** `images_8` 폴더를 같은 방법으로 만들고 `--data_factor 8`로 돌린다. 그릴 픽셀이 1/4로 준다.
+3. **`--packed`를 붙인다.** 메모리를 덜 쓰고 조금 느려지는 방식이라고 코드 주석에 적혀 있다.
+4. **반복 수를 줄인다.** `--max_steps`를 낮추면 덩어리가 덜 늘어난 상태에서 끝난다. 대신 덜 또렷하다.
+
+### 끝까지 돌리기
+
+7천 번 반복이 문제없이 끝났으면 `--max_steps 7000`을 빼고 다시 돌린다. 3만 번은 수십 분 걸릴 것으로 본다(미검증). 시작 시각을 적어 두고, 돌려 놓은 채 폰으로 s9 읽기를 해도 된다. 끝나면 "Viewer running... Ctrl+C to exit."가 찍히고 뷰어는 계속 떠 있다.
+
+결과 폴더에는 이런 것이 생긴다.
+
+| 위치 | 내용 |
+| --- | --- |
+| `gsplat/ckpts/` | 학습된 장면 파일(`.pt`) |
+| `gsplat/stats/` | 걸린 시간, 최대 VRAM, 덩어리 수 |
+| `gsplat/videos/` | 카메라가 장면을 도는 영상 |
+
+`stats` 폴더의 JSON 파일을 메모장으로 열면 세 숫자가 있다. 3만 번을 돌렸으면 `train_step29999_rank0.json`, 7천 번만 돌렸으면 `train_step6999_rank0.json`이다.
+
+- `mem`: PyTorch가 쓴 최대 GPU 메모리(GB)
+- `ellipse_time`: 걸린 시간(초). "elapsed"의 오타 같지만 스크립트의 실제 철자가 이렇다.
+- `num_GS`: 덩어리 수
+
+<SessionBreak id="s8" />
+
+## 실습 ⑤: 뷰어로 보기
+
+### 학습이 끝난 장면 다시 열기
+
+학습 창을 닫은 뒤에도 저장된 파일로 뷰어를 띄울 수 있다. 새 창이면 먼저 위 "창 준비" 세 줄(`conda activate gsplat`, `cd`, `$R = …`)을 친다. 그다음 실행한다.
+
+```text
+python simple_viewer.py `
+  --ckpt `
+    "$R\gsplat\ckpts\ckpt_29999_rank0.pt" `
+  --output_dir "$R\gsplat" `
+  --port 8080
+```
+
+브라우저에서 `http://localhost:8080`을 연다. 마우스로 끌어 돌리고 휠로 다가간다. 7천 번만 돌렸다면 파일 이름은 `ckpt_6999_rank0.pt`다. 뷰어 화면의 버튼 구성은 문서에 없어 직접 보고 익힌다(위 상자 ③).
+
+### 무엇을 볼까
+
+아래 순서로 5분씩 본다.
+
+1. **찍은 자리에서 본다.** 사진을 찍었던 위치와 방향 근처에서는 사진처럼 보여야 한다.
+2. **찍지 않은 자리로 간다.** 방 한가운데로 들어가거나 천장 가까이 올라가 본다. 어디서부터 무너지는지 본다.
+3. **표면에 다가간다.** 책등의 글자, 벽, 바닥을 가까이서 본다.
+
+두 가지 현상에 이름이 있다.
+
+- **플로터(floater):** 허공에 떠 있는 뿌연 덩어리다. 사진 몇 장에서만 보인 것을 3DGS가 "허공의 반투명 얼룩"으로 맞춰 버린 것으로, 찍은 자리에서는 안 보이다가 옆으로 비켜서면 드러난다.
+- **흐린 영역:** 뭉개져 보이는 곳이다. 그곳을 본 사진이 적거나, 빈 벽처럼 COLMAP 점이 거의 없던 곳이라 덩어리가 크고 듬성듬성하게 남은 것이다.
+
+거울과 창문 근처도 본다. 거울 "안쪽"에 방이 하나 더 만들어져 있을 수 있다.
+
+### 기록 남기기
+
+저장소 밖이나 `datasets/raw/room01/` 안에 메모 파일을 하나 만들어 아래를 적는다. 이 숫자와 관찰이 9주차(COLMAP 구조)와 12주차(학습 실험)의 출발점이다.
+
+| 항목 | 어디서 얻나 |
+| --- | --- |
+| 넣은 사진 수 | images 폴더의 파일 수 |
+| 등록된 사진 수 | COLMAP 창 또는 Parser 줄 |
+| 3D 점 수 | COLMAP 창 |
+| 1·2·3단계 시간 | Elapsed time 줄 |
+| 학습 시간 | ellipse_time 또는 적어 둔 시각 |
+| 최대 VRAM | mem, nvidia-smi 최대값 |
+| 덩어리 수 | num_GS |
+| 쓴 명령과 버전 | 터미널에서 복사 |
+
+그리고 관찰 3개를 적는다. 하나마다 "어디가, 어떻게 보이고, 왜 그런 것 같은지"를 한 줄씩 쓴다. 이유는 틀려도 된다. 뒤 주차에서 고쳐 쓰는 것이 공부다.
+
+- 잘 나온 곳 하나 (예: 책장. 무늬가 많고 여러 각도에서 찍었다)
+- 못 나온 곳 하나 (예: 흰 벽. 찍힌 점이 없었다)
+- 예상과 달랐던 것 하나 (예: 창문 밖에 덩어리가 떠 있다)
+
+설치에서 막혀 바꾼 것(버전, 추가로 깐 것, WSL2로 옮겼는지)도 같이 적는다. 다음에 환경을 다시 만들 때 이 메모가 설치 안내서가 된다.
+
+<SessionBreak id="s9" />
+
+## 문제 해결
+
+증상을 눌러 펼치면 원인과 해 볼 것이 나온다. 여기에 없는 오류는 오류 문구 마지막 줄을 그대로 적어 둔다. 고치는 데 30분을 넘기면 기록만 남기고 다음 세션으로 간다.
+
+**설치**
+
+<Details summary="torch.cuda.is_available()가 False">
+  원인: GPU를 못 쓰는 PyTorch가 깔렸거나, NVIDIA 드라이버가 문제다.
+
+  해 볼 것: "PyTorch와 gsplat 설치" 절의 False 대처 순서(nvidia-smi, pip show torch, 지우고 다시 설치)를 따른다.
+</Details>
+
+<Details summary="예제 패키지(requirements.txt) 설치 실패">
+  원인: C++ 컴파일러나 CUDA Toolkit이 없거나, 컴파일러가 보이지 않는 창에서 실행했다.
+
+  해 볼 것: x64 Native Tools 창에서 다시 하고, 오류 마지막 20줄을 저장한다. 설치 시간이 5시간을 넘으면 WSL2로 간다.
+</Details>
+
+<Details summary="PowerShell이 colmap을 인식하지 못함">
+  원인: 새 창이라 별명이 없다.
+
+  해 볼 것: Set-Alias 줄을 다시 친다.
+</Details>
+
+**COLMAP**
+
+<Details summary="등록된 사진이 절반 이하">
+  원인: 겹침 부족, 제자리 회전, 빈 벽.
+
+  해 볼 것: 빠진 구간을 걸음 폭을 줄여 다시 찍어 추가하고, 1단계부터 다시 돌린다.
+</Details>
+
+<Details summary="sparse 아래에 0, 1이 같이 생김">
+  원인: 사진이 여러 조각으로 끊겼다.
+
+  해 볼 것: 가장 큰 조각을 0으로 바꾸고, 조각 사이를 잇는 사진을 추가해 다시 돌린다.
+</Details>
+
+<Details summary="점 구름이 방 모양이 아님(휘거나 겹침)">
+  원인: 거울이나 반복 무늬 때문에 틀린 짝이 생겼다.
+
+  해 볼 것: 거울을 가리고 다시 찍는다.
+</Details>
+
+**학습과 결과**
+
+<Details summary="Parser 줄의 카메라 수가 1이 아님">
+  원인: 특징점 추출 때 카메라 공유 옵션이 빠졌다.
+
+  해 볼 것: single_camera 옵션을 주고 1단계부터 다시 돌린다.
+</Details>
+
+<Details summary="학습 시작 때 COLMAP directory … does not exist">
+  원인: sparse 폴더를 room01 바로 아래로 복사하지 않았다.
+
+  해 볼 것: "학습 스크립트가 기대하는 폴더" 절을 다시 한다.
+</Details>
+
+<Details summary="학습 시작 때 Image folder … does not exist">
+  원인: images_4 폴더가 없다.
+
+  해 볼 것: 폴더를 만들거나, data_factor를 1로 준다.
+</Details>
+
+<Details summary="Parser 줄 전에 멈추거나 사진 수가 엉뚱함">
+  원인: 옛 pycolmap 사본이 COLMAP 4.2.1의 .bin 파일을 못 읽는 것일 수 있다(추정).
+
+  해 볼 것: "COLMAP 파일을 못 읽을 때" 절대로 TXT로 바꿔 넣는다.
+</Details>
+
+<Details summary="CUDA out of memory">
+  원인: VRAM 부족.
+
+  해 볼 것: "VRAM이 모자라면" 절을 위에서부터 차례로 한다.
+</Details>
+
+<Details summary="장면이 뒤집히거나 터진 것처럼 보임">
+  원인: 자세가 틀린 사진이 섞였거나, 세로 사진이 섞였다.
+
+  해 볼 것: COLMAP 창에서 점 구름과 카메라 위치부터 확인하고, 사진은 가로로 통일한다.
+</Details>
+
+<Details summary="허공에 뿌연 덩어리가 많음">
+  원인: 그 방향을 본 사진이 적다.
+
+  해 볼 것: 높이를 바꿔 한 바퀴 더 찍는다.
+</Details>
+
+<Details summary="장면 전체가 흐림">
+  원인: 반복 수가 부족하거나 사진이 흐리다.
+
+  해 볼 것: 3만 번까지 돌리고, 흐린 사진을 뺀다.
+</Details>
+
+## 체크 질문
+
+<CheckQuestion q="사진 묶음에서 3DGS 장면이 나오기까지, COLMAP과 3DGS 학습은 각각 무엇을 받아 무엇을 내놓나?" kind="개념">
+  COLMAP은 사진 묶음만 받는다. 사진들에서 같은 지점을 찾아, 사진마다 카메라가 어디서 어느 방향으로 찍었는지(자세)와 카메라 내부 파라미터, 그리고 그 지점들의 3D 좌표(희소 점 구름)를 내놓는다.
+
+  3DGS 학습은 사진과 COLMAP의 결과를 함께 받는다. 점 구름을 출발점으로 반투명 덩어리들을 놓고, 각 카메라 자리에서 그린 그림이 실제 사진과 같아지도록 덩어리를 고치기를 반복한다. 결과는 찍지 않은 자리에서도 그려 볼 수 있는 덩어리 묶음이다.
+</CheckQuestion>
+
+<CheckQuestion q="촬영할 때 왜 초점을 고정하고, 왜 제자리에서 돌지 말고 걸으며 찍어야 하나?" kind="왜">
+  자동 초점은 렌즈를 움직여 사진마다 카메라 내부 파라미터를 바꾼다. 그러면 "모든 사진을 같은 카메라 하나로 찍었다"는 가정(`single_camera`)이 깨져 COLMAP의 추정이 불안정해진다.
+
+  제자리에서 돌기만 하면 카메라 위치가 변하지 않아 시차가 없다. 가까운 물체와 먼 물체가 화면에서 똑같이 움직이므로 깊이를 알 수 없고, 3D 점도 카메라 위치도 정해지지 않는다. 위치를 옮겨야 같은 지점이 서로 다른 각도에서 찍힌다.
+</CheckQuestion>
+
+<CheckQuestion q="사진 120장을 넣었는데 COLMAP이 70장만 등록했고, 학습된 장면의 방 한쪽이 뿌옇다. 무엇을 확인하고 어떻게 고치나?" kind="실무">
+  먼저 `sparse` 폴더에 `0` 말고 다른 번호가 있는지 본다. 있으면 사진들이 여러 조각으로 끊긴 것이고, 학습은 `0` 조각만 썼다. `0`이 가장 큰 조각인지도 확인한다. 그다음 빠진 50장이 어느 구간인지 본다. 보통 뿌연 쪽을 찍은 사진들이다.
+
+  원인은 그 구간의 겹침 부족, 제자리 회전, 빈 벽이나 거울 중 하나일 가능성이 높다. 그 구간을 걸음 폭을 줄여 다시 찍고(높이를 바꿔 한 번 더), 조각 사이를 잇는 사진을 더해 COLMAP을 처음부터 다시 돌린다. 등록 수가 90%를 넘는지 확인한 뒤에 학습을 다시 한다.
+
+  학습 옵션(반복 수, 사진 크기)을 먼저 만지지 않는다. 등록되지 않은 사진은 학습에 아예 들어가지 않으므로, 옵션으로는 고쳐지지 않는다.
+</CheckQuestion>
+
+<SessionBreak id="s10" />

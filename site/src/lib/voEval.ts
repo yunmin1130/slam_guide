@@ -87,8 +87,8 @@ export function matToQuat(R: Mat3): [number, number, number, number] {
 }
 
 /**
- * 추정 궤적을 TUM 궤적 파일 형식으로: 줄마다 "시각 tx ty tz qx qy qz qw" (T_wc, 스케일은 VO 그대로).
- * 22주차 evo(evo_ape tum gt.txt est.txt -as)로 같은 ATE를 다시 계산할 수 있다.
+ * 추정 궤적을 TUM 궤적 파일 형식으로: 줄마다 "시각 tx ty tz qx qy qz qw" (T_wc, 스케일은 VO 그대로). 머리 주석은 ASCII만 (cp949로 읽는 Windows 도구용).
+ * evo(evo_ape tum 기준.txt est.txt -as)로 같은 ATE를 다시 계산할 수 있다 (11d 선택 절).
  */
 export function toTumTrajectory(times: readonly number[], poses: readonly (SE3 | null)[]): string {
   const f = (v: number): string => v.toFixed(6);
@@ -98,5 +98,5 @@ export function toTumTrajectory(times: readonly number[], poses: readonly (SE3 |
     const [w, x, y, z] = matToQuat(P.R);
     return [`${times[k]!.toFixed(6)} ${f(P.t[0])} ${f(P.t[1])} ${f(P.t[2])} ${f(x)} ${f(y)} ${f(z)} ${f(w)}`];
   });
-  return `# timestamp tx ty tz qx qy qz qw (slam_guide VO, T_world_cam, 단안이라 스케일 임의)\n${lines.join("\n")}\n`;
+  return `# timestamp tx ty tz qx qy qz qw (slam_guide mini SfM, T_world_cam, monocular: arbitrary scale)\n${lines.join("\n")}\n`;
 }

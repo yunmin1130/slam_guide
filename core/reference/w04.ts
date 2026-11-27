@@ -1,5 +1,5 @@
 /** 4주차 정답 구현. 시그니처는 core/mine/w04.ts와 같다. */
-import type { BrownDistortion, FisheyeDistortion, Intrinsics, Vec2, Vec3 } from "../types";
+import type { BrownDistortion, CompositeResult, FisheyeDistortion, Intrinsics, Mat2, Mat3, Vec2, Vec3 } from "../types";
 
 const NEWTON_MAX_ITER = 50;
 const NEWTON_TOL = 1e-15;
@@ -63,4 +63,66 @@ export function unprojectFisheye(px: Vec2, K: Intrinsics, k: FisheyeDistortion):
   }
   const s = Math.sin(th) / thd;
   return [xd * s, yd * s, Math.cos(th)];
+}
+
+// ---- 4b: 3DGS ----
+// 3D Gaussian Splatting (Kerbl 등 2023) 의 화면 투영과 알파 합성. 공분산 투영은 EWA splatting (Zwicker 등 2001) 의 식이다.
+// 원 논문 구현과 다른 점: Σ' 대각에 0.3 을 더하는 저역 통과 필터와 x/z 를 화각의 1.3배로 자르는 처리는 넣지 않았다 (레슨 디버그 목록).
+
+export function buildCovariance(scale: Vec3, R: Mat3): Mat3 {
+  // M = R·S 의 k번째 열은 타원체의 k번째 반축 벡터 (길이 s_k, 방향은 R의 k번째 열). Σ = M·Mᵀ = R·S·Sᵀ·Rᵀ
+  const M = R.map((row) => row.map((v, k) => v * scale[k]));
+  const e = (i: number, j: number) => M[i][0] * M[j][0] + M[i][1] * M[j][1] + M[i][2] * M[j][2];
+  return [
+    [e(0, 0), e(0, 1), e(0, 2)],
+    [e(1, 0), e(1, 1), e(1, 2)],
+    [e(2, 0), e(2, 1), e(2, 2)],
+  ];
+}
+
+export function projectCovariance(Sigma: Mat3, Rcw: Mat3, pCam: Vec3, K: Intrinsics): Mat2 | null {
+  const [x, y, z] = pCam;
+  if (!(z > 0)) return null; // 카메라 뒤: 투영도 야코비안도 뜻이 없다
+  // 핀홀 투영 (u, v) = (fx·x/z + cx, fy·y/z + cy) 를 가우시안 중심에서 미분한 야코비안 (2×3)
+  const J: readonly [Vec3, Vec3] = [
+    [K.fx / z, 0, (-K.fx * x) / (z * z)],
+    [0, K.fy / z, (-K.fy * y) / (z * z)],
+  ];
+  // T = J·W (2×3). W = Rcw 는 월드 → 카메라 회전 (이동 t 는 모양을 바꾸지 않는다)
+  const T = J.map((row) => [0, 1, 2].map((c) => row[0] * Rcw[0][c] + row[1] * Rcw[1][c] + row[2] * Rcw[2][c]));
+  // Σ' = T·Σ·Tᵀ = J·W·Σ·Wᵀ·Jᵀ
+  const TS = T.map((row) => [0, 1, 2].map((c) => row[0] * Sigma[0][c] + row[1] * Sigma[1][c] + row[2] * Sigma[2][c]));
+  const e = (i: number, j: number) => TS[i][0] * T[j][0] + TS[i][1] * T[j][1] + TS[i][2] * T[j][2];
+  return [
+    [e(0, 0), e(0, 1)],
+    [e(1, 0), e(1, 1)],
+  ];
+}
+
+export function gaussianWeight2D(d: Vec2, Sigma2D: Mat2): number {
+  // 대칭 Σ = [[a, b], [b, c]] 의 역행렬은 [[c, −b], [−b, a]] / det
+  const a = Sigma2D[0][0];
+  const b = Sigma2D[0][1];
+  const c = Sigma2D[1][1];
+  const det = a * c - b * b;
+  if (!(det > 0)) return 0; // 납작한(또는 잘못된) 공분산은 그리지 않는다
+  const [dx, dy] = d;
+  const mahalanobis2 = (c * dx * dx - 2 * b * dx * dy + a * dy * dy) / det; // dᵀ Σ⁻¹ d
+  return Math.exp(-0.5 * mahalanobis2);
+}
+
+export function alphaComposite(colors: readonly Vec3[], alphas: readonly number[]): CompositeResult {
+  if (colors.length !== alphas.length) throw new Error(`colors(${colors.length})와 alphas(${alphas.length})의 길이가 다르다`);
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let T = 1; // 지금까지 지나온 가우시안들을 통과하고 남은 빛의 비율
+  for (let i = 0; i < colors.length; i++) {
+    const w = alphas[i] * T; // 이 가우시안이 픽셀 색에 기여하는 몫
+    r += colors[i][0] * w;
+    g += colors[i][1] * w;
+    b += colors[i][2] * w;
+    T *= 1 - alphas[i];
+  }
+  return { color: [r, g, b], transmittance: T };
 }

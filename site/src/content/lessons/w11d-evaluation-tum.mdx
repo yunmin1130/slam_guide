@@ -1,31 +1,30 @@
 ---
 week: 11
 part: d
-title: 미니 VO (4) Sim(3) 정렬, ATE·RPE, TUM으로 M1 리포트
-summary: 스케일을 모르는 단안 궤적을 정답에 Sim(3)으로 맞추는 우메야마 정렬과 ATE를 구현하고, TUM RGB-D 시퀀스에서 내 VO를 채점해 M1 리포트를 만든다
-prereq: [w11c, w02]
+title: "미니 SfM (4) COLMAP과 비교: Sim(3) 정렬과 ATE"
+summary: 크기와 좌표계가 제각각인 두 재구성을 Sim(3)으로 맞추는 우메야마 정렬과 ATE를 구현하고, 내 방 사진에서 내 미니 SfM이 구한 카메라 위치를 COLMAP의 결과와 비교한다
+prereq: [w11c, w02, w09]
 la_box: [직교 프로크루스테스 문제]
 tasks: [alignUmeyama, ate]
 read_only: [rpe]
-deliverables: ["M1 리포트: TUM RGB-D에서 내 구현(mine)으로 낸 ATE·RPE (사이트 숫자 + evo 검증), 소거 실험 표, ORB-SLAM 기준선(주의점 포함), 궤적 그림, 실패 구간 분석"]
+deliverables: ["비교 노트: 내 방 사진에서 내 구현(mine)으로 등록한 사진 수, COLMAP 기준 ATE(이동 거리 대비 %), 궤적 그림, 끊긴 곳과 그 이유"]
 jetbot: false
 units: 2.5
 sessions:
-  - { id: s1, device: phone, title: "개념: ATE, RPE, 왜 Sim(3) 정렬인가" }
+  - { id: s1, device: phone, title: "개념: 무엇과 비교하나, 왜 Sim(3) 정렬인가" }
   - { id: s2, device: phone, title: "개념: 우메야마 정렬 유도 + LA 박스" }
   - { id: s3, device: pad, title: "손 유도: 정렬, 반사 경우" }
   - { id: s4, device: pc, title: "과제: alignUmeyama 구현" }
   - { id: s15, device: pc, title: "과제: alignUmeyama 디버그·테스트 통과" }
   - { id: s5, device: pc, title: "과제: ate 구현" }
   - { id: s16, device: pc, title: "과제: ate 디버그·테스트 통과, 읽기: rpe" }
-  - { id: s6, device: pc, title: "실습: TUM 받기, 트랙 파일 만들기" }
-  - { id: s10, device: pc, title: "실습: 실행기로 내 VO 돌리기" }
-  - { id: s7, device: pc, title: "실습: 기준 숫자와 비교" }
-  - { id: s11, device: pc, title: "실습: evo로 다시 재기" }
-  - { id: s12, device: pc, title: "실습: 소거 실험(ablation)" }
-  - { id: s13, device: pc, title: "실습: ORB-SLAM 기준선 표와 조건 차이" }
-  - { id: s8, device: pc, title: "M1 리포트: 결과 표와 그림" }
-  - { id: s14, device: pc, title: "M1 리포트: 실패 분석과 한계" }
+  - { id: s6, device: pc, title: "확인: 정답이 있는 TUM 데이터 받기, 트랙 파일" }
+  - { id: s10, device: pc, title: "확인: 실행기로 TUM 돌리기" }
+  - { id: s7, device: pc, title: "확인: 기준 숫자와 비교" }
+  - { id: s17, device: pc, title: "실습: COLMAP 결과를 트랙 파일로" }
+  - { id: s18, device: pc, title: "실습: 내 방 사진으로 미니 SfM 돌리기" }
+  - { id: s19, device: phone, title: "개념: 이 비교가 말해 주는 것과 못 하는 것" }
+  - { id: s20, device: pc, title: "실습: 설정 바꿔 보기, 비교 노트" }
   - { id: s9, device: phone, title: "체크 질문" }
 ---
 
@@ -33,42 +32,68 @@ import VoFileRunner from "../../components/demos/VoFileRunner.astro";
 
 ## 개념
 
-이번 파트를 마치면 내 VO가 얼마나 정확한지 숫자로 말할 수 있다. 정답 궤적이 있는 공개 데이터(TUM RGB-D)에서 그 숫자를 내는 것이 M1 마일스톤이다.
+이번 파트를 마치면 내 미니 SfM이 얼마나 맞는지 숫자로 말할 수 있다. 내 방 사진에서 내 함수로 구한 카메라 위치를, 같은 사진으로 COLMAP이 구한 위치(0주차 결과)와 비교한다.
 
-### 두 가지 오차: ATE와 RPE
+### 무엇과 비교하나
 
-- **ATE (absolute trajectory error, 절대 궤적 오차):** 추정 궤적 전체를 정답에 한 번 맞춰 놓고, 프레임마다 위치 차이를 잰다. 보통 RMSE(제곱 평균의 제곱근) 하나로 낸다. 궤적 전체의 모양이 얼마나 맞는지 보며, 누적 드리프트까지 포함한다.
-- **RPE (relative pose error, 상대 자세 오차):** $\Delta$(정수 프레임 수)만큼 떨어진 두 자세 사이의 상대 움직임을 정답의 상대 움직임과 비교한다. 짧은 구간의 정확도(오도메트리의 질)를 본다. 드리프트가 쌓여도 구간마다 맞으면 작다.
+비교 대상은 둘이다.
+
+- **COLMAP의 결과 (주 실습):** 내 방 사진에는 정답이 없다. 대신 훨씬 정교한 COLMAP의 결과를 기준(reference)으로 삼는다. 정답은 아니고 "믿을 만한 기준"이다.
+- **TUM RGB-D의 정답 (먼저 하는 확인):** 모션캡처로 잰 진짜 정답 궤적이 있는 공개 영상이다. 평가 코드가 맞는지 여기서 먼저 확인한다.
+
+### 오차 하나: ATE
+
+ATE(absolute trajectory error, 절대 궤적 오차)는 내 카메라 위치들 전체를 기준에 한 번 맞춰 놓고, 사진마다 위치 차이를 잰 것이다. 보통 RMSE(제곱 평균의 제곱근) 하나로 낸다.
+
+숫자 예: 사진 4장의 위치 차이가 1, 1, 1, 3 cm면 RMSE는 $\sqrt{(1 + 1 + 1 + 9)/4} = \sqrt 3 \approx 1.7$ cm다. 평균(1.5 cm)보다 크다. 제곱하므로 크게 틀린 한 장이 더 무겁게 들어간다.
+
+비교하는 위치는 카메라 중심이다. 내 자세는 $T_{cw}$라서 카메라 중심 $-R^\top t$를 쓴다(실행기는 `site/src/lib/voEval.ts`에서 이렇게 한다). COLMAP도 자세를 월드→카메라로 저장하므로 같은 식으로 중심을 구한다(9주차).
 
 ### 왜 Sim(3)으로 맞추나
 
-VO의 월드는 첫 카메라이고, 길이 단위는 초기화의 $|t| = 1$이다. 정답은 모션캡처 좌표계와 미터 단위다.
+내 지도의 월드는 첫 사진의 카메라이고, 길이 단위는 초기화의 $|t| = 1$이다. COLMAP의 월드와 길이 단위도 COLMAP이 임의로 정한 것이다. 둘 다 사진만으로는 방향·위치·크기(합쳐서 7자유도, 8b의 게이지)를 알 수 없기 때문이다.
 
-둘을 비교하려면 먼저 회전 $R$, 이동 $t$, **크기 $s$** 를 맞춰야 한다. 이 7자유도 변환이 닮음 변환 Sim(3)이다: $y = sRx + t$.
+그래서 비교하기 전에 회전 $R$, 이동 $t$, **크기 $s$** 를 맞춘다. 이 7자유도 변환이 닮음 변환 Sim(3)이다: $y = sRx + t$.
 
-비교하는 위치는 카메라 중심이다. VO 자세는 $T_{cw}$라서 $T_{wc}$로 뒤집고, 위치로 카메라 중심 $-R^\top t$를 쓴다(실행기는 `site/src/lib/voEval.ts`에서 이렇게 한다).
+크기를 맞추지 않으면 ATE가 모양의 차이가 아니라 단위의 차이를 재게 된다. 스테레오나 깊이 카메라처럼 크기를 아는 시스템끼리라면 $s = 1$로 두고 회전·이동만 맞춘다.
 
-TUM의 원래 평가 스크립트(`evaluate_ate.py`)는 크기 없이 회전·이동만 맞춘다(Horn 방법, 강체 정렬). RGB-D처럼 크기를 아는 시스템을 위한 도구라서다. 단안에서는 크기까지 맞추는 것이 관례이고, 궤적 평가 도구 evo의 `-as`(`-a` 정렬, `-s` 크기 맞춤)와 ORB-SLAM 논문의 7자유도 정렬이 그렇게 한다.
+<figure class="w11-fig" aria-label="정렬 전에는 내 궤적이 작고 돌아간 채 다른 곳에 있고, Sim(3) 정렬 뒤에는 COLMAP 궤적과 거의 겹친다">
+  <svg viewBox="0 0 320 175" width="100%" style="max-width: 360px; display: block; color: inherit;" aria-hidden="true">
+    <text x="77" y="16" text-anchor="middle" font-size="13" fill="currentColor">정렬 전</text>
+    <text x="237" y="16" text-anchor="middle" font-size="13" fill="currentColor">Sim(3) 정렬 후</text>
+    <line x1="160" y1="24" x2="160" y2="150" stroke="currentColor" stroke-width="1" opacity="0.3"></line>
+    <polyline points="25,125 50,100 80,92 110,102 130,74 122,42" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" opacity="0.7"></polyline>
+    <polyline points="17.3,39.2 32.6,43.3 42.5,53.2 45.4,67.2 60.8,68.7 71.4,58.4" fill="none" stroke="currentColor" stroke-width="2.5"></polyline>
+    <circle cx="17.3" cy="39.2" r="3.5" fill="currentColor"></circle>
+    <circle cx="25" cy="125" r="3.5" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+    <polyline points="185,125 210,100 240,92 270,102 290,74 282,42" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" opacity="0.7"></polyline>
+    <polyline points="186.5,124 209,102 242,93.5 268.5,100 291,76 280,43" fill="none" stroke="currentColor" stroke-width="2.5"></polyline>
+    <circle cx="186.5" cy="124" r="3.5" fill="currentColor"></circle>
+    <line x1="20" y1="162" x2="44" y2="162" stroke="currentColor" stroke-width="2" stroke-dasharray="5 4" opacity="0.7"></line>
+    <text x="50" y="166" font-size="12" fill="currentColor">COLMAP</text>
+    <line x1="130" y1="162" x2="154" y2="162" stroke="currentColor" stroke-width="2.5"></line>
+    <text x="160" y="166" font-size="12" fill="currentColor">내 결과 (점 = 첫 사진)</text>
+  </svg>
+  <figcaption>왼쪽: 내 카메라 위치들은 첫 사진이 원점이고 단위도 달라서, 같은 모양이 작게, 돌아간 채, 다른 곳에 있다. 오른쪽: 크기 s, 회전 R, 이동 t를 한 번 맞춘 뒤다. 남은 사진별 차이가 ATE다.</figcaption>
+</figure>
 
-스테레오나 RGB-D, IMU처럼 크기를 아는 시스템이면 $s = 1$로 두고 SE(3)으로만 맞춘다.
+<Details summary="더 보기: RPE(상대 자세 오차)는 언제 쓰나">
+  RPE(relative pose error)는 $\Delta$장 떨어진 두 자세 사이의 상대 움직임을 기준의 상대 움직임과 비교한다. 정답 자세를 $Q_i$, 추정 자세를 $P_i$(둘 다 $T_{wc}$)라 하면 오차는 다음과 같다.
 
-### RPE 식
+  $$
+  E_i = (Q_i^{-1} Q_{i+\Delta})^{-1}\,(P_i^{-1} P_{i+\Delta})
+  $$
 
-정답 자세를 $Q_i$, 추정 자세를 $P_i$(둘 다 $T_{wc}$)라 하자. 상대 움직임을 비교한 오차는 다음과 같다.
+  $E_i$의 이동 크기와 회전각을 각각 RMSE로 모은다. 추정 쪽 이동에는 ATE 정렬의 $s$를 곱한다.
 
-$$
-E_i = (Q_i^{-1} Q_{i+\Delta})^{-1}\,(P_i^{-1} P_{i+\Delta})
-$$
-
-단안이면 $P$의 이동에 ATE 정렬의 $s$를 곱한 뒤 계산한다. $E_i$의 이동 크기와 회전각을 각각 RMSE로 모은다. 월드 회전·이동은 상대 움직임에서 지워지므로 정렬이 필요 없고, 크기만 필요하다.
-
-`rpe`의 $\Delta$는 정수 프레임 수다. TUM 관례는 1초 간격이라, 실행기는 1초에 해당하는 프레임 수를 쓴다(15Hz면 15, 10Hz면 10).
+  영상에서는 "1초 동안 얼마나 틀어지나"(드리프트 속도)를 보는 숫자라 VO 평가에 많이 쓴다. 사진 묶음에는 시간이 없어서 뜻이 약하다. 실행기는 사진 파일에서는 이웃한 두 장 사이($\Delta = 1$)로, TUM 영상에서는 약 1초 간격으로 계산해 참고로 보여 준다.
+</Details>
 
 <SessionBreak id="s1" />
 
 ### 우메야마(Umeyama) 정렬
 
-대응하는 점 $x_i$(추정), $y_i$(정답), $i = 1..n$에서 다음을 최소화하는 $s, R, t$를 찾는다.
+대응하는 점 $x_i$(내 카메라 위치), $y_i$(기준 위치), $i = 1..n$에서 다음을 최소화하는 $s, R, t$를 찾는다.
 
 $$
 \sum_i \lVert y_i - (sRx_i + t) \rVert^2
@@ -82,21 +107,33 @@ $$
 
 $\Sigma = UDV^\top$이면 답은 $R = USV^\top$다. 여기서 $S = \mathrm{diag}(1, 1, \pm 1)$이고, $\det U \det V < 0$이면 $-1$을 써서 반사 대신 회전을 고른다.
 
-**3) $s$.** $s$로 미분하면 다음과 같다.
+**3) $s$.** 2)의 $R = USV^\top$를 교차항에 넣는다. $U^\top U = I$이고, 대각합은 곱의 순서를 돌려도 같으며, $S$와 $D$는 대각 행렬이다.
+
+$$
+\mathrm{tr}(R^\top\Sigma) = \mathrm{tr}(V S U^\top U D V^\top) = \mathrm{tr}(SD)
+$$
+
+$\sigma_y^2 = \frac{1}{n}\sum_i \lVert \bar y_i \rVert^2$로 두고 목적 함수를 $n$으로 나누면 $s$의 이차식이 남는다(교차항 $-2ns\,\mathrm{tr}(R^\top\Sigma)$, 크기 항 $s^2\sum_i\lVert\bar x_i\rVert^2 = ns^2\sigma_x^2$).
+
+$$
+\sigma_y^2 - 2s\,\mathrm{tr}(DS) + s^2\sigma_x^2
+$$
+
+위로 열린 포물선이라 꼭짓점(미분해서 0)에서 최소다.
 
 $$
 s = \frac{\mathrm{tr}(DS)}{\sigma_x^2},\quad
 \sigma_x^2 = \frac{1}{n}\sum_i \lVert \bar x_i \rVert^2
 $$
 
-점들이 한 직선 위면 그 직선 둘레 회전을 정할 수 없다($\Sigma$의 둘째 특이값이 0). 이때는 예외를 던진다.
+점들이 한 직선 위면 그 직선 둘레 회전을 정할 수 없다($\Sigma$의 둘째 특이값이 0). 이때는 예외를 던진다. 복도를 일직선으로 걸으며 찍은 사진이 이런 경우에 가깝다.
 
 <LABox term="직교 프로크루스테스 문제">
   **정의:** 주어진 행렬 $\Sigma$에 대해 $\mathrm{tr}(R^\top\Sigma)$를 최대로 하는 직교 행렬 $R$을 찾는 문제. $\Sigma = UDV^\top$이면 $R = UV^\top$다. 회전($\det = +1$)으로 제한하면 $R = U\,\mathrm{diag}(1, 1, \det(UV^\top))\,V^\top$다.
 
   **기하학적 의미:** 두 점 구름을 가장 잘 겹치는 회전이다. $\mathrm{tr}(R^\top U D V^\top) = \mathrm{tr}(D\,V^\top R^\top U)$에서 $V^\top R^\top U$는 직교 행렬이라 대각 원소가 1 이하이고, 모두 1일 때(단위 행렬일 때) 최대다.
 
-  **SLAM에서:** 궤적 정렬(ATE), 두 점 구름의 강체 정합(ICP의 한 단계), 6주차 PnP에서 가장 가까운 회전 찾기($M = UDV^\top \to UV^\top$)가 모두 이 문제다.
+  **재구성에서:** 두 재구성의 정렬(ATE), 두 점 구름의 강체 정합(ICP의 한 단계), 6주차 PnP에서 가장 가까운 회전 찾기($M = UDV^\top \to UV^\top$)가 모두 이 문제다. 14주차 캡스톤에서 다른 카메라로 찍은 사진의 자세를 장면 좌표계에 맞출 때도 쓴다.
 
   **이전 레슨:** [2주차 최소제곱과 SVD](../w02-least-squares-svd/)
 </LABox>
@@ -111,14 +148,22 @@ $$
 
 1. 목적 함수를 $t$로 미분해 $t = \mu_y - sR\mu_x$를 얻는다.
 2. $\sum_i \bar y_i^\top R \bar x_i = n\,\mathrm{tr}(R^\top\Sigma)$임을 보인다($a^\top R b = \mathrm{tr}(R^\top a b^\top)$을 쓴다).
-3. 2D 점 $x = \{(2, 0), (-2, 0), (0, 1), (0, -1)\}$을 90° 돌리고 2배 키운 뒤 $(3, 1)$만큼 옮긴 $y$를 만든다. 공식으로 $s$, $R$, $t$를 되찾는다. 2D에서는 $S = \mathrm{diag}(1, \pm 1)$이다. (힌트: $\mu_x = 0$이다. $C = \frac{1}{n}\sum_i \bar x_i \bar x_i^\top$가 대각 행렬이라 $\Sigma = 2RC$로 쓸 수 있는지 본다. 확인: $C = \mathrm{diag}(2, \tfrac12)$, $\sigma_x^2 = \tfrac52$, $D = \mathrm{diag}(4, 1)$, $s = 5 / \tfrac52 = 2$.)
+3. 2D 점 $x = \{(2, 0), (-2, 0), (0, 1), (0, -1)\}$을 90° 돌리고 2배 키운 뒤 $(3, 1)$만큼 옮긴 $y$를 만든다. 공식으로 $s$, $R$, $t$를 되찾는다. 2D에서는 $S = \mathrm{diag}(1, \pm 1)$이다. (힌트: $\mu_x = 0$이다. $C = \frac{1}{n}\sum_i \bar x_i \bar x_i^\top$가 대각 행렬이라 $\Sigma = 2RC$로 쓸 수 있는지 본다. 확인: $C = \mathrm{diag}(2, \tfrac12)$, $\sigma_x^2 = \tfrac52$, $U = R$, $V = I$, $D = \mathrm{diag}(4, 1)$, $s = 5 / \tfrac52 = 2$.)
 4. $y$가 $x$의 거울상(예: $z \to -z$)이면 $\det U\det V < 0$이 된다. $S$의 $-1$이 없으면 $R$이 무엇이 되는지 설명한다.
-5. 같은 VO 결과인데 ATE는 크고 RPE는 작다면 궤적이 어떻게 생겼을까? 반대면?
+5. 내 카메라 위치들이 기준과 모양은 같은데 전체가 1.2배 크다. Sim(3)으로 맞춘 ATE와, 크기 없이($s = 1$) 맞춘 ATE는 각각 어떻게 나올까?
+
+<Details summary="막히면: 손 유도 1–5의 첫 걸음">
+  1. 목적 함수에서 $t$가 들어간 부분만 본다. $\lVert y_i - sRx_i - t \rVert^2$를 $t$로 미분하면 $-2(y_i - sRx_i - t)$다. 모두 더해 0으로 두고 $n$으로 나눈다.
+  2. 대각합은 $\mathrm{tr}(ABC) = \mathrm{tr}(CAB)$로 돌릴 수 있다. $\mathrm{tr}(R^\top a b^\top)$를 돌려 $b^\top R^\top a$를 만들고, 이 값이 숫자 하나라서 전치해도 같다는 점을 쓴다.
+  3. 먼저 $y_i = 2Rx_i + (3, 1)$로 네 점을 계산한다. $\mu_x = 0$이라 $\bar y_i = 2R\bar x_i$이고, 이것을 $\Sigma$의 정의에 넣으면 $2R$이 합 밖으로 나온다.
+  4. $UV^\top$의 행렬식은 $\det U \cdot \det V^\top$다. 이 값이 $-1$인 직교 행렬이 무엇인지 3주차(회전 행렬은 $\det = +1$)에서 떠올린다.
+  5. 모양이 같으면 $s = 1/1.2$로 정확히 겹친다. $s = 1$로 고정하면 무게중심에서 먼 카메라일수록 얼마나 남는지, 무게중심에서 1만큼 떨어진 카메라로 계산해 본다.
+</Details>
 
 <SessionBreak id="s3" />
 
 <TaskCard fn="alignUmeyama">
-  추정 점들 `src`를 정답 점들 `dst`에 맞추는 $s, R, t$($dst \approx sR\,src + t$)를 최소제곱으로 구한다. `withScale`이 `false`면 $s = 1$이다. 길이가 다르거나, 3개 미만이거나, NaN·무한대가 있거나, 점들이 한 점·한 직선 위면 예외를 던진다.
+  추정 점들 `src`를 기준 점들 `dst`에 맞추는 $s, R, t$($dst \approx sR\,src + t$)를 최소제곱으로 구한다. `withScale`이 `false`면 $s = 1$이다. 길이가 다르거나, 3개 미만이거나, NaN·무한대가 있거나, 점들이 한 점·한 직선 위면 예외를 던진다.
 
   <Hint level={1}>
     평균을 빼고 교차 공분산 $\Sigma$(3×3)를 만든 뒤 `ml-matrix`의 SVD를 쓴다. 회전은 $USV^\top$, 크기는 $\mathrm{tr}(DS)/\sigma_x^2$, 이동은 평균으로 구한다.
@@ -164,14 +209,16 @@ $$
 
 - 기본 테스트에서 회전만 틀리면 $\Sigma$를 $\bar x\bar y^\top$ 순서로 만든 것이다($R^\top$이 나온다).
 - 거울상 테스트에서 $\det R = -1$이면 $S$의 부호 처리를 빠뜨렸다.
-- 크기만 틀리면 $\sigma_x^2$를 정답 쪽($y$)으로 구했거나, $\mathrm{tr}(DS)$에서 셋째 특이값의 부호를 빠뜨렸다.
+- 크기만 틀리면 $\sigma_x^2$를 기준 쪽($y$)으로 구했거나, $\mathrm{tr}(DS)$에서 셋째 특이값의 부호를 빠뜨렸다.
 - "최소제곱 해다" 테스트는 $s$, $R$, $t$를 조금씩 흔들어 오차가 커지는지 본다. 하나만 실패하면 그 항의 공식을 다시 본다.
 - 예외 테스트에서 "한 직선 위"만 실패하면 퇴화 검사가 없거나 기준이 너무 작다. 위 힌트 2의 두 조건을 그대로 쓴다.
 
 <SessionBreak id="s15" />
 
 <TaskCard fn="ate">
-  추정 위치 `est`를 정답 위치 `gt`에 Sim(3)으로 맞춘 뒤(`alignUmeyama`, 크기 포함) 점마다 위치 오차를 구한다. 결과는 `rmse`, `mean`, `median`(짝수 개면 가운데 둘의 평균), `max`, `errors`, `align`이다. 입력이 이상하면 `alignUmeyama`의 예외를 그대로 낸다.
+  추정 위치 `est`를 기준 위치 `gt`에 Sim(3)으로 맞춘 뒤(`alignUmeyama`, 크기 포함) 점마다 위치 오차를 구한다. 결과는 `rmse`, `mean`, `median`(짝수 개면 가운데 둘의 평균), `max`, `errors`, `align`이다. 입력이 이상하면 `alignUmeyama`의 예외를 그대로 낸다.
+
+  인자 이름 `gt`는 정답(ground truth)의 줄임말이다. COLMAP과 비교할 때는 여기에 COLMAP의 카메라 위치가 들어간다.
 
   <Hint level={1}>
     정렬한 점은 $sR\,est_i + t$다. 오차 $e_i$는 그것과 $gt_i$ 사이 거리다. RMSE는 $\sqrt{\frac{1}{n}\sum e_i^2}$다.
@@ -211,7 +258,7 @@ $$
 ### 읽기: rpe
 
 <TaskCard fn="rpe" readOnly>
-  $T_{wc}$ 궤적 두 개(`est`, `gt`)와 간격 $\Delta$(정수 프레임 수), ATE 정렬의 크기 `scale`로 상대 자세 오차를 구한다. 결과는 이동 RMSE, 회전 RMSE(도), 비교한 쌍의 수다.
+  $T_{wc}$ 궤적 두 개(`est`, `gt`)와 간격 $\Delta$(정수 장 수), ATE 정렬의 크기 `scale`로 상대 자세 오차를 구한다. 결과는 이동 RMSE, 회전 RMSE(도), 비교한 쌍의 수다. 식은 개념 절의 "더 보기"에 있다.
 
   카드에는 `rpe`만 보이므로, 에디터에서 `core/reference/w11.ts`를 열어 도우미 `rel`과 `angleDeg`도 함께 읽는다.
 
@@ -220,42 +267,38 @@ $$
 
 <SessionBreak id="s16" />
 
-## 실습: TUM RGB-D로 내 VO 채점하기 (M1)
+## 확인: 정답이 있는 데이터로 먼저 (권장)
+
+내 방 사진으로 가기 전에, 진짜 정답이 있는 데이터에서 `ate`와 조립 코드가 제대로 도는지 한 번 확인한다. 여기서 숫자가 맞으면, 뒤에서 COLMAP과 차이가 날 때 "평가 코드가 틀렸나"를 의심하지 않아도 된다.
+
+시간이 없으면 건너뛰어도 된다. 그때는 아래 "실행기" 절만 읽고, 세 세션(TUM 받기, 실행기로 TUM 돌리기, 기준 숫자와 비교)은 완료 표시만 한 뒤 "실습: 내 방 사진을 COLMAP과 비교"로 간다.
+
+TUM RGB-D는 모션캡처 정답 궤적이 딸린 실내 영상이다. 영상이라 이웃한 프레임이 촘촘해서, 원래 VO로 만든 이 코드가 가장 편하게 도는 입력이기도 하다.
 
 ### 데이터 받기와 트랙 파일 만들기
 
-1. [TUM RGB-D 다운로드 페이지](https://cvg.cit.tum.de/data/datasets/rgbd-dataset/download)에서 **freiburg1_xyz**의 tgz(약 0.45GB)를 받아 푼다. 라이선스는 CC BY 4.0이라 리포트에 출처만 적으면 된다.
-2. PC에서 트랙 파일을 만든다. 컬러 영상 2장마다 1장(15Hz)으로 300장을 KLT로 추적하고, 렌즈 왜곡을 펴고, 정답 자세를 붙인다. 몇 초면 끝난다.
+1. [TUM RGB-D 다운로드 페이지](https://cvg.cit.tum.de/data/datasets/rgbd-dataset/download)에서 **freiburg1_xyz**의 tgz(약 0.45GB)를 받아 푼다. 라이선스는 CC BY 4.0이라 결과를 어디에 실을 때 출처만 적으면 된다.
+2. PC에서 트랙 파일을 만든다. 컬러 영상 2장마다 1장(15Hz)으로 300장을 KLT로 추적하고(10주차), 렌즈 왜곡을 펴고, 정답 자세를 붙인다. 몇 초면 끝난다.
 
 ```text
 pip install opencv-python numpy
-python datasets/tum_tracks.py
+python datasets/tum_tracks.py `
   path/to/rgbd_dataset_freiburg1_xyz
 ```
 
-(보기 좋게 나눈 것이고, 실제로는 한 줄로 쓴다.) 명령은 저장소 루트 폴더에서 실행한다. 결과는 `datasets/tracks/` 폴더의 JSON(약 1.5MB)이고, 이 폴더는 저장소에 올리지 않는다.
+명령은 저장소 루트 폴더에서 PowerShell로 실행한다. 줄 끝의 백틱(`` ` ``)은 다음 줄로 이어진다는 표시다. `path/to/`는 tgz를 푼 폴더로 바꾼다. 결과는 `datasets/tracks/` 폴더의 JSON(약 1.5MB)이고, 이 폴더는 저장소에 올리지 않는다.
 
-3. **freiburg1_desk**도 같은 다운로드 페이지에서 받는다. 빠르게 움직이는 시퀀스라 30Hz로, 600장까지 만든다(아래 기준 숫자 표와 같은 조건). 실제로는 한 줄로 쓴다.
-
-```text
-python datasets/tum_tracks.py
-  path/to/rgbd_dataset_freiburg1_desk
-  --every 1 --max-frames 600
-```
-
-4. 긴 시퀀스는 프레임 간격을 늘린다. **freiburg3_long_office_household**(약 1.5GB, 87초, 사무실 한 바퀴)는 `--every 3 --max-frames 800`으로 만든다.
-
-받은 tgz 폴더는 지우지 않는다. 안의 `groundtruth.txt`(정답 궤적 원본)를 evo와 ORB-SLAM 비교에서 다시 쓴다.
+시간이 남으면 긴 시퀀스도 하나 만든다. **freiburg3_long_office_household**(약 1.5GB, 87초, 사무실 한 바퀴)는 `--every 3 --max-frames 800`을 붙인다.
 
 <SessionBreak id="s6" />
 
 ### 실행기
 
-트랙 파일을 열고 "VO 실행"을 누른다. 파일은 브라우저 안에서만 읽고 어디에도 올리지 않는다. 계산은 PC에서 300프레임에 10초 안팎이고, 폰은 몇 배 걸린다.
+트랙 파일을 열고 "실행"을 누른다. 파일은 브라우저 안에서만 읽고 어디에도 올리지 않는다. 계산은 PC에서 300프레임에 10초 안팎이고, 폰은 몇 배 걸린다.
 
-M1 숫자는 **내 구현(mine)** 으로 낸다. 아래 실행기 맨 위 토글을 내 구현에 둔다. 결과에 "아직 TODO라 정답을 쓴 함수" 안내가 뜨면 그 숫자는 내 숫자가 아니다.
+숫자는 **내 구현(mine)** 으로 낸다. 실행기 맨 위 토글을 내 구현에 둔다. 결과에 "아직 TODO라 정답을 쓴 함수" 안내가 뜨면 그 숫자는 내 숫자가 아니다.
 
-결과 아래 "내 궤적 저장"은 TUM 형식 궤적 파일(`T_wc`, 시각 + 위치 + 쿼터니언)을 내려받는다. 뒤의 evo 절에서 쓴다.
+이 실행기는 뒤의 COLMAP 실습에서도 그대로 쓴다. 지금은 TUM 파일을 연다.
 
 <VoFileRunner />
 
@@ -263,177 +306,217 @@ M1 숫자는 **내 구현(mine)** 으로 낸다. 아래 실행기 맨 위 토글
 
 ### 정답 구현으로 낸 기준 숫자
 
-이 레슨을 만들 때 정답 구현(reference)과 기본 설정(추적 기준 6px, local BA 켬)으로 돌린 결과다(2026-11-03). 리포트에는 이 숫자가 아니라 내 구현의 숫자를 쓴다. 내 숫자가 여기서 크게 벗어나면 어딘가 다르다는 신호다.
+이 레슨을 만들 때 정답 구현(reference)과 기본 설정(추적 기준 6px, local BA 켬)으로 돌린 결과다(2026-11-03). 내 구현의 숫자가 여기서 크게 벗어나면 어딘가 다르다는 신호다.
 
-| 시퀀스 | 추적한 프레임 | ATE (경로 길이) |
+| 시퀀스 | 추적한 프레임 | ATE (이동 거리) |
 | --- | --- | --- |
 | fr1/xyz (15Hz) | 299/300 | 4.6&nbsp;cm (6.5&nbsp;m) |
-| fr1/desk (30Hz) | 155/600 | 8.6&nbsp;cm (2.5&nbsp;m) |
 | fr3/long_office (10Hz) | 799/800 | 17&nbsp;cm (20.8&nbsp;m) |
 
-- **local BA를 끄면** fr1/xyz는 151번, fr3/long_office는 92번 프레임에서 추적이 끊긴다. 긴 영상에서는 BA가 정확도뿐 아니라 추적 자체를 지킨다.
-- **fr1/desk**는 15Hz(기본 `--every 2`)로 만들면 77번 프레임에야 초기화되고 99번에서 끊긴다. 30Hz(`--every 1 --max-frames 600`)로 만들어도 198번에서 끊긴다. 책상 위를 빠르게 훑는 회전이 많은 시퀀스라, 재위치 인식(relocalization)이 없는 미니 VO의 한계가 그대로 보인다.
-- **fr3/long_office**의 ATE 17cm는 경로의 0.83%다. 루프 클로저 없이 한 바퀴를 돌면 스케일과 방향이 조금씩 흘러 출발점으로 정확히 돌아오지 못한다. 궤적 그림에서 시작과 끝이 벌어진 곳을 찾아본다. 선택 21주차 포즈 그래프가 이 오차를 줄이는 도구다.
+- **local BA를 끄면** fr1/xyz는 151번, fr3/long_office는 92번 프레임에서 추적이 끊긴다. 긴 입력에서는 BA가 정확도뿐 아니라 등록 자체를 지킨다.
+- **fr3/long_office**의 ATE 17cm는 이동 거리의 0.83%다. 전역 BA도, 한 바퀴 돌아온 것을 알아채는 장치(루프 클로저, 선택 21주차)도 없어서 스케일과 방향이 조금씩 흐른다. 궤적 그림에서 시작과 끝이 벌어진 곳을 찾아본다.
 
-내 구현으로 세 시퀀스를 돌려 위 표와 나란히 적어 둔다. 추적 기준을 3px로 내려 보는 것도 해 본다. 합성 장면(11c)에서는 3px로 충분했는데 실제 데이터에서는 왜 모자랄까? (롤링 셔터, 보정 오차, 모션 블러)
+확인할 것은 두 가지다. 내 구현으로 fr1/xyz를 돌려 표와 비슷한 숫자(몇 cm)가 나오는가. 궤적 그림에서 내 궤적이 정답(점선)과 겹쳐 보이는가.
 
 <SessionBreak id="s7" />
 
-### evo로 다시 재기
+## 실습: 내 방 사진을 COLMAP과 비교
 
-evo는 궤적 평가에 널리 쓰는 표준 도구(파이썬 패키지)다. 사이트 숫자를 남의 도구로 한 번 더 재 두면, 내 `ate`·`rpe`와 내보낸 궤적 파일이 맞다는 근거가 된다. 리포트의 결과 표에는 두 숫자를 함께 적는다.
+### COLMAP 결과를 트랙 파일로 바꾸기
 
-**설치.** Windows의 Python 3.10 이상에서 pipx로 설치하는 것이 가장 간단하다. pipx는 도구마다 따로 가상환경(venv)을 만들어 주므로 다른 패키지와 섞이지 않는다.
+**실제 방 사진 모델로는 아직 확인하지 못했다.** 변환 스크립트는 공식 문서·소스와 형식을 대조했고(2026-11-27), 합성 COLMAP 모델로 스크립트 → 실행기 → ATE까지 확인했다. 막히면 오류 문장을 그대로 노트에 적는다.
 
-```text
-pip install pipx
-pipx install evo
-```
+필요한 것은 0주차의 COLMAP 결과 `datasets/raw/room01/colmap/sparse/0/`이다. 이 절의 명령은 모두 저장소 루트 폴더에서 PowerShell로 실행한다. 줄 끝의 백틱(`` ` ``)은 다음 줄로 이어진다는 표시다.
 
-트랙 파일을 만든 OpenCV용 venv가 Python 3.10 미만이면 최근 evo가 설치되지 않을 수 있으니, evo는 그 venv와 따로 설치한다. WSL2는 22a에서 만든다. 이미 만들었으면 그쪽에 설치해도 된다.
+**1) 텍스트 모델 준비.** 9주차에서 만든 `datasets/raw/room01/colmap/sparse_txt/`가 있으면 그대로 쓰고 2)로 간다. 없으면 빈 폴더를 만들고 바꾼다.
 
-**ATE.** `groundtruth.txt`는 TUM 폴더 안의 원본 정답이고, `est.txt`는 실행기의 "내 궤적 저장" 파일(`tum-…-vo.txt`)이다. 파일은 TUM 형식 `T_wc`라 그대로 넣는다. 이름이 길면 `est.txt`로 바꿔 둔다.
+첫 줄은 0·9주차와 같이 `colmap`이라는 짧은 이름을 붙이는 줄이다(Windows에는 `colmap` 명령이 따로 없다). PowerShell 창을 새로 열 때마다 다시 치고, COLMAP을 다른 폴더에 풀었으면 그 경로로 바꾼다.
 
 ```text
-evo_ape tum
-  groundtruth.txt
-  est.txt
-  -as --t_max_diff 0.02
+Set-Alias colmap C:\tools\colmap\COLMAP.bat
+mkdir datasets/raw/room01/colmap/sparse_txt
+colmap model_converter `
+  --input_path datasets/raw/room01/colmap/sparse/0 `
+  --output_path datasets/raw/room01/colmap/sparse_txt `
+  --output_type TXT
 ```
 
-**RPE.** 회전 오차를 보려면 `-r angle_deg`를 더한다(기본은 이동 성분).
+**2) 스크립트 자체 검사.** 합성 모델로 스크립트를 검사한다. 마지막 줄이 `자체 검사 N개 모두 통과`(N은 검사 수)면 된다. `[실패]` 줄이 하나라도 있으면 멈추고 그 줄을 노트에 적는다.
 
 ```text
-evo_rpe tum
-  groundtruth.txt
-  est.txt
-  -as -d 15 -u f
+pip install numpy
+python datasets/colmap_tracks.py --selftest
 ```
 
-(둘 다 보기 좋게 나눈 것이고, 실제로는 한 줄로 쓴다.)
+**3) 변환.**
 
-- `-a`는 정렬(우메야마), `-s`는 크기 맞춤이다. 합친 `-as`가 우리 `ate`의 Sim(3) 정렬과 같다.
-- `-d 15 -u f`는 "15프레임 간격"이다. evo에는 "초" 단위가 없어서 프레임 수로 준다. 15Hz 트랙이면 15프레임이 약 1초이고, 10Hz(fr3/long_office)면 `-d 10`, 30Hz면 `-d 30`이다.
-- `--t_max_diff 0.02`는 시각 차이 0.02초 안의 두 자세만 짝짓는다는 뜻이다.
+```text
+python datasets/colmap_tracks.py `
+  datasets/raw/room01/colmap/sparse_txt `
+  --name room01 `
+  --images datasets/raw/room01/images
+```
 
-숫자가 사이트와 조금 다를 수 있다. evo는 시각(timestamp)으로 정답과 추정을 짝짓고, 사이트는 트랙 파일을 만들 때 붙여 둔 정답 자세(같은 프레임)를 쓴다.
+잘 되면 요약 몇 줄 뒤에 `저장:` 줄 두 개가 나온다. 아래는 모양만 보이는 예이고, 숫자와 경로 앞부분은 내 PC에 따라 다르다.
 
-RPE는 짝지은 결과에서 쌍을 다시 고르므로 비교하는 쌍도 달라진다. 차이가 작으면 정상이고, 크게 다르면 시각 짝짓기나 파일 형식을 의심한다.
+```text
+사진 87장 (이름순, 시각 0–86), 특징점 평균 389개 (최소 282)
+카메라 640×480, fx 480.0, fy 480.0 (기준 카메라 1, 배율 0.1600)
+이웃 사진이 함께 본 점: 중앙값 373개, 최소 282개
+COLMAP이 등록하지 못한 사진 0장
+저장: C:\…\datasets\tracks\room01.json
+저장: C:\…\datasets\tracks\room01-colmap.txt
+```
 
-<SessionBreak id="s11" />
+결과는 두 파일이고, 저장소에 올라가지 않는다.
 
-### 소거 실험(ablation)
+- `datasets/tracks/room01.json`: 실행기에 여는 트랙 파일 (COLMAP 자세 포함)
+- `datasets/tracks/room01-colmap.txt`: COLMAP 카메라 궤적 (TUM 형식 텍스트)
 
-소거 실험은 구성 요소를 하나씩 끄거나 바꿔 무엇이 숫자를 만드는지 보는 실험이다. 한 번에 하나만 바꾸고 나머지는 기본값으로 둔다. fr1/xyz로 하고, 여유가 있으면 fr3/long_office로 한 번 더 한다.
+스크립트가 끝나며 찍는 요약을 노트에 옮긴다. 사진 수, 사진당 특징점 수, "이웃 사진이 함께 본 점"의 최솟값, 등록하지 못한 사진 이름이다.
+
+### 스크립트가 대신 정해 주는 것
+
+영상용으로 만든 실행기에 사진을 넣으려면 몇 가지를 맞춰야 한다. 실행기와 core는 건드리지 않고 스크립트가 처리한다.
+
+- **특징점 번호.** `images.txt` 둘째 줄의 `POINT3D_ID`를 그대로 id로 쓴다. 같은 번호 = 같은 3D 점이다. `-1`(3D 점이 안 된 특징점)은 뺀다.
+- **사진 순서.** 파일 이름순이다(숫자는 숫자로 비교해 `IMG_2`가 `IMG_10`보다 앞이고, 대소문자는 무시한다). 폰 사진은 이름순이 곧 찍은 순서다. COLMAP이 등록하지 못한 사진은 `images.txt`에 없으므로 빠진다.
+- **시각.** 사진에는 시각이 없어서 순서 번호 0, 1, 2, …를 쓴다.
+- **왜곡.** COLMAP의 기본 카메라 모델은 왜곡 계수가 하나 있는 `SIMPLE_RADIAL`이고(9주차), 우리 함수는 왜곡 없는 핀홀을 가정한다. 그래서 특징점을 미리 편다(4a의 `undistort`와 같은 일).
+- **크기.** 긴 변이 640픽셀이 되게 $K$와 특징점 좌표를 같은 배율로 줄인다. 실행기의 픽셀 기준(초기화 2px, 등록 6px)이 640×480 영상에 맞춰져 있어서다.
+- **자세.** COLMAP은 월드→카메라 $(q, t)$를 `QW QX QY QZ TX TY TZ` 순서로 적는다. 스크립트는 카메라→월드로 뒤집어 카메라 중심 $C = -R^\top t$와 켤레 쿼터니언을 저장한다.
+- **쿼터니언 순서.** `room01.json`의 자세는 `[cx, cy, cz, qw, qx, qy, qz]`(w가 먼저)다. TUM 형식 텍스트 `room01-colmap.txt`는 줄마다 `시각 tx ty tz qx qy qz qw`(w가 마지막)다. 같은 회전을 두 순서로 적은 것이다.
+
+크기를 줄여도 기하는 그대로다. 숫자 예: 폭 4000픽셀, $f_x = 3000$, $c_x = 2000$인 사진에서 $u = 2600$인 점의 정규화 좌표는 $(2600 - 2000)/3000 = 0.2$다. 0.16배로 줄이면 $u = 416$, $f_x = 480$, $c_x = 320$이고 $(416 - 320)/480 = 0.2$로 같다.
+
+내부 파라미터 $K$는 COLMAP이 번들 조정으로 다듬은 값(`cameras.txt`)을 쓴다. 4a에서 체스보드로 잰 폰의 $K$와의 차이는 9주차 노트에 적어 둔 것을 본다(4a주차에서 폰 캘리브레이션을 했다면). 여기서는 COLMAP과 같은 $K$를 써야 차이가 기하에서만 나온다.
+
+<SessionBreak id="s17" />
+
+### 내 방 사진으로 돌리기
+
+위의 실행기로 돌아가 `room01.json`을 연다. 파일 정보 줄에 "COLMAP 기준 자세 N개"가 보이면 맞게 읽은 것이다. 토글을 내 구현에 두고 "실행"을 누른다.
+
+결과에서 읽을 것은 세 가지와 궤적 그림이다.
+
+| 항목 | 뜻 |
+| --- | --- |
+| 추적한 프레임 | 내 함수로 자세를 구한(등록한) 사진 수 |
+| ATE … 이동 거리의 % | COLMAP 카메라 위치와의 차이 |
+| 정렬 스케일 s | 내 1단위가 COLMAP의 몇 단위인가 |
+
+길이 숫자의 단위는 미터가 아니라 COLMAP의 임의 단위다. 그래서 **이동 거리 대비 %** 를 본다.
+
+cm로 바꾸려면 찍으면서 실제로 걸은 길이를 곱한다. 숫자 예: 방을 따라 6m를 걸으며 찍었고 ATE가 0.5%면 약 3cm다.
+
+궤적 그림에서 점선이 COLMAP, 실선이 내 결과다. 내 결과는 Sim(3)으로 맞춘 뒤의 위치다.
+
+**끊겼을 때.** "프레임 k에서 끊김"의 k는 트랙 파일 안의 순서 번호다. 0부터 세고, COLMAP이 등록하지 못한 사진은 세지 않는다.
+
+`room01.json`을 텍스트 편집기로 열어 `images` 목록에서 k번째(0부터) 이름을 찾는다. 그 사진과 목록에서 바로 앞 사진을 `datasets/raw/room01/images/`에서 열어 본다. 흔한 이유는 세 가지다.
+
+- 두 사진이 거의 겹치지 않는다(방 반대편으로 건너뛰었거나, 나눠 찍은 묶음의 경계). 변환 요약의 "함께 본 점이 30개보다 적은 이웃 쌍" 경고가 같은 자리를 가리킨다.
+- 제자리에서 돌며 찍은 구간이라 새 점이 생기지 않았다(11c).
+- 사진당 특징점이 모자란다. `--max-features 800 --force`로 다시 만들어 본다(계산은 느려진다).
+
+끊긴 곳까지의 결과로도 ATE는 나온다. 끊긴 것 자체가 기록할 관찰이다. COLMAP은 같은 사진들을 끝까지 붙였다는 점과 함께 적는다.
+
+<SessionBreak id="s18" />
+
+### 이 비교가 말해 주는 것
+
+**COLMAP은 정답이 아니라 기준이다.** COLMAP의 카메라 위치에도 오차가 있다. 다만 아래 이유로 내 미니 SfM보다 훨씬 정확할 것이라 보고 기준으로 쓴다. TUM의 모션캡처처럼 다른 장비로 잰 값과는 성격이 다르다.
+
+**잘 맞으면 무엇을 알 수 있나.** 내 `initMap`, `trackPnP`와 조립 코드가 같은 관측에서 COLMAP과 같은 기하를 복원한다는 것이다. 좌표 규약, 정규화, 삼각측량, PnP, BA 중 어디 하나라도 틀리면 궤적은 몇 %가 아니라 통째로 어긋난다.
+
+어림 기준은 이렇다. 이동 거리의 1% 안쪽(방에서 몇 cm)이면 기하가 맞다고 보고, 수십 %면 버그다. 실제 방 사진에서는 1%보다 조금 클 수 있다.
+
+이 기준은 합성 모델과 TUM 결과에서 잡은 어림이고, 실제 방 사진으로 재면 고친다.
+
+| 입력 (정답 구현) | ATE (이동 거리 대비) |
+| --- | --- |
+| 합성 COLMAP 모델, 사진 40장 | 0.02–0.05% |
+| TUM fr1/xyz, 300프레임 | 0.7% |
+| TUM fr3/long_office, 800프레임 | 0.83% |
+
+합성 모델은 잡음이 작고(원본 크기에서 2–4px) 모든 것이 이상적이라 실제보다 훨씬 좋게 나온다. 내 방 사진은 TUM 쪽에 가까울 것으로 예상한다.
+
+**내 결과가 COLMAP보다 나쁜 이유.** 버그가 없어도 차이는 남는다.
+
+- 전역 BA가 없다. 최근 키프레임 4장만 다듬어서 앞쪽 오차가 남는다(11c).
+- PnP가 6점 DLT다. COLMAP은 P3P 계열 최소 해법을 쓴다(11b).
+- 키프레임이 아닌 사진은 PnP 한 번으로 끝난다. COLMAP은 모든 사진을 BA에 넣는다.
+- 새 점을 이름순으로 이어진 사진들 사이에서만 만든다(11c). COLMAP은 순서와 상관없이 만든다.
+- 사진 크기를 640픽셀로 줄였고, 사진당 특징점을 400개로 잘랐다.
+
+**이 비교가 확인하지 못하는 것.** 세 가지를 비교 노트에 같이 적는다.
+
+- 특징점 검출과 매칭은 COLMAP 것을 빌렸다. 그것도 COLMAP이 끝까지 살려 둔 관측만이라 엉터리 대응이 거의 없다. 그래서 이 숫자는 "내 SfM 전체"가 아니라 "내 기하 부분"의 숫자다.
+- $K$와 왜곡 계수도 COLMAP 것이다. 내부 파라미터가 틀렸을 때 생기는 문제는 여기서 드러나지 않는다(14주차 캡스톤의 주제).
+- 둘이 같은 관측을 쓰므로, 관측 자체가 치우쳐 있으면 둘이 함께 틀린다. 잘 맞는다는 것은 "실제 방과 맞다"가 아니라 "COLMAP과 맞다"이다.
+
+<SessionBreak id="s19" />
+
+### 설정 바꿔 보기와 비교 노트
+
+실행기에서 한 번에 하나만 바꿔 다시 돌리고, 나머지는 기본값으로 둔다.
 
 | 바꾼 것 | 설정 | 볼 숫자 |
 | --- | --- | --- |
-| local BA | 켬 / 끔 | 추적 프레임, ATE |
-| 추적 기준 | 4 / 6 / 8 px | 추적 프레임, ATE |
-| 특징점 수 | 200 / 300 / 500 | ATE, 계산 시간 |
-| 프레임 간격 | 1 / 2 (30 / 15Hz) | 추적 프레임, ATE, RPE |
-| 처리 시간 | PC / 폰 | 프레임당 ms |
+| local BA | 켬 / 끔 | 등록한 사진 수, ATE % |
+| 추적 기준 | 3 / 6 / 8 px | 등록한 사진 수, ATE % |
+| 구현 | 내 구현 / 정답 | ATE % |
 
-- local BA와 추적 기준은 실행기에서 바로 바꾼다. 특징점 수는 `--features`, 프레임 간격은 `--every`로 트랙 파일을 다시 만든다. 기본 파일을 덮지 않게 `--out`으로 이름을 바꾼다(예: `datasets/tracks/xyz-f500.json`).
-- 30Hz 트랙은 300프레임이 10초뿐이라 `--max-frames 600`을 같이 준다. 실행기의 RPE 간격도 약 1초에 맞춰 30프레임으로 바뀐다.
-- 프레임당 처리 시간은 실행기의 "계산 시간" ÷ 프레임 수다. 같은 파일을 PC와 폰에서 한 번씩 돌린다.
+- local BA를 껐을 때 무엇이 먼저 나빠지는가? 합성 모델에서는 끝까지 등록되지만 ATE가 약 6배 커졌다.
+- 내 구현과 정답 구현의 숫자가 비슷한가? 크게 다르면 내 `initMap`·`trackPnP`에 테스트가 못 잡은 차이가 있다는 뜻이다.
 
-표를 다 채우면 한 줄씩 결론을 적는다. 예를 들어 "특징점을 500개로 늘리면 ATE는 거의 같고 시간만 늘었다"처럼, 숫자가 말하는 것만 쓴다.
+**비교 노트.** 이번 주차의 산출물이다. 마크다운 파일 하나에 아래를 적는다. 14주차 캡스톤 리포트의 재료가 된다.
 
-<SessionBreak id="s12" />
+1. 데이터: 사진 수, COLMAP이 등록한 수, 변환 요약(사진당 특징점, 이웃 사진이 함께 본 점).
+2. 결과(내 구현): 등록한 사진 수, ATE(COLMAP 단위와 이동 거리 대비 %), 정렬 스케일 $s$, 궤적 그림 캡처.
+3. 위 표의 설정별 숫자와 한 줄 결론. 숫자가 말하는 것만 쓴다.
+4. 끊긴 곳이 있으면 그 사진 두 장과 이유.
+5. 이 비교가 확인하지 못하는 것 세 가지(앞 절)를 내 말로.
 
-### ORB-SLAM 기준선
+<Details summary="선택: 다른 도구(evo)로 한 번 더 재기">
+  꼭 하지 않아도 된다. 궤적 평가 도구 evo로 같은 숫자가 나오는지 보고 싶을 때만 한다. **COLMAP 파일로는 아직 확인하지 못했다.**
 
-내 숫자가 좋은지는 같은 데이터에서 잘 알려진 시스템과 견줘 봐야 말할 수 있다. ORB-SLAM 논문(Mur-Artal 외, IEEE T-RO 2015, arXiv:1502.00956)의 표 III이 TUM RGB-D의 단안 결과를 싣고 있다. 키프레임 궤적의 절대 오차 RMSE이고, 5번 실행한 중앙값이며, 7자유도 닮음 변환으로 정렬했다.
-
-| 시퀀스 | ORB-SLAM (단안) |
-| --- | --- |
-| fr1/xyz | 0.90&nbsp;cm |
-| fr1/desk | 1.69&nbsp;cm |
-| fr3/long_office | 3.45&nbsp;cm |
-
-이 세션에서 할 일은 둘이다. 첫째, 리포트 초안에 이 표를 옮기고 시퀀스마다 내 VO(mine)의 ATE를 옆에 적는다.
-
-- fr1/xyz: 내 VO ___ cm
-- fr1/desk: 내 VO ___ cm (끊긴 프레임 번호도)
-- fr3/long_office: 내 VO ___ cm
-
-둘째, 조건이 다르다는 것을 표 아래에 꼭 적는다.
-
-- ORB-SLAM은 **키프레임 궤적**만, 30Hz **전체 시퀀스**에서 잰다. 루프 클로저와 재위치 인식도 켜져 있다.
-- 우리 VO는 프레임을 솎거나(fr1/xyz 15Hz, fr3/long_office 10Hz) 앞부분만 쓴 **일부 구간**의 **모든 프레임**을 잰다. 루프 클로저와 재위치 인식이 없고, fr1/desk는 중간에 끊긴다.
-- 그래서 이 표는 "같은 조건의 순위"가 아니라 "완성된 SLAM이 어디쯤인가"를 보여 주는 기준선이다.
-
-<Details summary="선택 22주차 환경 설정 때: ORB-SLAM3 직접 돌려 보기 (선택)">
-  이 세션에서 하지 않는다. 선택 22주차에 C++ 환경을 꾸밀 때 시간이 남으면 해 본다.
-
-  **주의: 이 절차는 아직 이 PC에서 검증하지 않았다.** 빌드가 한 단위(약 5시간)를 넘겨도 막히면 그만두고 위의 논문 숫자를 인용한다.
-
-  1. Docker에서 Ubuntu 20.04 기반 컨테이너를 만들고 ORB-SLAM3(github.com/UZ-SLAMLab/ORB_SLAM3)를 받는다. 이 조합이 가장 많이 쓰이는 경로다.
-  2. 저장소 안내대로 의존성(Pangolin, OpenCV, Eigen)을 넣고 빌드한다. 메모리가 모자라면 병렬 수를 `-j2`~`-j4`로 줄인다. 컨테이너에는 화면이 없으니 뷰어는 끈다(예제의 `System` 생성 마지막 인자를 `false`로).
-  3. 시퀀스를 돌린다. fr1은 `TUM1.yaml`, fr3은 `TUM3.yaml`을 쓴다.
+  실행기의 "내 궤적 저장"이 TUM 형식 파일(`room01-vo.txt`)을 내려 준다. 내려받기 폴더에서 `datasets/tracks/`로 옮긴다. 변환 스크립트가 만든 `room01-colmap.txt`와 시각(사진 순서 번호)이 같아서 바로 짝지어진다.
 
   ```text
-  ./Examples/Monocular/mono_tum
-    Vocabulary/ORBvoc.txt
-    Examples/Monocular/TUM1.yaml
-    <시퀀스 폴더>
+  pip install pipx
+  pipx install evo
+  Move-Item $HOME\Downloads\room01-vo.txt datasets\tracks\
+  evo_ape tum `
+    datasets/tracks/room01-colmap.txt `
+    datasets/tracks/room01-vo.txt -as
   ```
 
-  끝나면 `KeyFrameTrajectory.txt`(TUM 형식)가 생긴다. 위 evo 절과 같은 방법으로 잰다.
+  저장소 루트에서 실행한다. 브라우저가 다른 폴더에 내려받았으면 `Move-Item`의 첫 경로를 그 폴더로 바꾼다.
 
-  ```text
-  evo_ape tum
-    groundtruth.txt
-    KeyFrameTrajectory.txt
-    -as --t_max_diff 0.02
-  ```
-
-  실행마다 숫자가 조금씩 다르므로 몇 번 돌려 중앙값을 쓴다(논문은 5번).
+  `-a`는 정렬(우메야마), `-s`는 크기 맞춤이다. 합친 `-as`가 우리 `ate`의 Sim(3) 정렬과 같다.
 </Details>
 
-<SessionBreak id="s13" />
-
-### M1 리포트 쓰기
-
-리포트에 넣을 것(앞부분):
-
-1. **무엇을 만들었나:** 미니 VO 구조 한 문단(초기화 → PnP 추적 → 키프레임·local BA). 내가 직접 구현한 함수(`initMap`, `trackPnP`, `alignUmeyama`, `ate`, 했다면 `localBA`)와 읽기만으로 쓴 함수를 나눠 적는다.
-2. **결과 표:** 모든 숫자는 **내 구현(mine)** 으로 낸다. 표에 "mine"이라 적고, 정답 구현으로 낸 숫자를 함께 싣는다면 "reference"로 따로 표시한다. 시퀀스마다 추적한 프레임, ATE RMSE와 경로 대비 %, RPE(약 1초 간격)를 적는다.
-3. **evo 검증:** 같은 궤적을 evo로 잰 ATE·RPE를 사이트 숫자 옆에 적고, 차이가 나는 이유를 한 줄 붙인다.
-4. **소거 실험 표:** local BA, 추적 기준, 특징점 수, 프레임 간격, 처리 시간(PC, 폰)과 한 줄 결론.
-5. **ORB-SLAM 기준선:** 논문 숫자(직접 돌렸으면 그 숫자도)와 위의 조건 차이.
-6. **궤적 그림:** 실행기 화면 캡처. 정답(점선)과 내 궤적이 크게 벌어지는 구간을 표시한다.
-
-<SessionBreak id="s8" />
-
-리포트에 넣을 것(뒷부분):
-
-7. **실패 분석:** 끊긴 프레임 근처에서 무슨 일이 있었나(빠른 회전, 흐린 사진, 특징점 부족). 원본 사진을 확인해 근거를 붙인다.
-8. **한계와 다음 단계:** 스케일 드리프트, 재위치 인식 없음, 루프 클로저 없음. 선택 22주차 C++ 포팅에서 무엇을 바꿀지.
-
-리포트는 M1 관문에서 사이트에 페이지로 붙인다(관문 진행 중에 AI가 틀을 만든다). 그 전에는 마크다운 초안으로 둔다.
-
-<SessionBreak id="s14" />
+<SessionBreak id="s20" />
 
 ## 체크 질문
 
-<CheckQuestion q="ATE와 RPE는 각각 무엇을 재고, 단안 VO를 평가할 때 왜 Sim(3)으로 정렬하나?" kind="개념">
-  ATE는 궤적 전체를 한 번 맞춘 뒤 프레임마다의 위치 차이로, 누적 드리프트까지 포함한 전체 모양의 정확도다. RPE는 일정 간격 떨어진 두 자세의 상대 움직임을 비교해 짧은 구간의 정확도를 본다.
+<CheckQuestion q="ATE는 무엇을 재고, 내 재구성을 COLMAP과 비교할 때 왜 Sim(3)으로 먼저 정렬하나?" kind="개념">
+  ATE는 카메라 위치들 전체를 기준에 한 번 맞춘 뒤 사진마다의 위치 차이를 잰 것이고, 보통 RMSE로 낸다. 전체 모양이 얼마나 맞는지를 본다.
 
-  단안 VO는 길이 단위가 초기화의 $|t| = 1$로 임의라, 정답과 비교하려면 회전·이동과 함께 크기도 맞춰야 한다. 크기를 맞추지 않으면 ATE가 모양이 아니라 단위 차이를 재게 된다.
+  사진만으로 한 재구성은 좌표계의 방향·위치와 길이 단위가 임의다(7자유도). 내 것은 첫 사진이 원점이고 $|t| = 1$이 단위이며, COLMAP도 자기 나름의 좌표계와 단위를 쓴다. 회전·이동·크기를 맞추지 않으면 ATE가 모양이 아니라 좌표계와 단위의 차이를 재게 된다.
 </CheckQuestion>
 
 <CheckQuestion q="우메야마 정렬에서 det U · det V < 0일 때 마지막 축의 부호를 뒤집는 이유는 무엇인가?" kind="왜">
-  $UV^\top$은 직교 행렬이지만 행렬식이 $-1$이면 회전이 아니라 반사다. 잡음이 크거나 점들이 거의 평면에 있으면 반사가 오차를 더 줄이는 경우가 생긴다.
+  $UV^\top$은 직교 행렬이지만 행렬식이 $-1$이면 회전이 아니라 반사다. 잡음이 크거나 점들이 거의 평면에 있으면 반사가 오차를 더 줄이는 경우가 생긴다. 방 안을 같은 높이로 걸으며 찍은 카메라 위치들이 바로 "거의 평면"이다.
 
-  궤적은 실제로 거울에 비친 것이 아니므로 회전으로 제한한다. 가장 작은 특이값 방향(가장 덜 중요한 축)만 뒤집으면 회전 중 최선의 답이 된다. 크기도 같은 부호를 써서 $\mathrm{tr}(DS)$로 구한다.
+  카메라 위치들은 실제로 거울에 비친 것이 아니므로 회전으로 제한한다. 가장 작은 특이값 방향(가장 덜 중요한 축)만 뒤집으면 회전 중 최선의 답이 된다. 크기도 같은 부호를 써서 $\mathrm{tr}(DS)$로 구한다.
 </CheckQuestion>
 
-<CheckQuestion q="면접에서 'TUM fr3/long_office에서 ATE 17cm'라고 했더니 '그게 좋은 숫자냐'고 묻는다. 어떻게 답하나?" kind="실무">
-  숫자만으로는 판단할 수 없다고 먼저 말하고, 비교 기준을 같이 댄다. 정답 경로 20.8m 대비 0.83%이고, 루프 클로저와 재위치 인식이 없는 단안 VO이며, 같은 데이터에서 local BA를 끄면 92프레임에서 추적을 잃는다는 비교를 붙인다.
+<CheckQuestion q="면접에서 '직접 만든 SfM의 카메라 위치가 COLMAP과 이동 거리의 0.5% 안에서 맞았다'고 했더니 'COLMAP이 정답이냐, 그 숫자가 무슨 뜻이냐'고 묻는다. 어떻게 답하나?" kind="실무">
+  COLMAP은 정답이 아니라 기준이라고 먼저 말한다. 정답 장비가 없는 내 사진에서, 전역 BA까지 하는 검증된 도구의 결과를 기준으로 삼았다. 평가 코드 자체는 모션캡처 정답이 있는 TUM 데이터에서 따로 확인했다.
 
-  그다음 오차가 어디서 오는지(스케일 드리프트, 한 바퀴 뒤 시작점이 벌어짐)와 줄이는 방법(루프 클로저와 포즈 그래프 최적화, IMU로 스케일 관측, 재위치 인식)을 말한다. 공개된 SLAM 시스템과 비교하려면 같은 정렬 방식(Sim(3))과 같은 프레임 구간을 썼는지 확인해야 한다. 예를 들어 ORB-SLAM 논문의 3.45cm는 30Hz 전체 시퀀스의 키프레임 궤적을 루프 클로저까지 켜고 잰 숫자라, 그대로 줄 세우면 안 된다.
+  숫자의 뜻은 "같은 관측에서 내 기하 구현(두 장 초기화, PnP 등록, 삼각측량, local BA)이 COLMAP과 같은 구조를 복원한다"이다. 한계도 같이 말한다. 매칭과 내부 파라미터는 COLMAP 것을 빌렸으니 그 부분은 검증하지 못했고, 둘 다 스케일을 모르므로 Sim(3)으로 맞춘 뒤의 숫자이며, 남은 차이는 전역 BA가 없는 것과 DLT PnP에서 온다.
 </CheckQuestion>
 
 <SessionBreak id="s9" />

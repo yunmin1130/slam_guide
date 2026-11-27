@@ -22,8 +22,8 @@ sessions:
   - { id: s9, device: pc, title: "과제: eightPoint 구현" }
   - { id: s10, device: pc, title: "과제: eightPoint 디버그·테스트 통과" }
   - { id: s11, device: pc, title: "과제: ransac 구현·테스트 통과" }
-  - { id: s12, device: pc, title: "JetBot: 옆으로 밀며 녹화, 대응점 뽑기" }
-  - { id: s13, device: phone, title: "JetBot: 내 함수로 E 추정, OpenCV와 비교" }
+  - { id: s12, device: pc, title: "카메라: 옆으로 옮기며 녹화, 대응점 뽑기" }
+  - { id: s13, device: phone, title: "카메라: 내 함수로 E 추정, OpenCV와 비교" }
   - { id: s14, device: phone, title: "체크 질문" }
 ---
 
@@ -93,7 +93,7 @@ $$
 N = \frac{\log(1 - c)}{\log(1 - w^s)}
 $$
 
-마지막에는 고른 인라이어 전부로 8점 알고리즘을 다시 돌려 더 정확한 $F$를 얻고, 그 $F$로 인라이어를 다시 센다.
+마지막에는 고른 인라이어 전부로 8점 알고리즘을 다시 돌려 더 정확한 $F$를 얻고, 그 $F$로 인라이어를 다시 센다. COLMAP도 매칭 뒤의 기하 검증(geometric verification) 단계에서 RANSAC으로 두 사진의 기하를 맞춰 인라이어 대응만 남긴다(9주차).
 
 <SessionBreak id="s3" />
 
@@ -105,11 +105,11 @@ $$
 
 $F$가 정해지지 않는 퇴화(degenerate) 경우가 둘 있다. 카메라가 제자리에서 돌기만 하면(순수 회전, $t = 0$) $E = [t]_\times R = 0$이 되어 에피폴라 제약 자체가 사라진다.
 
-모든 점이 평면 하나 위에 있으면 $E$는 0이 아니지만, $A$의 영공간이 여러 차원이 되어 답이 하나로 정해지지 않는다. 두 경우 모두 평면 대 평면 변환인 호모그래피(homography) $H$가 맞는 모델이다(11주차 VO(visual odometry, 카메라 영상으로 움직임을 추적) 초기화).
+모든 점이 평면 하나 위에 있으면 $E$는 0이 아니지만, $A$의 영공간이 여러 차원이 되어 답이 하나로 정해지지 않는다. 두 경우 모두 평면 대 평면 변환인 호모그래피(homography) $H$가 맞는 모델이다(11주차 미니 SfM(structure from motion, 여러 사진으로 카메라 자세와 장면 구조를 복원)의 두 장 초기화).
 
 어안 사진에서는 에피폴라"선"이 곡선이라 픽셀로 바로 풀 수 없다. 4주차 `unprojectFisheye`로 베어링 벡터 $b$를 만든 뒤, $b / b_z$(정규화 좌표 $[x, y]$)를 `eightPoint`에 넣는다. 광축과 거의 90°인 점은 $b_z$가 0에 가까워 값이 폭발하니 뺀다(사이트와 스크립트는 84°에서 자른다).
 
-그러면 나오는 행렬이 $E$다. 이번 주 JetBot 실습이 그렇게 한다.
+그러면 나오는 행렬이 $E$다. 이번 주 실습에서 어안 모델로 캘리브레이션한 카메라(JetBot 등)의 사진은 이렇게 처리한다.
 
 <SessionBreak id="s4" />
 
@@ -298,13 +298,15 @@ $F$가 정해지지 않는 퇴화(degenerate) 경우가 둘 있다. 카메라가
 
 <SessionBreak id="s11" />
 
-### JetBot 실습
+### 카메라 실습
 
-JetBot을 옆으로 밀며 찍은 영상의 두 프레임으로 $E$를 추정한다. 사진에서 대응점을 뽑는 일은 PC Python이 하고, $E$ 추정은 사이트에서 내 함수로 한다.
+카메라를 옆으로 옮기며 찍은 영상의 두 프레임으로 $E$를 추정한다. 사진에서 대응점을 뽑는 일은 PC Python이 하고, $E$ 추정은 사이트에서 내 함수로 한다.
 
-**녹화.** 4주차와 같은 녹화 명령([DATA 문서 §4](https://github.com/yunmin1130/slam_guide/blob/main/docs/DATA.md#4-jetbot-수집-규칙))을 쓰되, 4주차 체커보드 영상을 덮어쓰지 않게 `location=board.mp4`를 `location=walk.mp4`로 바꾼다.
+카메라는 4주차에 캘리브레이션한 광각 카메라를 쓴다. JetBot이 없으면 아이폰 0.5× 초광각으로 찍고 4주차의 `calib-iphone.json`을 쓴다. 아래 명령은 JetBot(선택) 기준이고, 아이폰으로 찍을 때 바꿀 것은 이 절 끝에 있다.
 
-책장처럼 무늬가 많은 곳을 향하게 둔다. 녹화를 시작하고 1초쯤 가만히 있다가, JetBot을 손으로 천천히 옆으로 20cm쯤 민다(3초 정도).
+**녹화.** JetBot(선택)이면 4주차와 같은 녹화 명령([DATA 문서 §4](https://github.com/yunmin1130/slam_guide/blob/main/docs/DATA.md#4-jetbot-수집-규칙))을 쓰되, 4주차 체커보드 영상을 덮어쓰지 않게 `location=board.mp4`를 `location=walk.mp4`로 바꾼다.
+
+책장처럼 무늬가 많은 곳을 향하게 둔다. 녹화를 시작하고 1초쯤 가만히 있다가, 카메라를 천천히 옆으로 20cm쯤 옮긴다(3초 정도, JetBot이면 본체를 손으로 민다).
 
 **대응점 뽑기.** 밀기 시작한 뒤의 두 프레임을 고른다. 30fps면 1.5초와 2.5초인 45번과 75번이다. 4주차의 `calib.json`을 주면 OpenCV의 결과도 같이 나온다.
 
@@ -324,7 +326,7 @@ python datasets/export_matches.py --video walk.mp4 --frames 45 75 --calib datase
 - 결과 $E$의 특이값 $(1, \sigma_2, \approx 0)$에서 $\sigma_2$가 1에 가까운가? 왜 그래야 하는지 LA 박스로 설명한다.
 - 제자리에서 돌기만 한 영상(옮기지 않고 방향만 바꾸기)으로 해 보면 무엇이 달라지나?
 
-**JetBot이 아직 준비되지 않았으면:** 4주차처럼 아이폰 0.5× 초광각(렌즈 보정 끄기)으로, 같은 방식으로 옆으로 움직이며 영상을 찍는다. 4주차 캘리브레이션도 영상으로 했으니 같은 해상도로 맞는다. `walk.mp4` 대신 아이폰 영상을, `calib.json` 대신 `calib-iphone.json`을 쓴다. 아이폰이 60fps로 찍었으면 같은 1.5초·2.5초는 90번과 150번이다.
+**아이폰으로 찍을 때:** 4주차에 `calib-iphone.json`을 만든 것과 같은 0.5× 초광각(렌즈 보정 끄기)·같은 해상도로, 같은 방식으로 옆으로 움직이며 영상을 찍는다. 해상도가 다르면 캘리브레이션 값이 맞지 않는다. `walk.mp4` 대신 아이폰 영상을, `calib.json` 대신 `calib-iphone.json`을 쓴다. 아이폰이 60fps로 찍었으면 같은 1.5초·2.5초는 90번과 150번이다.
 
 ```text
 python datasets/export_matches.py --video iphone-walk.mov --frames 90 150 --calib datasets/calib-iphone.json
@@ -346,7 +348,7 @@ python datasets/export_matches.py --video iphone-walk.mov --frames 90 150 --cali
   진짜 $F$는 $[t]_\times$ 때문에 랭크 2인데, 잡음이 섞인 해는 랭크 3이다. 랭크 3이면 에피폴라선들이 한 점(에피폴)에서 만나지 않아 기하가 어긋난다. SVD로 가장 가까운 랭크 2 행렬로 고친다.
 </CheckQuestion>
 
-<CheckQuestion q="로봇이 제자리에서 회전만 한 구간에서 VO의 E 추정이 불안정해졌다. 왜이고, 어떻게 대처하나?" kind="실무">
+<CheckQuestion q="카메라가 제자리에서 회전만 한 구간의 두 프레임으로 E를 추정했더니 불안정하다. 왜이고, 어떻게 대처하나?" kind="실무">
   순수 회전이면 $t = 0$이라 $E = [t]_\times R = 0$이다. 에피폴라 제약이 사라져서 $E$를 정할 수 없고, 잡음만 맞춘 엉뚱한 $E$가 나온다. 징후: 표본(시드)을 바꿀 때마다 $E$가 크게 달라지고, $\sigma_2$가 1에서 멀어지며, 호모그래피 하나로도 인라이어가 거의 다 맞는다.
 
   대처: 두 프레임 사이의 시차(parallax)가 충분할 때만 $E$를 쓴다. 회전만 있는 구간은 호모그래피로 회전을 구하거나 IMU 자이로를 쓴다. ORB-SLAM의 초기화가 $F$와 $H$를 둘 다 계산해 점수로 고르는 이유다.

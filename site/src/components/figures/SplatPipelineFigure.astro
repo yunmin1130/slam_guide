@@ -1,0 +1,114 @@
+---
+/**
+ * 4b주차 정적 그림: 3DGS 한 장 요약. 왼쪽 = 장면(반투명 3D 타원체들)과 카메라, 오른쪽 = 화면에 투영된 2D 타원들.
+ * 색은 레슨 전체에서 같다: 빨강이 카메라에 가장 가깝고, 초록, 파랑 순으로 멀다 (알파 합성 예시와 같은 순서).
+ */
+---
+
+<figure class="sp-figure" aria-label="왼쪽: 카메라 앞에 반투명 타원체 세 개가 떠 있는 장면. 오른쪽: 그 타원체들이 화면에 2D 타원 세 개로 투영되어 겹친 모습">
+  <svg viewBox="0 0 320 170" aria-hidden="true">
+    <text class="head" x="14" y="18">장면: 반투명 3D 타원체</text>
+    <text class="head" x="212" y="18">화면: 2D 타원</text>
+
+    <!-- 카메라와 광선 -->
+    <line class="ray" x1="24" y1="118" x2="98" y2="92"></line>
+    <line class="ray" x1="24" y1="118" x2="128" y2="66"></line>
+    <line class="ray" x1="24" y1="118" x2="150" y2="118"></line>
+    <path class="cam" d="M12 108 L30 118 L12 128 Z"></path>
+    <text class="note" x="8" y="144">카메라</text>
+
+    <!-- 3D 타원체 (가까운 것부터 빨강, 초록, 파랑) -->
+    <ellipse class="g-blue" cx="150" cy="118" rx="20" ry="20"></ellipse>
+    <ellipse class="g-green" cx="128" cy="66" rx="30" ry="12" transform="rotate(-20 128 66)"></ellipse>
+    <ellipse class="g-red" cx="98" cy="92" rx="22" ry="9" transform="rotate(35 98 92)"></ellipse>
+
+    <!-- 단계 화살표 -->
+    <line class="arrow" x1="178" y1="92" x2="200" y2="92"></line>
+    <path class="arrow-head" d="M198 86 L208 92 L198 98 Z"></path>
+
+    <!-- 화면 -->
+    <rect class="screen" x="212" y="30" width="96" height="124"></rect>
+    <ellipse class="g-blue" cx="270" cy="104" rx="19" ry="19"></ellipse>
+    <ellipse class="g-green" cx="262" cy="78" rx="28" ry="11" transform="rotate(-18 262 78)"></ellipse>
+    <ellipse class="g-red" cx="248" cy="96" rx="24" ry="10" transform="rotate(32 248 96)"></ellipse>
+  </svg>
+  <figcaption>
+    ① 타원체마다 화면의 2D 타원으로 투영한다. ② 카메라에서 가까운 순서로 정렬한다. ③ 픽셀마다 앞에서부터 색을 겹친다. 삼각형 대신 타원을 그리는 래스터라이저다.
+  </figcaption>
+</figure>
+
+<style>
+  .sp-figure {
+    --c-red: #d2402c;
+    --c-green: #2f9a48;
+    --c-blue: #2d63c8;
+    --c-cam: #12897f;
+    margin: var(--space-4) 0 var(--space-6);
+    display: grid;
+    gap: var(--space-2);
+  }
+  @media (prefers-color-scheme: dark) {
+    .sp-figure {
+      --c-red: #f2796a;
+      --c-green: #6bd083;
+      --c-blue: #82a9f5;
+      --c-cam: #4fd8c9;
+    }
+  }
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 300px;
+    background: var(--paper-sunken);
+    border-radius: var(--radius-sm);
+  }
+  .head {
+    fill: var(--ink);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .note {
+    fill: var(--ink-soft);
+    font-size: 11px;
+  }
+  .ray {
+    stroke: var(--ink-faint);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+  }
+  .cam {
+    fill: var(--c-cam);
+  }
+  .arrow {
+    stroke: var(--ink-soft);
+    stroke-width: 2;
+  }
+  .arrow-head {
+    fill: var(--ink-soft);
+  }
+  .screen {
+    fill: var(--paper);
+    stroke: var(--ink-soft);
+    stroke-width: 1.5;
+  }
+  .g-red {
+    fill: color-mix(in srgb, var(--c-red) 55%, transparent);
+    stroke: var(--c-red);
+    stroke-width: 1.5;
+  }
+  .g-green {
+    fill: color-mix(in srgb, var(--c-green) 55%, transparent);
+    stroke: var(--c-green);
+    stroke-width: 1.5;
+  }
+  .g-blue {
+    fill: color-mix(in srgb, var(--c-blue) 55%, transparent);
+    stroke: var(--c-blue);
+    stroke-width: 1.5;
+  }
+  figcaption {
+    font-size: var(--text-sm);
+    color: var(--ink-soft);
+  }
+</style>

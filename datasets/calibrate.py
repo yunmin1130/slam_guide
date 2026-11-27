@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-JetBot 카메라 캘리브레이션 (CURRICULUM 4주차, DATA §3).
+카메라 캘리브레이션: 폰 메인 카메라와 JetBot 카메라 (CURRICULUM 4a주차, DATA §3).
 
-체커보드 영상(또는 사진들)에서 교차점을 찾고, 같은 교차점으로
-핀홀(Brown, k1 k2 p1 p2 k3) 모델과 어안(Kannala-Brandt, k1~k4) 모델을 둘 다 맞춘다.
-재투영 오차를 화면 가운데와 가장자리로 나눠 비교하고, 결과를 calib.json으로 저장한다.
+체커보드 영상(또는 사진들)에서 교차점을 찾아 카메라 모델을 맞추고, 결과를 calib.json으로 저장한다.
+  --model fisheye (기본, JetBot 160° 광각): 같은 교차점으로 핀홀(Brown, k1 k2 p1 p2 k3)과
+      어안(Kannala-Brandt, k1~k4)을 둘 다 맞춰 비교하고, 어안 값을 camera에 쓴다.
+  --model pinhole (폰 메인 카메라 같은 보통 렌즈): 핀홀(Brown, k1 k2 p1 p2, k3 = 0 고정)만 맞춘다.
+      k3를 0으로 두는 것은 COLMAP의 OPENCV 모델(fx fy cx cy k1 k2 p1 p2)에 그대로 옮기기 위해서다.
+재투영 오차는 화면 가운데와 가장자리로 나눠 보여준다.
 
 사용 (PC):
   pip install opencv-python numpy
   python datasets/calibrate.py --video board.mp4 --cols 9 --rows 6 --square 0.025 --out datasets/calib.json
   python datasets/calibrate.py --images "frames/*.png" --cols 9 --rows 6 --square 0.025
+  python datasets/calibrate.py --model pinhole --images "phone-board/*.jpg"   # 폰 사진 → datasets/calib-phone.json
   python datasets/calibrate.py --selftest      # 합성 데이터로 스크립트 자체를 검증 (영상 없이)
   python datasets/calibrate.py --make-board board.png   # 인쇄용 체커보드 (A4 가로, 칸 2.5cm, 10×7칸)
 
@@ -44,6 +48,9 @@ except ImportError:  # pragma: no cover - 안내만
 EDGE_RADIUS_RATIO = 0.6
 MAX_VIEWS = 60
 MIN_VIEWS = 5
+MODELS = ("fisheye", "pinhole")
+# --out을 안 주면 모델마다 다른 파일에 쓴다 (폰 결과가 JetBot 결과를 덮어쓰지 않게)
+DEFAULT_OUT = {"fisheye": "datasets/calib.json", "pinhole": "datasets/calib-phone.json"}
 CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-9)
 
 
@@ -126,10 +133,12 @@ def collect(frames, pattern: tuple[int, int]) -> tuple[list[np.ndarray], tuple[i
 
 # ---------- 두 모델로 캘리브레이션 ----------
 
-def calibrate_pinhole(obj: np.ndarray, views: list[np.ndarray], size: tuple[int, int]) -> dict:
+def calibrate_pinhole(obj: np.ndarray, views: list[np.ndarray], size: tuple[int, int], fix_k3: bool = False) -> dict:
+    """fix_k3: k3를 0으로 고정한다 (왜곡이 작은 렌즈용. 계수가 k1 k2 p1 p2만 남는다)"""
     objs = [obj.astype(np.float32)] * len(views)
     imgs = [v.astype(np.float32).reshape(-1, 1, 2) for v in views]
-    rms, K, dist, rvecs, tvecs = cv2.calibrateCamera(objs, imgs, size, None, None, criteria=CRITERIA)
+    flags = cv2.CALIB_FIX_K3 if fix_k3 else 0
+    rms, K, dist, rvecs, tvecs = cv2.calibrateCamera(objs, imgs, size, None, None, flags=flags, criteria=CRITERIA)
     dist = dist.ravel()[:5]
     projected = [cv2.projectPoints(obj, r, t, K, dist)[0].reshape(-1, 2) for r, t in zip(rvecs, tvecs)]
     return {"K": K, "distortion": dist.tolist(), "rms": float(rms), "projected": projected}
@@ -189,10 +198,20 @@ def print_table(rows: list[dict]) -> None:
         print("주의: 가장자리에 찍힌 교차점이 없다. 판을 화면 구석에도 두고 다시 찍으면 왜곡 추정이 좋아진다\n")
 
 
-def run(views, size, obj) -> tuple[dict, dict]:
+def run(views, size, obj, model: str = "fisheye") -> tuple[dict, dict | None]:
+    """(핀홀 결과, 어안 결과). model이 pinhole이면 어안은 맞추지 않고 None이다"""
+    if model not in MODELS:
+        raise ValueError(f"모르는 모델: {model}")
     if len(views) < MIN_VIEWS:
         sys.exit(f"판을 찾은 프레임이 {len(views)}장뿐이다. 최소 {MIN_VIEWS}장, 보통 20장 이상 필요하다")
     try:
+        if model == "pinhole":
+            pin = summarize("pinhole", calibrate_pinhole(obj, views, size, fix_k3=True), views, size)
+            print_table([pin])
+            # calib.json은 OpenCV 규약(왼쪽 위 픽셀 중심 = (0, 0))으로 저장한다.
+            # COLMAP은 그 점을 (0.5, 0.5)로 둔다 (https://colmap.github.io/database.html)
+            print(f"COLMAP에 넣을 때는 cx, cy에 0.5를 더한다: cx {pin['cx'] + 0.5:.3f}, cy {pin['cy'] + 0.5:.3f}\n")
+            return pin, None
         pin = summarize("pinhole", calibrate_pinhole(obj, views, size), views, size)
         fish = summarize("fisheye", calibrate_fisheye(obj, views, size), views, size)
     except cv2.error as e:
@@ -205,8 +224,10 @@ def run(views, size, obj) -> tuple[dict, dict]:
 
 # ---------- calib.json ----------
 
-def write_calib(path: Path, size: tuple[int, int], pin: dict, fish: dict, views: int) -> None:
-    """DATA §3 형식. 이미 파일이 있으면 imu·wheel 등 다른 항목은 그대로 둔다"""
+def write_calib(path: Path, size: tuple[int, int], pin: dict, fish: dict | None, views: int) -> None:
+    """DATA §3 형식. 이미 파일이 있으면 imu·wheel 등 다른 항목은 그대로 둔다.
+    fish가 None이면 (--model pinhole) 핀홀 값을 camera에 쓴다"""
+    main = fish if fish is not None else pin
     data = {}
     if path.exists():
         try:
@@ -219,19 +240,20 @@ def write_calib(path: Path, size: tuple[int, int], pin: dict, fish: dict, views:
     if not isinstance(camera, dict):
         camera = {}
     camera.update({
-        "model": "fisheye",
+        "model": main["model"],
         "width": size[0], "height": size[1],
-        "fx": fish["fx"], "fy": fish["fy"], "cx": fish["cx"], "cy": fish["cy"],
-        "distortion": fish["distortion"],
+        "fx": main["fx"], "fy": main["fy"], "cx": main["cx"], "cy": main["cy"],
+        "distortion": main["distortion"],
     })
     camera.setdefault("rolling_shutter", True)
     camera.setdefault("readout_time_ms", None)
     data["camera"] = camera
-    data.setdefault("imu", {"model": "MPU9250", "T_cam_imu": None, "time_offset_ms": None, "gyro_noise": None, "accel_noise": None})
-    data.setdefault("wheel", {"radius_m": None, "baseline_m": None, "ticks_per_rev": None})
+    if fish is not None:  # imu·wheel 기본값은 JetBot용이다. 폰 파일에는 만들지 않는다
+        data.setdefault("imu", {"model": "MPU9250", "T_cam_imu": None, "time_offset_ms": None, "gyro_noise": None, "accel_noise": None})
+        data.setdefault("wheel", {"radius_m": None, "baseline_m": None, "ticks_per_rev": None})
     data["calibrated_at"] = dt.date.today().isoformat()
-    data["reproj_error_px"] = fish["rms_px"]
-    data["comparison"] = {"views": views, "pinhole": pin, "fisheye": fish}
+    data["reproj_error_px"] = main["rms_px"]
+    data["comparison"] = {"views": views, "pinhole": pin, **({"fisheye": fish} if fish is not None else {})}
     try:
         # NaN은 사이트의 JSON.parse가 못 읽는 잘못된 JSON이 되므로 막는다
         text = json.dumps(data, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
@@ -282,8 +304,8 @@ def make_board(path: Path, cols: int, rows: int, square_mm: float) -> None:
 
 # ---------- 합성 데이터 자체 검증 ----------
 
-def synthetic_views(rng, obj_c, K_true, D_true, size, count=30) -> list[np.ndarray]:
-    """화면 곳곳(가장자리 포함)에 판을 두고 알려진 어안 카메라로 투영한다"""
+def synthetic_views(rng, obj_c, K_true, D_true, size, count=30, fisheye=True, max_angle=70.0, dist=(0.2, 0.45)) -> list[np.ndarray]:
+    """화면 곳곳(가장자리 포함)에 판을 두고 알려진 카메라(어안 또는 핀홀)로 투영한다"""
     views = []
     for _ in range(5000):
         if len(views) >= count:
@@ -291,15 +313,18 @@ def synthetic_views(rng, obj_c, K_true, D_true, size, count=30) -> list[np.ndarr
         direction = rng.normal(size=3)
         direction[2] = abs(direction[2]) + 0.3
         direction /= np.linalg.norm(direction)
-        if math.degrees(math.acos(direction[2])) > 70:
+        if math.degrees(math.acos(direction[2])) > max_angle:
             continue
         rvec = rng.normal(scale=0.35, size=3)
         R, _ = cv2.Rodrigues(rvec)
-        tvec = direction * rng.uniform(0.2, 0.45)
+        tvec = direction * rng.uniform(*dist)
         cam = (R @ obj_c.T).T + tvec
         if (cam[:, 2] <= 0.05).any():
             continue
-        px = cv2.fisheye.projectPoints(obj_c.reshape(-1, 1, 3), rvec, tvec, K_true, D_true)[0].reshape(-1, 2)
+        if fisheye:
+            px = cv2.fisheye.projectPoints(obj_c.reshape(-1, 1, 3), rvec, tvec, K_true, D_true)[0].reshape(-1, 2)
+        else:
+            px = cv2.projectPoints(obj_c, rvec, tvec, K_true, D_true)[0].reshape(-1, 2)
         if (px < 0).any() or (px[:, 0] > size[0]).any() or (px[:, 1] > size[1]).any():
             continue
         views.append(px + rng.normal(scale=0.2, size=px.shape))
@@ -323,9 +348,35 @@ def selftest() -> int:
         ("어안 RMS가 노이즈 수준 (0.4px 미만)", fish["rms_px"] < 0.4),
         ("가장자리에서 어안이 핀홀보다 정확하다", (fish["edge_rms_px"] or 0) < (pin["edge_rms_px"] or 0)),
     ]
+    checks += selftest_pinhole(rng, obj_c)
     for name, ok in checks:
         print(f"{'통과' if ok else '실패'}: {name}")
     return 0 if all(ok for _, ok in checks) else 1
+
+
+def selftest_pinhole(rng, obj_c) -> list[tuple[str, bool]]:
+    """--model pinhole 경로: 알려진 보통 렌즈(폰 사진 정도, 왜곡 작음)의 값을 되찾고 calib.json에 pinhole로 쓰는지 본다"""
+    size = (4032, 3024)
+    K_true = np.array([[2800.0, 0, 2010], [0, 2805.0, 1520], [0, 0, 1]])
+    # 참값 k3를 0이 아니게 둔다: CALIB_FIX_K3가 빠지면 추정 k3가 0이 아니게 나와 아래 검사가 실패한다
+    D_true = np.array([0.08, -0.15, 0.001, -0.0005, 0.02])
+    views = synthetic_views(rng, obj_c, K_true, D_true, size, fisheye=False, max_angle=30.0, dist=(0.35, 0.8))
+    print(f"합성 판 {len(views)}장 (핀홀, 노이즈 0.2px)")
+    pin, fish = run(views, size, obj_c, "pinhole")
+    with tempfile.TemporaryDirectory() as d:
+        out = Path(d) / "calib-phone.json"
+        write_calib(out, size, pin, fish, len(views))
+        saved = json.loads(out.read_text(encoding="utf-8"))
+    cam = saved["camera"]
+    return [
+        ("핀홀 fx를 1% 안으로 되찾는다", abs(pin["fx"] - 2800) / 2800 < 0.01),
+        ("핀홀 cx를 0.5% 안으로 되찾는다", abs(pin["cx"] - 2010) / 2010 < 0.005),
+        ("핀홀 RMS가 노이즈 수준 (0.4px 미만)", pin["rms_px"] < 0.4),
+        ("핀홀 k3는 0으로 고정된다", pin["distortion"][4] == 0.0),
+        ("calib.json의 camera가 pinhole이고 어안·imu 항목이 없다",
+         cam["model"] == "pinhole" and cam["fx"] == pin["fx"] and len(cam["distortion"]) == 5
+         and "fisheye" not in saved["comparison"] and "imu" not in saved),
+    ]
 
 
 def main() -> int:
@@ -335,11 +386,13 @@ def main() -> int:
     src.add_argument("--images", help='이미지 glob 패턴 (예: "frames/*.png")')
     src.add_argument("--selftest", action="store_true", help="합성 데이터로 스크립트 검증")
     src.add_argument("--make-board", metavar="PNG", help="인쇄용 체커보드 PNG를 만든다 (A4 가로)")
+    ap.add_argument("--model", choices=MODELS, default="fisheye",
+                    help="fisheye: 핀홀과 어안을 둘 다 맞춰 비교 (JetBot, 기본). pinhole: 핀홀만 (폰 메인 카메라)")
     ap.add_argument("--cols", type=int, default=9, help="가로 내부 교차점 수 (기본 9)")
     ap.add_argument("--rows", type=int, default=6, help="세로 내부 교차점 수 (기본 6)")
     ap.add_argument("--square", type=float, default=0.025, help="한 칸 크기 (m, 기본 0.025)")
     ap.add_argument("--every", type=int, default=10, help="영상에서 몇 프레임마다 하나씩 쓸지 (기본 10)")
-    ap.add_argument("--out", default="datasets/calib.json", help="저장할 calib.json 경로")
+    ap.add_argument("--out", help=f"저장할 calib.json 경로 (기본: fisheye는 {DEFAULT_OUT['fisheye']}, pinhole은 {DEFAULT_OUT['pinhole']})")
     args = ap.parse_args()
 
     if args.selftest:
@@ -352,8 +405,8 @@ def main() -> int:
     pattern = (args.cols, args.rows)
     frames = frames_from_video(args.video, args.every) if args.video else frames_from_images(args.images)
     views, size = collect(frames, pattern)
-    pin, fish = run(views, size, board_object_points(args.cols, args.rows, args.square))
-    write_calib(Path(args.out), size, pin, fish, len(views))
+    pin, fish = run(views, size, board_object_points(args.cols, args.rows, args.square), args.model)
+    write_calib(Path(args.out or DEFAULT_OUT[args.model]), size, pin, fish, len(views))
     return 0
 
 

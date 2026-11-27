@@ -148,7 +148,7 @@
 }
 .listNote {
   margin: 0 0 var(--space-2);
-  font-size: var(--text-sm);
+  font-size: 0.9375rem; /* 15px: 폰에서 14px 회색은 작다는 화면 검토 지적 */
   color: var(--ink-soft);
 }
 .rowMain {
@@ -176,7 +176,7 @@
 }
 .storageNote {
   margin: var(--space-3) 0 0;
-  font-size: var(--text-sm);
+  font-size: 0.9375rem; /* 15px: 폰에서 14px 회색은 작다는 화면 검토 지적 */
   line-height: 1.55;
   color: var(--ink-soft);
 }

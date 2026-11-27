@@ -33,6 +33,18 @@ describe("parseTracks", () => {
     expect(f.groundtruth[0]!.t).toEqual([0.1, 0.2, 0.3]);
     expect(f.groundtruth[0]!.R).toEqual(quatToMat([1, 0, 0, 0]));
     expect(f.groundtruth[1]).toBeNull();
+    expect(f.reference).toBe("groundtruth");
+  });
+
+  it("source가 colmap이면 비교 대상이 정답이 아니라 COLMAP 기준이라고 알려준다 (모르는 필드는 무시)", () => {
+    const f = parseTracks(text({ ...base(), source: "colmap", images: ["a.jpg", "b.jpg"], pixel_scale: 0.16 }));
+    expect(f.reference).toBe("colmap");
+    // COLMAP 파일도 자세가 빠진 프레임(null)을 허용한다: 실행기는 자세가 있는 프레임끼리만 비교한다
+    const partial = parseTracks(text({ ...base(), source: "colmap", groundtruth: [null, [0, 0, 0, 1, 0, 0, 0]] }));
+    expect(partial.reference).toBe("colmap");
+    expect(partial.groundtruth[0]).toBeNull();
+    expect(partial.groundtruth[1]!.t).toEqual([0, 0, 0]);
+    expect(parseTracks(text({ ...base(), source: "tum" })).reference).toBe("groundtruth");
   });
 
   it("JSON이 아니거나 format·version이 다르면 이유를 담아 예외", () => {

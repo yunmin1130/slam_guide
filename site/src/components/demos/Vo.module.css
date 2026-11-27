@@ -124,13 +124,22 @@
   cursor: pointer;
 }
 .primary {
-  background: var(--ink);
+  /* accent 위 paper 글자: 밝은 테마 약 4.9:1, 어두운 테마 약 7.4:1 */
+  background: var(--accent);
   color: var(--paper);
-  border-color: var(--ink);
+  border-color: var(--accent);
 }
 .button:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+}
+/* 꺼진 주 버튼은 색을 빼고 점선 테두리로: 켜진 상태와 한눈에 구별되게 */
+.primary:disabled {
+  opacity: 1;
+  background: transparent;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+  border-style: dashed;
 }
 .option:focus-visible,
 .button:focus-visible,
